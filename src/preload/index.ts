@@ -9,6 +9,8 @@ const on = <T>(channel: string, cb: (v: T) => void) => {
 
 const api: IptvApi = {
   platform: process.platform,
+  device: 'desktop',
+  version: ipcRenderer.sendSync('app:version'),
   getStore: () => ipcRenderer.invoke('store:all'),
   setStore: (key, value) => ipcRenderer.invoke('store:set', key, value),
   getLibrary: () => ipcRenderer.invoke('library:get'),
@@ -24,10 +26,15 @@ const api: IptvApi = {
     close: () => ipcRenderer.send('win:close'),
     setFullscreen: (on) => ipcRenderer.send('win:fullscreen', on),
     setMaterial: (m) => ipcRenderer.send('win:material', m),
-    setTheme: (t) => ipcRenderer.send('win:theme', t)
+    setTheme: (mode) => ipcRenderer.send('win:theme', mode)
   },
   onWindowState: (cb) => on('win:state', cb),
-  onProgress: (cb) => on('progress', cb)
+  onProgress: (cb) => on('progress', cb),
+  update: {
+    check: () => ipcRenderer.send('update:check'),
+    install: () => ipcRenderer.send('update:install'),
+    onState: (cb) => on('update:state', cb)
+  }
 }
 
 contextBridge.exposeInMainWorld('api', api)

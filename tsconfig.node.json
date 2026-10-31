@@ -8,9 +8,11 @@
     "strict": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "allowImportingTsExtensions": true,
     "noEmit": true,
     "composite": true
   },
-  "include": ["electron.vite.config.ts", "src/main/**/*", "src/preload/**/*", "src/shared/**/*"],
-  "exclude": ["src/main/**/*.test.ts"]
+  "include": ["electron.vite.config.ts", "vite.web.config.mts", "tools/**/*.mts", "src/main/**/*", "src/preload/**/*", "src/shared/**/*"],
+  "exclude": ["src/**/*.test.ts", "tools/**/*.test.ts"]
 }

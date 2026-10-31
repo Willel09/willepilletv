@@ -1,65 +1,154 @@
-# Lumen — a premium IPTV player for Windows
+# Lumen — a premium IPTV player for Windows, Samsung TV and the web
 
-Lumen is a desktop IPTV **player**. It ships with no channels: you add your own M3U playlist, Xtream Codes login and (optionally) an XMLTV guide. The look takes inspiration from Apple's "Liquid Glass", the Apple TV app and Netflix. It does not use any of their logos or trademarks.
+Lumen is an IPTV **player**. It ships with no channels: you add your own M3U playlist, Xtream Codes login and (optionally) an XMLTV guide. The look takes inspiration from Apple's "Liquid Glass", the Apple TV app and Netflix. It does not use any of their logos or trademarks.
 
-**Stack:** Electron · React 19 · TypeScript · Vite (electron-vite) · Tailwind CSS 4 · Framer Motion · hls.js · mpegts.js · electron-store · electron-builder
+| Device | How it runs | Updates |
+| --- | --- | --- |
+| **Windows** | Electron app (`Lumen-Setup-x.y.z.exe`) | Downloads new versions in the background, then offers **Restart to update** |
+| **Samsung TV** (Tizen 6.5+, 2022 models and newer) | `Lumen.wgt`, installed with [smarttv-installer](https://github.com/Krishnakant010/smarttv-installer) | Loads the newest version from GitHub Pages every time it starts. No reinstall needed |
+| **Web / phone** | <https://willel09.github.io/apple-iptv/> | Always the latest |
+
+**Stack:** Electron · React 19 · TypeScript · Vite · Tailwind CSS 4 · Framer Motion · hls.js · mpegts.js · electron-store · electron-updater · Supabase (sync)
 
 ---
 
 ## Quick start (Windows)
 
-You need **Node.js 22 LTS** (or 20.19+) from <https://nodejs.org>. Use **Git** if you clone the repo.
+You need **Node.js 22 LTS** (or 20.19+) from <https://nodejs.org>.
 
 ```bash
 npm install          # downloads all dependencies + the Electron runtime (one time, ~2 min)
 npm run dev          # starts the app with hot reload — edit a file and the window updates
-npm run dist         # builds the Windows installer → dist\Lumen-Setup-1.0.0.exe
+npm run dist         # builds the Windows installer → dist\Lumen-Setup-1.1.0.exe
 ```
-
-Other useful commands:
 
 | Command | What it does |
 | --- | --- |
-| `npm test` | Runs the parser tests (M3U, XMLTV, EPG matching) |
-| `npm run typecheck` | Type-checks main, preload and renderer code |
-| `npm run build` | Compiles everything into `out/` without packaging |
-| `npm run preview` | Runs the compiled `out/` build (closest to the installed app) |
+| `npm test` | Runs the unit tests (M3U/XMLTV parsers, sync merge, TV CSS compatibility) |
+| `npm run typecheck` | Type-checks all code |
+| `npm run build:tv` | Builds the TV package `dist\Lumen.wgt` and the web app in `dist\web` |
+| `npm run dev:web` | Runs the TV/web version in your browser with hot reload (handy for TV layout work) |
+| `npm run preview` | Runs the compiled desktop build |
 | `npm run dist:dir` | Builds an unpacked app in `dist\win-unpacked\Lumen.exe` (faster, no installer) |
 
 > The installer is not code-signed, so Windows SmartScreen will say "Windows protected your PC" the first time. Click **More info → Run anyway**.
 
 ---
 
+## One-time setup: releases and auto-update
+
+Updates come from **GitHub Releases** (Windows) and **GitHub Pages** (TV and web). Do this once:
+
+1. Make the repository **public**: GitHub → *Settings → General → Danger Zone → Change visibility*. Releases and Pages must be downloadable without logging in.
+2. Turn on Pages: GitHub → *Settings → Pages → Build and deployment → Source: **GitHub Actions***.
+
+### Shipping a new version
+
+From then on, every update you make reaches every device with two commands:
+
+```bash
+npm version minor
+```
+```bash
+git push --follow-tags
+```
+
+`npm version minor` bumps 1.1.0 → 1.2.0, commits and tags it. Use `patch` for small fixes (1.1.0 → 1.1.1). Pushing the tag starts the **Release** workflow (`.github/workflows/release.yml`, about 10 minutes), which:
+
+- builds the Windows installer and publishes it with `latest.yml` to a GitHub Release, so installed apps update themselves;
+- builds `Lumen.wgt` and attaches it to the same release;
+- deploys the web app to GitHub Pages, so TVs pick up the new version the next time Lumen is opened.
+
+Follow it under the repo's **Actions** tab.
+
+---
+
+## Install on a Samsung TV
+
+Lumen for Samsung is the same app as on Windows, packaged as a Tizen web app (`Lumen.wgt`). It is installed with [smarttv-installer](https://github.com/Krishnakant010/smarttv-installer), which signs the package with a developer certificate for *your* TV.
+
+**1. Turn on Developer Mode on the TV** (once):
+Open **Apps** → press **1 2 3 4 5** on the remote → set **Developer mode: On** → enter your **PC's IP address** as Host PC IP → restart the TV fully (hold the power button until the logo appears).
+
+**2. Get smarttv-installer** (once) on the same PC:
+
+```bash
+git clone https://github.com/Krishnakant010/smarttv-installer.git
+```
+```bash
+cd smarttv-installer
+```
+```bash
+npm install
+```
+
+**3. Install Lumen.** Replace `192.168.1.50` with your TV's IP address (TV → Settings → General → Network → Network Status → IP Settings).
+
+Install the latest release:
+```bash
+node cli.js --ip 192.168.1.50 --repo Willel09/apple-iptv --tag latest
+```
+…or a package you built yourself with `npm run build:tv`:
+```bash
+node cli.js --ip 192.168.1.50 --file ..\apple-iptv\dist\Lumen.wgt
+```
+
+There's also a GUI: run `npm start` in the smarttv-installer folder.
+
+**4. Link the TV with your PC** so you never have to type a password with the remote. On the TV, the Welcome screen has **Already use Lumen on another device? Link it**, which shows a code. On the PC, go to *Settings → Sync & Devices → Link a device* and type that code. Your sources, watchlist, favorites, resume positions and theme appear on the TV within seconds.
+
+**TV remote:**
+
+| Button | Action |
+| --- | --- |
+| Arrows / OK | Move / select |
+| Back | Go back; exits the app on Home |
+| Play/Pause, ◀◀ ▶▶ | Playback, seek 10 s |
+| CH + / CH − | Next / previous channel |
+| 0–9 | Jump to a channel number |
+| Red / Green (in the player) | Favorite the channel / toggle subtitles |
+
+> You only need to reinstall the `.wgt` if the TV package itself changes (rare: new permissions or app id). Normal updates load automatically.
+
+---
+
+## Sync between devices
+
+*Settings → Sync & Devices* keeps these in sync between your PC, TV and the web app:
+
+- watchlist, favorites, watch history and resume positions;
+- sources (Xtream logins and playlists), so only one device needs typing;
+- theme, accent, artwork glow, extra guide URL, hidden categories, stream format and autoplay.
+
+**Privacy:** everything is encrypted on your device (AES-256-GCM, with a key derived from your sync code) before it is sent. The server stores only ciphertext under a SHA-256 hash of the code, so it never sees the code, your logins or your lists. Anyone who has your **sync code** can read your synced data, so keep it private. Turning sync off on a device keeps its local data.
+
+**Backend:** a free Supabase project, `lumen-sync` (Stockholm). The database only exposes three functions (`sync_get`, `sync_put`, `sync_delete`); the table itself can't be read or listed. Free Supabase projects pause after about a week without any traffic. If sync shows *Sync failed* after a long break, open the project in the [Supabase dashboard](https://supabase.com/dashboard) and click **Restore**.
+
+**Deletions sync too.** Removing something from the watchlist on the TV removes it on the PC, rather than it coming back on the next sync.
+
+---
+
+## Web app (phone, tablet, any browser)
+
+<https://willel09.github.io/apple-iptv/> runs the same app. Link it like the TV (Settings → Sync → Link with another device) to see and manage your watchlist, favorites and Continue Watching from your phone.
+
+> **Limitation:** browsers block plain `http://` IPTV servers on secure (`https://`) pages, and most providers don't allow browser access (CORS). So on the web you can usually *manage* your lists, but playback works only if your provider supports it. The Windows and TV apps aren't affected.
+
+---
+
 ## Features
 
-- **Sources:** M3U/M3U8 by URL or local file, Xtream Codes (Live, Movies, Series), and XMLTV guides (`.xml` or `.xml.gz`). The provider guide is found automatically from Xtream `xmltv.php` or the M3U `url-tvg` header.
-- **Home:** an auto-rotating hero with a cinematic fade, then Netflix-style rows: Continue Watching, Favorites, Recently Watched Channels, and one row per category.
-- **Live TV:** a filterable category sidebar, a virtualised channel list with logos and now/next progress, an info panel with the upcoming schedule, and a **full TV guide grid** with a live "now" line.
-- **Movies & Series:** a virtualised poster grid (sort by newest, A–Z or top rated) and a detail page with backdrop, rating, cast, a **season/episode picker** and "More Like This".
-- **Search** across every channel, movie and series. Accents and case are ignored.
-- **Player:**
-  - a glass control bar that auto-hides, with seek, volume, audio and subtitle tracks, and speed
-  - fullscreen, Picture-in-Picture, and channel up/down
-  - an **automatic engine fallback**: mpegts.js → hls.js → native, for example
-  - error messages written for people (403 = "subscription expired or too many devices", codec issues and so on)
-  - one-click **Open in VLC** and copy the stream URL
-- **Favorites, watch history and resume** positions.
-- **Keyboard / remote style navigation** with arrow keys, Enter, Esc and Space.
-- **Design:** frosted glass panels, a floating pill tab bar, parallax-tilt poster cards with a specular sheen, an ambient background tinted by the focused artwork, spring animations, a frameless window with glass window buttons, and **Windows 11 Mica/Acrylic**.
+- **Sources:** M3U/M3U8 by URL or local file (Windows), Xtream Codes (Live, Movies, Series), and XMLTV guides (`.xml` / `.xml.gz`, found automatically from Xtream or the M3U `url-tvg` header).
+- **Home:** an auto-rotating hero, then rows: Continue Watching, **My Watchlist**, Favorites, Recently Watched Channels, and one row per category.
+- **Watchlist:** add movies and series from the hero (＋) or the detail page. It also appears as a category under Movies and Series, and syncs between devices.
+- **Live TV:** a filterable category sidebar, a virtualised channel list with now/next, an info panel with the upcoming schedule, and a full **TV guide grid**.
+- **Movies & Series:** a virtualised poster grid (newest, A–Z, top rated), and detail pages with backdrop, cast, season/episode picker and "More Like This".
+- **Player:** a glass control bar; audio/subtitle tracks; speed; sleep timer; PiP; fullscreen; channel zapping and number entry; resume; Up Next autoplay; automatic engine fallback; error messages written for people; Open in VLC (Windows).
+- **Themes:** Graphite (default), Midnight (OLED black), Crimson, Nordic, Ember, Forest, Rosé, Aurora, Daylight and Sand. You can also set a custom accent colour and choose **Artwork glow: Vivid / Subtle / Off** for how much posters tint the background.
+- **Updates:** see *Settings → Updates* for the current version and **Check for updates**.
+- **Keyboard / remote navigation** everywhere, Windows 11 Mica/Acrylic, and Reduced Motion support.
 
-**Extra quality-of-life features**
-
-- Instant startup: your library and guide are cached and refreshed in the background.
-- Type a channel number (`1` `0` `4`) while watching live TV to jump to that channel.
-- Up Next with a countdown autoplays the next episode. Press `N` to skip ahead.
-- A sleep timer, playback speed, and a resolution badge.
-- Paste any stream URL (`Ctrl+V`) anywhere to play it immediately.
-- Hide categories by keyword (for example `adult, 24/7`).
-- Xtream account expiry date and connection limit are shown in Settings.
-- A live stream format toggle (MPEG-TS ↔ HLS) for providers that stutter in one format.
-- Dark and light themes, accent colors, and Reduced Motion support.
-
-### Keyboard
+### Keyboard (Windows)
 
 | Key | Action |
 | --- | --- |
@@ -68,10 +157,10 @@ Other useful commands:
 | Ctrl+1…6 | Switch tabs |
 | `/` or Ctrl+F | Search |
 | Space / K | Play / pause |
-| ← / → | Seek 10 s (movies & episodes) |
+| ← / → | Seek 10 s |
 | ↑ / ↓, PgUp / PgDn | Channel up / down (live) |
 | 0–9 | Jump to channel number |
-| F · M · P · C · N | Fullscreen · Mute · Picture-in-Picture · Subtitles · Next episode |
+| F · M · P · C · N | Fullscreen · Mute · PiP · Subtitles · Next episode |
 
 ---
 
@@ -79,55 +168,33 @@ Other useful commands:
 
 ```
 apple-iptv/
-├─ package.json               scripts + dependencies
-├─ electron.vite.config.ts    builds main, preload and renderer with Vite
-├─ electron-builder.yml       Windows installer (NSIS) settings
-├─ build/icon.png             app icon
+├─ package.json                  scripts + dependencies
+├─ electron.vite.config.ts       Windows app build (main, preload, renderer)
+├─ vite.web.config.mts           TV + web build of the same renderer
+├─ electron-builder.yml          Windows installer + auto-update (GitHub Releases)
+├─ scripts/build-web.mjs         web build → update loader (boot.js) → dist/Lumen.wgt
+├─ tools/css-compat.mts          makes Tailwind 4 CSS work on older TV browsers (Chromium 85+)
+├─ .github/workflows/release.yml builds + publishes everything when you push a version tag
 └─ src/
-   ├─ shared/types.ts         types shared by every process (Source, Channel, Movie, Settings, the window.api bridge…)
-   ├─ main/                   Electron main process (Node.js) — all networking lives here, so CORS never blocks it
-   │  ├─ index.ts             window (frameless + Mica), IPC handlers, VLC launcher, stream header/CORS rewriting
-   │  ├─ http.ts              fetch with a custom user agent, gzip support, friendly error messages
-   │  ├─ m3u.ts               M3U parser (splits live / movies / series episodes)
-   │  ├─ xtream.ts            Xtream Codes API client
-   │  ├─ epg.ts               fast streaming-style XMLTV parser + channel matching
-   │  ├─ library.ts           loads all sources, builds the guide, disk cache
-   │  └─ parsers.test.ts      unit tests
-   ├─ preload/index.ts        safe bridge: exposes window.api to the UI
-   └─ renderer/               the React app
-      ├─ index.html
-      └─ src/
-         ├─ App.tsx           shell: screens, overlays, global shortcuts
-         ├─ store.ts          app state (zustand), favorites, history, playback actions, library index
-         ├─ index.css         the Liquid Glass design system (glass, glass-thin, glass-strong, theme tokens)
-         ├─ lib/              spatial keyboard navigation, EPG helpers, formatting, spring presets
-         ├─ components/       TitleBar + tab pill, Hero, Row, poster/channel cards, sidebar, virtual grid, sheet, toast
-         ├─ screens/          Home, Live, Guide, Browse (Movies/Series), Detail, Search, Settings
-         └─ player/           Player UI + engine.ts (hls.js / mpegts.js / native with fallback)
+   ├─ shared/
+   │  ├─ types.ts                types shared by every platform
+   │  └─ core/                   M3U, Xtream, XMLTV/EPG and library loading (used by Windows, TV and web)
+   ├─ main/                      Electron main process: window, Mica, IPC, VLC, auto-update, CORS/UA rewriting
+   ├─ preload/index.ts           window.api bridge for the Windows app
+   └─ renderer/src/
+      ├─ platform/web.ts         window.api for TV/web (localStorage, IndexedDB cache, Tizen keys, update check)
+      ├─ store.ts                app state, watchlist/favorites/history, sync orchestration
+      ├─ lib/sync.ts             end-to-end encrypted sync + merge + device pairing
+      ├─ lib/themes.ts           theme presets
+      ├─ lib/tv.ts               Samsung remote key mapping
+      ├─ components/  screens/  player/
+      └─ index.css               the Liquid Glass design system and theme tokens
 ```
-
-### How it works
-
-1. The **main process** downloads playlists, Xtream data and XMLTV. Node isn't subject to CORS, and it sends a VLC-style user agent that most providers accept.
-2. Video streams are fetched by hls.js/mpegts.js in the **renderer**. Most IPTV servers don't send CORS headers, so the main process rewrites stream responses (adds `Access-Control-Allow-Origin`, removes `Origin`/`Referer`, sets the user agent). Web security stays on.
-3. Settings, sources, favorites and history are kept in **electron-store** (`%APPDATA%\Lumen\lumen.json`). The large library and guide caches are `library.json` / `epg.json` in the same folder.
-4. Big lists (10,000+ channels, 50,000+ movies, 1,000+ categories) are **virtualised** with `@tanstack/react-virtual`, so only what's on screen is rendered.
-
----
-
-## Step-by-step: what was built and how to test each step
-
-1. **Project setup.** Run `npm install`, then `npm run dev`. A dark window opens with the glass tab bar and a "Welcome to Lumen" card.
-2. **Glass design system.** Look at the floating tab pill, the window buttons (top right) and the Welcome card. Hover the tabs to see the spring-animated highlight. Try Settings → Appearance → Light / Accent color.
-3. **Playlist & Xtream loading.** Click **Xtream Codes Login** (or **M3U Playlist**) and enter your details. The spinner pill in the top-right corner shows progress. Settings → Sources then shows the channel, movie and series counts and your account expiry.
-4. **Home / Live / Movies / Series.** Hover posters for the tilt and glow, then use the arrow keys to move around. Open a movie or series to see the detail page and episode picker.
-5. **Player.** Play anything. Move the mouse to show the controls, which hide after 3 seconds. Test ↑/↓ on live TV, ←/→ on movies, `F` for fullscreen and `P` for Picture-in-Picture. If a stream fails, try **Open in VLC** (VLC must be installed).
-6. **EPG.** Live TV → **TV Guide**. If your provider guide is missing, paste an XMLTV URL in Settings → TV Guide and click **Refresh Guide**.
-7. **Packaging.** Run `npm run dist`. The installer is written to `dist\Lumen-Setup-1.0.0.exe`.
 
 ## Troubleshooting
 
-- **A channel won't play.** The error card explains why. Try **Try HLS / Try MPEG-TS** (Xtream), then **Open in VLC**. If there's no sound, the stream probably uses AC3/DTS audio, which Chromium can't decode; VLC can.
-- **The provider blocks the app.** Change the user agent in Settings → Playback.
-- **No TV guide.** Check that the channels in your playlist have `tvg-id` values that match the guide, or that the names match.
-- **Want a fresh start?** Delete `%APPDATA%\Lumen`.
+- **A channel won't play.** The error card explains why. Try **Try HLS / Try MPEG-TS** (Xtream), or **Open in VLC** on Windows. If there's no sound on Windows, the stream probably uses AC3/DTS audio. Samsung TVs can usually decode those.
+- **The provider blocks the app.** Change the user agent in Settings → Playback (Windows).
+- **The TV install fails.** Make sure Developer Mode shows your PC's IP, the TV was fully restarted, and both are on the same network.
+- **No TV guide.** Check that the channels have `tvg-id` values matching the guide, or matching names.
+- **Fresh start:** on Windows delete `%APPDATA%\Lumen`. On TV, uninstall and reinstall Lumen.

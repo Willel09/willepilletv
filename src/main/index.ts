@@ -3,18 +3,24 @@ import { spawn } from 'child_process'
 import { existsSync } from 'fs'
 import { join } from 'path'
 import Store from 'electron-store'
-import { DEFAULT_SETTINGS, type Library, type Settings, type StoreShape } from '../shared/types'
-import { buildEpg, buildLibrary, readCache } from './library'
-import { xtreamInfo } from './xtream'
+import { autoUpdater } from 'electron-updater'
+import { DEFAULT_SETTINGS, STORE_DEFAULTS, type Library, type Settings, type StoreShape, type UpdateState } from '../shared/types'
+import { buildEpg, buildLibrary, emptyLibrary } from '../shared/core/library'
+import { xtreamInfo } from '../shared/core/xtream'
+import { getText } from './http'
+import { readCache, writeCache } from './library'
 
 // Lets <video> expose audioTracks for multi-language MP4/MKV files
 app.commandLine.appendSwitch('enable-blink-features', 'AudioVideoTracks')
 
-const store = new Store<StoreShape>({
-  name: 'lumen',
-  defaults: { settings: DEFAULT_SETTINGS, sources: [], favorites: [], history: [] }
-})
-const settings = (): Settings => ({ ...DEFAULT_SETTINGS, ...store.get('settings') })
+// cast: electron-store's dotted-path typing can't express Record<> fields in SyncMeta
+const store = new Store<StoreShape>({ name: 'lumen', defaults: STORE_DEFAULTS as never })
+// v1.0 stored theme as 'dark' | 'light'
+const LEGACY_THEME: Record<string, string> = { dark: 'graphite', light: 'daylight' }
+const settings = (): Settings => {
+  const s = { ...DEFAULT_SETTINGS, ...store.get('settings') }
+  return { ...s, theme: LEGACY_THEME[s.theme] ?? s.theme }
+}
 
 let win: BrowserWindow | null = null
 let library: Library | null = null
@@ -23,7 +29,7 @@ const isWin11 = process.platform === 'win32' && Number(process.getSystemVersion(
 
 function createWindow() {
   const s = settings()
-  nativeTheme.themeSource = s.theme
+  nativeTheme.themeSource = s.theme === 'daylight' || s.theme === 'sand' ? 'light' : 'dark'
   const material = isWin11 && s.material !== 'none' ? s.material : undefined
   win = new BrowserWindow({
     width: 1480,
@@ -82,25 +88,33 @@ function patchNetworking() {
 }
 
 const progress = (m: string) => win?.webContents.send('progress', m)
-const STORE_KEYS: (keyof StoreShape)[] = ['settings', 'sources', 'favorites', 'history']
+const get = (url: string, timeoutMs?: number) => getText(url, settings().userAgent, timeoutMs)
+const STORE_KEYS = Object.keys(STORE_DEFAULTS) as (keyof StoreShape)[]
 
 function registerIpc() {
-  ipcMain.handle('store:all', () => ({ ...store.store, settings: settings() }))
+  ipcMain.on('app:version', (e) => (e.returnValue = app.getVersion()))
+  ipcMain.handle('store:all', () => ({ ...STORE_DEFAULTS, ...store.store, settings: settings() }))
   ipcMain.handle('store:set', (_e, key: keyof StoreShape, value: unknown) => {
     if (!STORE_KEYS.includes(key)) throw new Error(`Unknown store key ${key}`)
     store.set(key, value as never)
   })
   ipcMain.handle('library:get', async () => (library ??= await readCache<Library>('library')))
-  ipcMain.handle('library:refresh', async () => (library = await buildLibrary(store.get('sources'), settings(), progress)))
+  ipcMain.handle('library:refresh', async () => {
+    library = await buildLibrary(store.get('sources'), settings(), get, progress)
+    await writeCache('library', library)
+    return library
+  })
   ipcMain.handle('epg:get', () => readCache('epg'))
   ipcMain.handle('epg:refresh', async () => {
     library ??= await readCache<Library>('library')
-    return buildEpg(library ?? { channels: [], movies: [], series: [], epgUrls: [], providerEpgUrls: [], accounts: {}, errors: [], updatedAt: 0 }, settings(), progress)
+    const epg = await buildEpg(library ?? emptyLibrary(), settings(), get, progress)
+    await writeCache('epg', epg)
+    return epg
   })
   ipcMain.handle('media:info', (_e, sourceId: string, kind: 'movie' | 'series', id: number) => {
     const src = store.get('sources').find((x) => x.id === sourceId)
     if (!src || src.kind !== 'xtream') return {}
-    return xtreamInfo(src, kind, id, settings().userAgent)
+    return xtreamInfo(src, kind, id, get)
   })
   ipcMain.handle('dialog:playlist', async () => {
     const r = await dialog.showOpenDialog(win!, {
@@ -132,7 +146,9 @@ function registerIpc() {
   ipcMain.on('win:close', () => win?.close())
   ipcMain.on('win:fullscreen', (_e, on: boolean) => win?.setFullScreen(on))
   // Mica/Acrylic tint follows nativeTheme, so keep it in step with the app theme
-  ipcMain.on('win:theme', (_e, t: Settings['theme']) => (nativeTheme.themeSource = t))
+  ipcMain.on('win:theme', (_e, mode: 'dark' | 'light') => (nativeTheme.themeSource = mode))
+  ipcMain.on('update:check', () => checkForUpdates())
+  ipcMain.on('update:install', () => autoUpdater.quitAndInstall(false, true))
   ipcMain.on('win:material', (_e, m: Settings['material']) => {
     if (!isWin11 || !win) return
     win.setBackgroundMaterial(m === 'none' ? 'none' : m)
@@ -140,11 +156,37 @@ function registerIpc() {
   })
 }
 
+/**
+ * Auto-update from GitHub Releases (electron-builder publishes latest.yml next to the installer).
+ * Downloads in the background; the UI offers "Restart to update", otherwise it installs on quit.
+ */
+function sendUpdate(s: UpdateState) {
+  win?.webContents.send('update:state', s)
+}
+function checkForUpdates() {
+  if (!app.isPackaged) return sendUpdate({ status: 'unsupported' })
+  autoUpdater.checkForUpdates().catch((e) => sendUpdate({ status: 'error', message: String(e?.message ?? e) }))
+}
+function setupUpdater() {
+  autoUpdater.autoDownload = true
+  autoUpdater.autoInstallOnAppQuit = true
+  autoUpdater.on('checking-for-update', () => sendUpdate({ status: 'checking' }))
+  autoUpdater.on('update-not-available', () => sendUpdate({ status: 'none' }))
+  autoUpdater.on('update-available', (i) => sendUpdate({ status: 'available', version: i.version }))
+  autoUpdater.on('download-progress', (p) => sendUpdate({ status: 'downloading', version: '', percent: Math.round(p.percent) }))
+  autoUpdater.on('update-downloaded', (i) => sendUpdate({ status: 'ready', version: i.version }))
+  autoUpdater.on('error', (e) => sendUpdate({ status: 'error', message: e.message }))
+  if (!app.isPackaged) return
+  setTimeout(checkForUpdates, 8000)
+  setInterval(checkForUpdates, 4 * 3600_000)
+}
+
 app.whenReady().then(() => {
   app.setAppUserModelId('app.lumen.iptv')
   patchNetworking()
   registerIpc()
   createWindow()
+  setupUpdater()
   app.on('activate', () => BrowserWindow.getAllWindows().length === 0 && createWindow())
 })
 app.on('window-all-closed', () => app.quit())

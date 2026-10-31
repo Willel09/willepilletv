@@ -1,17 +1,21 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { Heart, Info, Play, Star } from 'lucide-react'
+import { Check, Info, Play, Plus, Star } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { Movie, Show } from '../../../shared/types'
 import { cleanName } from '../lib/format'
 import { softSpring } from '../lib/motion'
-import { isFavorite, openDetail, playMovie, setAmbient, toggleFavorite, useApp } from '../store'
+import { inWatchlist, openDetail, playMovie, setAmbient, toggleWatchlist, useApp } from '../store'
 import { Button, IconButton } from './ui'
 
 /** Full-bleed featured banner that auto-rotates, with a cinematic gradient fade into the rows below */
+// Portrait posters become a blurred backdrop; how strong follows the "Artwork glow" setting
+const BACKDROP = { strong: 'opacity-100', subtle: 'opacity-60', off: 'opacity-30' }
+
 export function Hero({ items }: { items: (Movie | Show)[] }) {
   const [i, setI] = useState(0)
+  const glow = useApp((s) => s.settings.ambient)
   const [paused, setPaused] = useState(false)
-  useApp((s) => s.favorites)
+  useApp((s) => s.watchlist)
   const item = items[i % items.length]
 
   useEffect(() => {
@@ -26,7 +30,7 @@ export function Hero({ items }: { items: (Movie | Show)[] }) {
   if (!item) return null
   const art = (item.kind === 'series' && item.backdrop) || item.poster
   const wide = item.kind === 'series' && !!item.backdrop
-  const fav = isFavorite(item.id)
+  const listed = inWatchlist(item.id)
 
   return (
     <section className="relative h-[min(78vh,760px)] min-h-[540px] overflow-hidden" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
@@ -46,14 +50,14 @@ export function Hero({ items }: { items: (Movie | Show)[] }) {
                 src={art}
                 alt=""
                 referrerPolicy="no-referrer"
-                className={`absolute inset-0 size-full object-cover object-[center_22%] ${wide ? '' : 'scale-110 blur-2xl saturate-150'}`}
+                className={`absolute inset-0 size-full object-cover object-[center_22%] ${wide ? '' : `scale-110 blur-2xl saturate-150 ${BACKDROP[glow]}`}`}
                 onError={(e) => (e.currentTarget.style.display = 'none')}
               />
             )}
           </motion.div>
         </AnimatePresence>
-        <div className="absolute inset-0 bg-gradient-to-r from-[color-mix(in_srgb,var(--base)_92%,transparent)] via-[color-mix(in_srgb,var(--base)_45%,transparent)] to-transparent" />
-        <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-[color-mix(in_srgb,var(--base)_55%,transparent)] to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-r from-[rgb(var(--base-rgb)/0.92)] via-[rgb(var(--base-rgb)/0.45)] to-transparent" />
+        <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-[rgb(var(--base-rgb)/0.55)] to-transparent" />
       </div>
 
       <AnimatePresence>
@@ -68,7 +72,7 @@ export function Hero({ items }: { items: (Movie | Show)[] }) {
             animate={{ opacity: 1, y: 0, rotate: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ ...softSpring, delay: 0.15 }}
-            className="absolute right-[9%] top-[46%] hidden aspect-[2/3] h-[56%] -translate-y-1/2 rounded-[28px] object-cover shadow-[0_50px_100px_-20px_rgb(0_0_0/0.85),inset_0_1px_0_rgb(255_255_255/0.3)] ring-1 ring-white/15 lg:block"
+            className="absolute right-[9%] top-[18%] hidden aspect-[2/3] h-[56%] rounded-[28px] object-cover shadow-[0_50px_100px_-20px_rgb(0_0_0/0.85),inset_0_1px_0_rgb(255_255_255/0.3)] ring-1 ring-white/15 lg:block"
             onError={(e) => (e.currentTarget.style.display = 'none')}
           />
         )}
@@ -107,8 +111,8 @@ export function Hero({ items }: { items: (Movie | Show)[] }) {
               <Button size="lg" icon={<Info className="size-5" />} onClick={() => openDetail(item)}>
                 More Info
               </Button>
-              <IconButton label={fav ? 'Remove from Favorites' : 'Add to Favorites'} className="size-13" onClick={() => toggleFavorite(item)}>
-                <Heart className={`size-5 ${fav ? 'fill-rose-400 text-rose-400' : ''}`} />
+              <IconButton label={listed ? 'Remove from Watchlist' : 'Add to Watchlist'} className="size-13" onClick={() => toggleWatchlist(item)}>
+                {listed ? <Check className="size-5" /> : <Plus className="size-5" />}
               </IconButton>
             </div>
           </motion.div>

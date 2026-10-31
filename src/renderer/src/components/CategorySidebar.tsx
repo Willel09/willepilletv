@@ -19,7 +19,17 @@ export function CategorySidebar({ items, value, onChange, layoutId }: { items: C
   const ref = useRef<HTMLDivElement>(null)
   const v = useVirtualizer({ count: list.length, getScrollElement: () => ref.current, estimateSize: () => 44, overscan: 12 })
   return (
-    <aside className="glass flex w-[264px] shrink-0 flex-col overflow-hidden rounded-[28px]">
+    <>
+    {/* phones: a compact picker instead of the sidebar */}
+    <select
+      aria-label="Category"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="glass-thin absolute left-4 right-4 top-[84px] z-10 h-10 rounded-full bg-transparent px-4 text-[14px] font-semibold text-fg md:hidden"
+    >
+      {items.map((c) => <option key={c.key} value={c.key} className="text-black">{c.label} ({c.count})</option>)}
+    </select>
+    <aside className="glass hidden w-[264px] shrink-0 flex-col overflow-hidden rounded-[28px] md:flex">
       <div className="p-3 pb-2">
         <label className="flex h-10 items-center gap-2 rounded-2xl bg-fg/7 px-3 text-fg/45 focus-within:shadow-[inset_0_0_0_2px_var(--accent)]">
           <Search className="size-4 shrink-0" />
@@ -48,5 +58,6 @@ export function CategorySidebar({ items, value, onChange, layoutId }: { items: C
         </div>
       </div>
     </aside>
+    </>
   )
 }

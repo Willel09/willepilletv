@@ -28,7 +28,7 @@ function useTilt() {
 
 const lift = {
   rest: { scale: 1, y: 0, boxShadow: '0 12px 30px -14px rgba(0,0,0,0.6)' },
-  focus: { scale: 1.08, y: -6, boxShadow: '0 40px 70px -18px rgba(0,0,0,0.85), 0 0 0 1px rgba(255,255,255,0.18), 0 0 46px -6px color-mix(in srgb, var(--accent) 45%, transparent)' }
+  focus: { scale: 1.08, y: -6, boxShadow: '0 40px 70px -18px rgba(0,0,0,0.85), 0 0 0 1px rgba(255,255,255,0.18), 0 0 46px -6px rgb(var(--accent-rgb) / 0.45)' }
 }
 const fade = { rest: { opacity: 0 }, focus: { opacity: 1 } }
 

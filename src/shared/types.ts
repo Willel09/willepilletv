@@ -125,7 +125,10 @@ export interface MediaInfo {
 }
 
 export interface Settings {
-  theme: 'dark' | 'light'
+  /** theme preset id, see renderer lib/themes.ts */
+  theme: string
+  /** how strongly the background picks up the focused artwork */
+  ambient: 'strong' | 'subtle' | 'off'
   material: 'mica' | 'acrylic' | 'none'
   accent: string
   liveFormat: 'ts' | 'm3u8'
@@ -152,19 +155,35 @@ export interface HistoryEntry {
   parentId?: string
 }
 
+/** Per-item change times + deletion tombstones, keyed "<collection>:<id>". Drives sync merges. */
+export interface SyncMeta {
+  at: Record<string, number>
+  tomb: Record<string, number>
+}
+
+export interface SyncConfig {
+  /** secret sync code shared by your devices; never sent to the server in plain form */
+  code: string
+  lastSync: number
+}
+
 export interface StoreShape {
   settings: Settings
   sources: Source[]
   favorites: Item[]
+  watchlist: (Movie | Show)[]
   history: HistoryEntry[]
+  meta: SyncMeta
+  sync: SyncConfig
 }
 
 export const DEFAULT_UA = 'VLC/3.0.21 LibVLC/3.0.21'
 
 export const DEFAULT_SETTINGS: Settings = {
-  theme: 'dark',
+  theme: 'graphite',
+  ambient: 'subtle',
   material: 'mica',
-  accent: '#0a84ff',
+  accent: '',
   liveFormat: 'ts',
   epgUrl: '',
   autoProviderEpg: true,
@@ -177,9 +196,28 @@ export const DEFAULT_SETTINGS: Settings = {
 
 export type WindowState = { maximized: boolean; fullscreen: boolean }
 
+export type UpdateState =
+  | { status: 'idle' | 'checking' | 'none' | 'unsupported' }
+  | { status: 'available' | 'downloading'; version: string; percent?: number }
+  | { status: 'ready'; version: string }
+  | { status: 'error'; message: string }
+
+export const STORE_DEFAULTS: StoreShape = {
+  settings: DEFAULT_SETTINGS,
+  sources: [],
+  favorites: [],
+  watchlist: [],
+  history: [],
+  meta: { at: {}, tomb: {} },
+  sync: { code: '', lastSync: 0 }
+}
+
 /** The bridge exposed on window.api by the preload script */
 export interface IptvApi {
   platform: string
+  /** desktop = Electron app, tv = Samsung Tizen, web = browser */
+  device: 'desktop' | 'tv' | 'web'
+  version: string
   getStore(): Promise<StoreShape>
   setStore<K extends keyof StoreShape>(key: K, value: StoreShape[K]): Promise<void>
   getLibrary(): Promise<Library | null>
@@ -195,8 +233,13 @@ export interface IptvApi {
     close(): void
     setFullscreen(on: boolean): void
     setMaterial(m: Settings['material']): void
-    setTheme(t: Settings['theme']): void
+    setTheme(mode: 'dark' | 'light'): void
   }
   onWindowState(cb: (s: WindowState) => void): () => void
   onProgress(cb: (msg: string) => void): () => void
+  update: {
+    check(): void
+    install(): void
+    onState(cb: (s: UpdateState) => void): () => void
+  }
 }

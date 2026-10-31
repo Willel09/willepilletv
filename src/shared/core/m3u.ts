@@ -1,4 +1,4 @@
-import type { Channel, Episode, Movie, Show } from '../shared/types'
+import type { Channel, Episode, Movie, Show } from '../types'
 
 /** 53-bit string hash (cyrb53): short, stable ids with negligible collisions at 100k+ items. */
 export function hash(str: string): string {

@@ -4,6 +4,7 @@ import { Ambient } from './components/Ambient'
 import { TABS, TitleBar } from './components/TitleBar'
 import { Toast } from './components/Toast'
 import { initSpatialNav } from './lib/nav'
+import { initTvKeys } from './lib/tv'
 import { spring } from './lib/motion'
 import Player from './player/Player'
 import Browse from './screens/Browse'
@@ -50,6 +51,8 @@ export default function App() {
   const sheet = useApp((s) => s.sourceSheet)
 
   useEffect(() => {
+    // must run before every other key handler (registers the first capture listener)
+    const offTv = api.device === 'tv' ? initTvKeys() : () => {}
     boot()
     const offProgress = api.onProgress((progress) => useApp.setState({ progress }))
     const offNav = initSpatialNav()
@@ -65,6 +68,7 @@ export default function App() {
         if (s.detail) closeDetail()
         else if (isTyping()) (document.activeElement as HTMLElement).blur()
         else if (s.tab !== 'home') setTab('home')
+        else if (api.device === 'tv') api.win.close() // Back on Home exits the TV app
       }
     }
     // Paste a stream URL anywhere to play it straight away
@@ -76,6 +80,7 @@ export default function App() {
     window.addEventListener('keydown', onKey)
     window.addEventListener('paste', onPaste)
     return () => {
+      offTv()
       offProgress()
       offNav()
       window.removeEventListener('keydown', onKey)

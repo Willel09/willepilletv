@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { FileText, Link2, Tv } from 'lucide-react'
+import { FileText, Link2, MonitorSmartphone, Tv } from 'lucide-react'
 import { useMemo } from 'react'
 import { ChannelTile, PosterCard, WideCard } from '../components/Cards'
 import { Hero } from '../components/Hero'
@@ -9,6 +9,7 @@ import { nowNext } from '../lib/epg'
 import { softSpring } from '../lib/motion'
 import { openDetail, openSourceSheet, playChannel, playMovie, resume, resumable, setGroup, setTab, useApp, useIndex } from '../store'
 import type { Item } from '../../../shared/types'
+import { startPairing } from './Settings'
 
 function Welcome() {
   return (
@@ -29,6 +30,9 @@ function Welcome() {
             M3U Playlist
           </Button>
         </div>
+        <button onClick={startPairing} className="mx-auto mt-6 flex items-center gap-2 rounded-full px-4 py-2 text-[14px] font-semibold text-fg/60 transition hover:bg-fg/8 hover:text-fg">
+          <MonitorSmartphone className="size-4" /> Already use Lumen on another device? Link it
+        </button>
       </motion.div>
     </div>
   )
@@ -39,6 +43,7 @@ export default function Home() {
   const sources = useApp((s) => s.sources)
   const loading = useApp((s) => s.loading)
   const favorites = useApp((s) => s.favorites)
+  const watchlist = useApp((s) => s.watchlist)
   const history = useApp((s) => s.history)
   const epg = useApp((s) => s.epg)
 
@@ -52,7 +57,7 @@ export default function Home() {
   }, [idx])
 
   if (!sources.length) return <Welcome />
-  if (!idx.channels.length && !idx.movies.length && !idx.series.length)
+  if (!idx.channels.length && !idx.movies.length && !idx.series.length && !watchlist.length && !favorites.length && !history.length)
     return (
       <div className="grid h-full place-items-center text-fg/60">
         {loading ? (
@@ -93,6 +98,7 @@ export default function Home() {
             ))}
           </Row>
         )}
+        {watchlist.length > 0 && <Row title="My Watchlist" count={watchlist.length}>{watchlist.slice(0, 40).map(poster)}</Row>}
         {favorites.length > 0 && <Row title="Favorites">{favorites.slice(0, 40).map(poster)}</Row>}
         {recentLive.length > 0 && (
           <Row title="Recently Watched Channels">

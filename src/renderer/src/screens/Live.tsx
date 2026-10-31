@@ -178,7 +178,7 @@ export default function Live() {
   if (!idx.channels.length) return <Empty icon={<Tv className="size-8" />} title="No live channels" text="Add an M3U playlist or Xtream Codes account in Settings." />
 
   return (
-    <div className="flex h-full gap-5 px-7 pb-7 pt-[92px]">
+    <div className="flex h-full gap-5 px-3 pb-3 pt-[136px] md:px-7 md:pb-7 md:pt-[92px]">
       <CategorySidebar items={cats} value={group} onChange={(k) => setGroup('live', k)} layoutId="live-cat" />
       <div className="flex min-w-0 flex-1 flex-col gap-4">
         <div className="flex items-center justify-between px-2">

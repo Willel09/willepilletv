@@ -1,4 +1,4 @@
-import type { Channel, Programme } from '../shared/types'
+import type { Channel, Programme } from '../types'
 
 const ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" }
 

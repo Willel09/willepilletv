@@ -35,7 +35,7 @@ function TabBar() {
               />
             )}
             <Icon className="relative size-4" strokeWidth={2.2} />
-            <span className="relative">{label}</span>
+            <span className="relative hidden md:inline">{label}</span>
           </button>
         )
       })}
@@ -67,17 +67,17 @@ export function TitleBar() {
   const progress = useApp((s) => s.progress)
   const hasSources = useApp((s) => s.sources.length > 0)
   return (
-    <header className="drag absolute inset-x-0 top-0 z-30 flex h-[76px] items-center justify-between px-6">
+    <header className="drag absolute inset-x-0 top-0 z-30 flex h-[76px] items-center justify-center px-3 lg:justify-between lg:px-6">
       {/* iOS-style scroll edge: content scrolling underneath softly blurs and dims away */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[96px] bg-gradient-to-b from-[color-mix(in_srgb,var(--base)_82%,transparent)] to-transparent backdrop-blur-[14px] [mask-image:linear-gradient(to_bottom,black_25%,transparent)]" />
-      <div className="flex w-64 items-center gap-2.5">
+      <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[96px] bg-gradient-to-b from-[rgb(var(--base-rgb)/0.82)] to-transparent backdrop-blur-[14px] [mask-image:linear-gradient(to_bottom,black_25%,transparent)]" />
+      <div className="hidden w-64 items-center gap-2.5 lg:flex">
         <div className="grid size-8 place-items-center rounded-[10px] bg-[conic-gradient(from_200deg,var(--accent),#bf5af2,#ff375f,var(--accent))] shadow-[0_6px_20px_-6px_var(--accent)]">
           <div className="size-3 rounded-full bg-white/95 shadow-[0_0_12px_white]" />
         </div>
         <span className="text-[17px] font-bold tracking-[-0.03em]">Lumen</span>
       </div>
       <TabBar />
-      <div className="flex w-64 items-center justify-end gap-3">
+      <div className="hidden w-64 items-center justify-end gap-3 lg:flex">
         {loading || progress ? (
           <div className="glass-thin no-drag flex h-8 max-w-44 items-center gap-2 rounded-full px-3 text-[12px] font-medium text-fg/75" title={progress}>
             <Spinner className="size-3.5 shrink-0" />
@@ -90,7 +90,7 @@ export function TitleBar() {
             </button>
           )
         )}
-        <WindowButtons />
+        {api.device === 'desktop' && <WindowButtons />}
       </div>
     </header>
   )

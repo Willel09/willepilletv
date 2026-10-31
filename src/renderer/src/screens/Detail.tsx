@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { ChevronLeft, ExternalLink, Heart, Play, RotateCcw, Star } from 'lucide-react'
+import { Check, ChevronLeft, ExternalLink, Heart, Play, Plus, RotateCcw, Star } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import type { Episode, MediaInfo, Movie, Show } from '../../../shared/types'
 import { PosterCard } from '../components/Cards'
@@ -8,7 +8,7 @@ import { Row } from '../components/Row'
 import { Button, IconButton, Spinner } from '../components/ui'
 import { cleanName, duration } from '../lib/format'
 import { sheetSpring, softSpring, spring } from '../lib/motion'
-import { api, closeDetail, historyFor, index, isFavorite, openDetail, playEpisode, playMovie, resumable, setAmbient, toast, toggleFavorite, useApp } from '../store'
+import { api, closeDetail, historyFor, inWatchlist, index, isFavorite, openDetail, playEpisode, playMovie, resumable, setAmbient, toast, toggleFavorite, toggleWatchlist, useApp } from '../store'
 
 function EpisodeCard({ show, ep, episodes, art }: { show: Show; ep: Episode; episodes: Episode[]; art?: string }) {
   const h = useApp((s) => s.history.find((x) => x.id === `${show.id}:${ep.id}`))
@@ -53,6 +53,7 @@ export default function Detail({ item }: { item: Movie | Show }) {
   const [loading, setLoading] = useState(false)
   const [season, setSeason] = useState<number>()
   useApp((s) => s.favorites)
+  useApp((s) => s.watchlist)
   const history = useApp((s) => s.history)
 
   useEffect(() => {
@@ -116,8 +117,8 @@ export default function Detail({ item }: { item: Movie | Show }) {
         <motion.div className="absolute inset-0 overflow-hidden [mask-image:linear-gradient(to_bottom,black_50%,transparent)]" initial={{ scale: 1.08 }} animate={{ scale: 1 }} transition={{ duration: 1.6, ease: [0.2, 0.7, 0.2, 1] }}>
           {art && <img src={art} alt="" referrerPolicy="no-referrer" className={`size-full object-cover object-[center_20%] ${info.backdrop || (item.kind === 'series' && item.backdrop) ? '' : 'scale-110 blur-2xl saturate-150'}`} onError={(e) => (e.currentTarget.style.display = 'none')} />}
         </motion.div>
-        <div className="absolute inset-0 bg-gradient-to-r from-[color-mix(in_srgb,var(--base)_92%,transparent)] via-[color-mix(in_srgb,var(--base)_60%,transparent)] to-transparent" />
-        <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-[color-mix(in_srgb,var(--base)_55%,transparent)] to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-r from-[rgb(var(--base-rgb)/0.92)] via-[rgb(var(--base-rgb)/0.6)] to-transparent" />
+        <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-[rgb(var(--base-rgb)/0.55)] to-transparent" />
 
         <div className="relative flex items-end gap-12 px-14 pb-14 pt-32">
           <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ ...softSpring, delay: 0.08 }} className="min-w-0 max-w-3xl flex-1">
@@ -156,12 +157,17 @@ export default function Detail({ item }: { item: Movie | Show }) {
                   From Beginning
                 </Button>
               )}
+              <Button size="lg" icon={inWatchlist(item.id) ? <Check className="size-5" /> : <Plus className="size-5" />} onClick={() => toggleWatchlist(item)}>
+                {inWatchlist(item.id) ? 'In Watchlist' : 'Watchlist'}
+              </Button>
               <IconButton label={fav ? 'Remove from Favorites' : 'Add to Favorites'} className="size-13" onClick={() => toggleFavorite(item)}>
                 <Heart className={`size-5 ${fav ? 'fill-rose-400 text-rose-400' : ''}`} />
               </IconButton>
-              <IconButton label="Open in VLC" className="size-13" onClick={vlc}>
-                <ExternalLink className="size-5" />
-              </IconButton>
+              {api.device === 'desktop' && (
+                <IconButton label="Open in VLC" className="size-13" onClick={vlc}>
+                  <ExternalLink className="size-5" />
+                </IconButton>
+              )}
             </div>
           </motion.div>
           <motion.div

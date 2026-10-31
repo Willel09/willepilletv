@@ -35,8 +35,8 @@ export function Guide({ channels }: { channels: Channel[] }) {
     <div ref={ref} className="glass relative min-h-0 min-w-0 flex-1 overflow-auto rounded-[28px]">
       <div className="relative" style={{ width: LEFT + width, height: HEAD + v.getTotalSize() }}>
         {/* time header */}
-        <div className="sticky top-0 z-20 flex border-b border-fg/8 bg-[color-mix(in_srgb,var(--base)_80%,transparent)] backdrop-blur-xl" style={{ height: HEAD }}>
-          <div className="sticky left-0 z-10 flex shrink-0 items-center bg-[color-mix(in_srgb,var(--base)_92%,transparent)] px-5 text-[12px] font-bold uppercase tracking-[0.12em] text-fg/50 backdrop-blur-xl" style={{ width: LEFT }}>
+        <div className="sticky top-0 z-20 flex border-b border-fg/8 bg-[rgb(var(--base-rgb)/0.8)] backdrop-blur-xl" style={{ height: HEAD }}>
+          <div className="sticky left-0 z-10 flex shrink-0 items-center bg-[rgb(var(--base-rgb)/0.92)] px-5 text-[12px] font-bold uppercase tracking-[0.12em] text-fg/50 backdrop-blur-xl" style={{ width: LEFT }}>
             {new Date(now).toLocaleDateString([], { weekday: 'long' })}
           </div>
           {slots.map((t) => (
@@ -58,7 +58,7 @@ export function Guide({ channels }: { channels: Channel[] }) {
             <div key={c.id} className="absolute inset-x-0 flex border-b border-fg/6" style={{ top: HEAD + row.start, height: ROW_H }}>
               <button
                 onClick={() => playChannel(c, channels)}
-                className="card sticky left-0 z-10 flex shrink-0 items-center gap-3 bg-[color-mix(in_srgb,var(--base)_90%,transparent)] px-4 text-left backdrop-blur-xl hover:bg-[color-mix(in_srgb,var(--base)_75%,var(--fg))]"
+                className="card sticky left-0 z-10 flex shrink-0 items-center gap-3 bg-[rgb(var(--base-rgb)/0.9)] px-4 text-left backdrop-blur-xl hover:bg-[rgb(var(--base-rgb)/0.75)]"
                 style={{ width: LEFT }}
               >
                 <div className="h-9 w-14 shrink-0 overflow-hidden rounded-[10px] bg-fg/6">
@@ -76,7 +76,7 @@ export function Guide({ channels }: { channels: Channel[] }) {
                         key={p.start}
                         onClick={() => playChannel(c, channels)}
                         title={`${clock(p.start)}–${clock(p.stop)}  ${p.title}${p.desc ? `\n\n${p.desc}` : ''}`}
-                        className={`card absolute inset-y-1.5 overflow-hidden rounded-[14px] px-3 py-2 text-left transition-colors ${live ? 'bg-accent/25 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_60%,transparent)] hover:bg-accent/35' : past ? 'bg-fg/4 text-fg/40 hover:bg-fg/8' : 'glass-thin hover:bg-fg/12'}`}
+                        className={`card absolute inset-y-1.5 overflow-hidden rounded-[14px] px-3 py-2 text-left transition-colors ${live ? 'bg-accent/25 shadow-[inset_0_0_0_1px_rgb(var(--accent-rgb)/0.6)] hover:bg-accent/35' : past ? 'bg-fg/4 text-fg/40 hover:bg-fg/8' : 'glass-thin hover:bg-fg/12'}`}
                         style={{ left: x(p.start) + 2, width: Math.max(4, x(p.stop) - x(p.start) - 4) }}
                       >
                         <div className="truncate text-[13px] font-semibold">{p.title}</div>

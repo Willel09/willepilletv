@@ -2,6 +2,7 @@ import { net } from 'electron'
 import { readFile } from 'fs/promises'
 import { fileURLToPath } from 'url'
 import { gunzipSync } from 'zlib'
+import { HTTP_HINT } from '../shared/core/net'
 
 const FRIENDLY: [RegExp, string][] = [
   [/ERR_NAME_NOT_RESOLVED|ENOTFOUND/, 'Server not found. Check the address for typos.'],
@@ -37,18 +38,6 @@ export async function getText(url: string, ua: string, timeoutMs = 180_000): Pro
   } catch (e) {
     throw friendly(e, url)
   }
-  if (!res.ok) {
-    const hint = res.status === 401 || res.status === 403 ? ' Access denied: check your login or subscription.' : res.status === 404 ? ' Not found: check the URL.' : ''
-    throw new Error(`Server replied ${res.status} ${res.statusText}.${hint}`)
-  }
+  if (!res.ok) throw new Error(HTTP_HINT(res.status, res.statusText))
   return decode(Buffer.from(await res.arrayBuffer()))
-}
-
-export async function getJson<T>(url: string, ua: string): Promise<T> {
-  const text = await getText(url, ua, 90_000)
-  try {
-    return JSON.parse(text) as T
-  } catch {
-    throw new Error('The server did not return valid data. Is this an Xtream Codes server?')
-  }
 }

@@ -1,34 +1,40 @@
 @import 'tailwindcss';
 
-@theme {
+/* inline: utilities reference var(--fg) directly, so nested overrides (the always-dark player) work */
+@theme inline {
   --font-sans: 'Inter Variable', 'Segoe UI Variable Text', system-ui, sans-serif;
   --color-fg: var(--fg);
   --color-accent: var(--accent);
   --color-bg: var(--base);
 }
 
-/* ---------- Theme tokens ---------- */
+/* ---------- Theme tokens ----------
+   Colours are RGB triplets so themes can swap them at runtime (lib/themes.ts) and so the
+   TV build can turn color-mix() into rgb(var(--x-rgb) / a) for older Samsung browsers. */
 :root {
-  --accent: #0a84ff;
+  --fg-rgb: 245 245 247;
+  --base-rgb: 11 11 13;
+  --accent-rgb: 152 162 179;
+  --glow-1: 120 130 150;
+  --glow-2: 60 60 70;
 }
-/* [data-theme=dark] also matches the player, which always stays dark */
-:root,
-[data-theme='dark'] {
-  --fg: #f5f5f7;
-  --base: #07070b;
+[data-theme] {
+  --fg: rgb(var(--fg-rgb));
+  --base: rgb(var(--base-rgb));
+  --accent: rgb(var(--accent-rgb));
   --app-bg: var(--base);
-  --glass-fill: rgb(255 255 255 / 0.085);
-  --glass-strong: rgb(28 28 34 / 0.55);
-  --glass-hi: rgb(255 255 255 / 0.14);
-  --glass-edge: rgb(255 255 255 / 0.12);
-  --glass-top: rgb(255 255 255 / 0.3);
+}
+[data-theme='dark'] {
+  --glass-fill: rgb(255 255 255 / 0.075);
+  --glass-strong: rgb(var(--base-rgb) / 0.62);
+  --glass-hi: rgb(255 255 255 / 0.12);
+  --glass-edge: rgb(255 255 255 / 0.11);
+  --glass-top: rgb(255 255 255 / 0.28);
   --glass-shadow: 0 30px 80px -20px rgb(0 0 0 / 0.65), 0 10px 30px -10px rgb(0 0 0 / 0.45);
   --card-bg: rgb(255 255 255 / 0.06);
   color-scheme: dark;
 }
 [data-theme='light'] {
-  --fg: #1d1d1f;
-  --base: #eceef3;
   --glass-fill: rgb(255 255 255 / 0.5);
   --glass-strong: rgb(255 255 255 / 0.72);
   --glass-hi: rgb(255 255 255 / 0.65);
@@ -38,10 +44,15 @@
   --card-bg: rgb(0 0 0 / 0.05);
   color-scheme: light;
 }
+/* The player is always dark whatever the theme */
+.force-dark {
+  --fg-rgb: 245 245 247;
+  --base-rgb: 0 0 0;
+}
 /* Let Windows 11 Mica / Acrylic shine through the window */
 [data-material='mica'],
 [data-material='acrylic'] {
-  --app-bg: color-mix(in srgb, var(--base) 62%, transparent);
+  --app-bg: rgb(var(--base-rgb) / 0.62);
 }
 
 html,
@@ -138,13 +149,13 @@ input:focus-visible {
   height: 12px;
 }
 ::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--fg) 16%, transparent);
+  background: rgb(var(--fg-rgb) / 0.16);
   border: 4px solid transparent;
   border-radius: 99px;
   background-clip: content-box;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background-color: color-mix(in srgb, var(--fg) 30%, transparent);
+  background-color: rgb(var(--fg-rgb) / 0.3);
 }
 ::-webkit-scrollbar-track,
 ::-webkit-scrollbar-corner {
@@ -167,10 +178,28 @@ video::cue {
   }
 }
 .skeleton {
-  background: linear-gradient(90deg, var(--card-bg) 0%, color-mix(in srgb, var(--fg) 10%, transparent) 50%, var(--card-bg) 100%);
+  background: linear-gradient(90deg, var(--card-bg) 0%, rgb(var(--fg-rgb) / 0.1) 50%, var(--card-bg) 100%);
   background-size: 200% 100%;
   animation: shimmer 1.6s linear infinite;
 }
 input[type='range'] {
   accent-color: var(--accent);
+}
+
+/* ---------- Samsung TV ---------- */
+/* TV GPUs are modest: lighter blurs keep focus animations and scrolling smooth */
+[data-device='tv'] .glass,
+[data-device='tv'] .glass-strong {
+  backdrop-filter: blur(18px) saturate(150%);
+}
+[data-device='tv'] .glass-thin {
+  backdrop-filter: blur(12px) saturate(140%);
+}
+[data-device='tv'] .ambient-art {
+  filter: blur(60px);
+}
+/* Seen from the sofa: a thicker focus ring */
+[data-device='tv'] :focus-visible {
+  outline-width: 3px;
+  outline-offset: 4px;
 }

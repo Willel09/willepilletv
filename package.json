@@ -1,7 +1,7 @@
 {
   "name": "lumen-iptv",
   "productName": "Lumen",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "A premium IPTV player for Windows. Bring your own M3U, Xtream Codes and XMLTV sources.",
   "author": "Lumen",
   "license": "MIT",
@@ -12,12 +12,15 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
-    "test": "node --experimental-strip-types --test src/main/*.test.ts",
-    "dist": "npm run build && electron-builder --win",
-    "dist:dir": "npm run build && electron-builder --win --dir"
+    "test": "node --experimental-strip-types --test src/**/*.test.ts tools/*.test.ts",
+    "dist": "npm run build && electron-builder --win --publish never",
+    "dist:dir": "npm run build && electron-builder --win --dir --publish never",
+    "dev:web": "vite --config vite.web.config.mts",
+    "build:tv": "node scripts/build-web.mjs"
   },
   "dependencies": {
-    "electron-store": "12.0.0"
+    "electron-store": "12.0.0",
+    "electron-updater": "6.8.11"
   },
   "devDependencies": {
     "@fontsource-variable/inter": "5.3.0",
@@ -30,6 +33,7 @@
     "electron": "45.2.1",
     "electron-builder": "26.18.0",
     "electron-vite": "6.0.0",
+    "fflate": "0.8.3",
     "framer-motion": "14.9.0",
     "hls.js": "1.7.4",
     "lucide-react": "1.66.0",

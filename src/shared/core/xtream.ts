@@ -1,5 +1,5 @@
-import type { Account, Channel, Episode, MediaInfo, Movie, Show, Source } from '../shared/types'
-import { getJson } from './http'
+import type { Account, Channel, Episode, MediaInfo, Movie, Show, Source } from '../types'
+import { getJson, type GetText } from './net'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Json = any
@@ -31,11 +31,11 @@ export interface XtreamResult {
   account: Account
 }
 
-export async function loadXtream(src: Source, ua: string, progress: (m: string) => void): Promise<XtreamResult> {
+export async function loadXtream(src: Source, get: GetText, progress: (m: string) => void): Promise<XtreamResult> {
   if (!src.server || !src.username || !src.password) throw new Error('Server, username and password are required.')
   const base = api(src)
   progress(`${src.name}: signing in…`)
-  const auth = await getJson<Json>(base, ua)
+  const auth = await getJson<Json>(get, base)
   const ui = auth?.user_info
   if (!ui || +ui.auth === 0) throw new Error('Login failed. Check your username and password.')
   if (ui.status && ui.status !== 'Active') throw new Error(`Account is ${ui.status}.`)
@@ -47,11 +47,11 @@ export async function loadXtream(src: Source, ua: string, progress: (m: string) 
   }
 
   progress(`${src.name}: loading channels, movies and series…`)
-  const get = (action: string) => getJson<Json>(`${base}&action=${action}`, ua).catch(() => [])
+  const act = (action: string) => getJson<Json>(get, `${base}&action=${action}`).catch(() => [])
   const [lc, ls, vc, vs, sc, ss] = await Promise.all([
-    get('get_live_categories'), get('get_live_streams'),
-    get('get_vod_categories'), get('get_vod_streams'),
-    get('get_series_categories'), get('get_series')
+    act('get_live_categories'), act('get_live_streams'),
+    act('get_vod_categories'), act('get_vod_streams'),
+    act('get_series_categories'), act('get_series')
   ])
   const catMap = (c: Json) => new Map(arr(c).map((x) => [String(x.category_id), str(x.category_name) ?? 'Uncategorized']))
   const lcm = catMap(lc), vcm = catMap(vc), scm = catMap(sc)
@@ -77,10 +77,10 @@ export async function loadXtream(src: Source, ua: string, progress: (m: string) 
   return { channels, movies, series, account }
 }
 
-export async function xtreamInfo(src: Source, kind: 'movie' | 'series', id: number, ua: string): Promise<MediaInfo> {
+export async function xtreamInfo(src: Source, kind: 'movie' | 'series', id: number, get: GetText): Promise<MediaInfo> {
   const base = api(src)
   if (kind === 'movie') {
-    const r = await getJson<Json>(`${base}&action=get_vod_info&vod_id=${id}`, ua)
+    const r = await getJson<Json>(get, `${base}&action=get_vod_info&vod_id=${id}`)
     const i = r?.info ?? {}
     return {
       plot: str(i.plot) ?? str(i.description), backdrop: str(arr(i.backdrop_path)[0]), poster: str(i.movie_image),
@@ -88,7 +88,7 @@ export async function xtreamInfo(src: Source, kind: 'movie' | 'series', id: numb
       rating: num(i.rating) || undefined, year: year(i.releasedate ?? i.release_date)
     }
   }
-  const r = await getJson<Json>(`${base}&action=get_series_info&series_id=${id}`, ua)
+  const r = await getJson<Json>(get, `${base}&action=get_series_info&series_id=${id}`)
   const i = r?.info ?? {}
   const episodes: Episode[] = []
   for (const [season, list] of Object.entries(r?.episodes ?? {})) {

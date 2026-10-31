@@ -9,6 +9,9 @@ import { nowNext, useNow } from '../lib/epg'
 import { cleanName, clock, duration } from '../lib/format'
 import { sheetSpring, spring } from '../lib/motion'
 import { api, closePlayer, index, isFavorite, playChannel, playEpisode, saveProgress, toast, toggleFavorite, useApp, type PlayRequest } from '../store'
+
+const desktop = api.device === 'desktop'
+const tv = api.device === 'tv'
 import { createEngine, pickEngines, type Engine, type Track } from './engine'
 
 const clamp = (n: number, a = 0, b = 1) => Math.max(a, Math.min(b, n))
@@ -289,7 +292,17 @@ function Session({ req, fullscreen, sleepAt, setSleepAt }: SessionProps) {
       const k = e.key.length === 1 ? e.key.toLowerCase() : e.key
       switch (k) {
         case ' ':
-        case 'k': toggle(); break
+        case 'k':
+        case 'MediaPlayPause': toggle(); break
+        case 'MediaPlay': v().play().catch(() => {}); break
+        case 'MediaPause': v().pause(); break
+        case 'MediaStop': closePlayer(); break
+        case 'MediaRewind': seek(-10); break
+        case 'MediaFastForward': seek(10); break
+        case 'ChannelUp': zap(1); break
+        case 'ChannelDown': zap(-1); break
+        case 'ColorF0Red': if (req.channel) toggleFavorite(req.channel); break
+        case 'ColorF1Green': toggleSubs(); break
         case 'Escape':
         case 'Backspace': if (menu) setMenu(null); else close(); break
         case 'ArrowLeft': seek(-10); break
@@ -454,7 +467,7 @@ function Session({ req, fullscreen, sleepAt, setSleepAt }: SessionProps) {
 
             <div className="group/vol ml-3 flex items-center gap-1">
               <CtrlBtn label="Mute (M)" onClick={() => (v().muted = !v().muted)}><VolIcon className="size-5" /></CtrlBtn>
-              <input data-nav-ignore type="range" min={0} max={1} step={0.01} value={muted ? 0 : volume} onChange={(e) => setVol(+e.target.value)} aria-label="Volume" className="w-24 cursor-pointer" />
+              <input data-nav-ignore type="range" hidden={matchMedia('(max-width: 640px)').matches} min={0} max={1} step={0.01} value={muted ? 0 : volume} onChange={(e) => setVol(+e.target.value)} aria-label="Volume" className="w-24 cursor-pointer" />
             </div>
 
             <div className="flex-1" />
@@ -468,7 +481,7 @@ function Session({ req, fullscreen, sleepAt, setSleepAt }: SessionProps) {
                     value={tracks.ca}
                     options={tracks.audio.length ? tracks.audio.map((a) => ({ value: a.id, label: a.label })) : [{ value: -1, label: 'Default' }]}
                     onPick={(id) => (engine.current?.setAudio(id), setTracks((x) => ({ ...x, ca: id })), setMenu(null))}
-                    footer="No sound? AC3/DTS audio isn't supported by the built-in player — open the stream in VLC."
+                    footer={desktop ? "No sound? AC3/DTS audio isn't supported by the built-in player — open the stream in VLC." : undefined}
                   />
                 )}
               </AnimatePresence>
@@ -503,9 +516,9 @@ function Session({ req, fullscreen, sleepAt, setSleepAt }: SessionProps) {
                 )}
               </AnimatePresence>
             </div>
-            <CtrlBtn label="Picture in Picture (P)" onClick={pip}><PictureInPicture2 className="size-5" /></CtrlBtn>
-            <CtrlBtn label="Open in VLC" onClick={vlc}><ExternalLink className="size-5" /></CtrlBtn>
-            <CtrlBtn label="Fullscreen (F)" onClick={() => api.win.setFullscreen(!fullscreen)}>{fullscreen ? <Minimize className="size-5" /> : <Maximize className="size-5" />}</CtrlBtn>
+            {!tv && <CtrlBtn label="Picture in Picture (P)" onClick={pip}><PictureInPicture2 className="size-5" /></CtrlBtn>}
+            {desktop && <CtrlBtn label="Open in VLC" onClick={vlc}><ExternalLink className="size-5" /></CtrlBtn>}
+            {!tv && <CtrlBtn label="Fullscreen (F)" onClick={() => api.win.setFullscreen(!fullscreen)}>{fullscreen ? <Minimize className="size-5" /> : <Maximize className="size-5" />}</CtrlBtn>}
           </div>
         </div>
       </motion.div>
@@ -539,8 +552,8 @@ function Session({ req, fullscreen, sleepAt, setSleepAt }: SessionProps) {
                     Try {fmt === 'ts' ? 'HLS' : 'MPEG-TS'}
                   </button>
                 )}
-                <button onClick={vlc} className="glass-thin flex h-10 items-center gap-2 rounded-full px-5 text-[13.5px] font-semibold text-white"><ExternalLink className="size-4" /> Open in VLC</button>
-                <button onClick={copy} className="glass-thin flex h-10 items-center gap-2 rounded-full px-5 text-[13.5px] font-semibold text-white"><Copy className="size-4" /> Copy URL</button>
+                {desktop && <button onClick={vlc} className="glass-thin flex h-10 items-center gap-2 rounded-full px-5 text-[13.5px] font-semibold text-white"><ExternalLink className="size-4" /> Open in VLC</button>}
+                {!tv && <button onClick={copy} className="glass-thin flex h-10 items-center gap-2 rounded-full px-5 text-[13.5px] font-semibold text-white"><Copy className="size-4" /> Copy URL</button>}
               </div>
               {live && <button onClick={() => zap(1)} className="mt-4 text-[13px] font-semibold text-white/55 hover:text-white">Next channel →</button>}
             </motion.div>
@@ -567,7 +580,7 @@ export default function Player({ req }: { req: PlayRequest }) {
     <motion.div
       data-theme="dark"
       data-nav-scope
-      className="fixed inset-0 z-50 overflow-hidden bg-black text-fg"
+      className="force-dark fixed inset-0 z-50 overflow-hidden bg-black text-fg"
       initial={{ opacity: 0, scale: 1.06, filter: 'blur(12px)' }}
       animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
       exit={{ opacity: 0, scale: 1.03, filter: 'blur(8px)' }}

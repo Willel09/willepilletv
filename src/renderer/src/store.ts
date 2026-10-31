@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import {
-  DEFAULT_SETTINGS,
+  STORE_DEFAULTS,
   type Channel,
   type Epg,
   type Episode,
@@ -14,8 +14,12 @@ import {
   type StoreShape
 } from '../../shared/types'
 import { fold } from './lib/format'
+import * as sync from './lib/sync'
+import { hexToRgb, themeById } from './lib/themes'
+import { createWebApi } from './platform/web'
 
-export const api = window.api
+/** Electron provides window.api from its preload; Samsung TV and browsers use the web implementation */
+export const api = window.api ?? createWebApi()
 
 export type Tab = 'home' | 'live' | 'movies' | 'series' | 'search' | 'settings'
 
@@ -50,14 +54,12 @@ interface State extends StoreShape {
   sourceSheet: { kind: Source['kind']; source?: Source; file?: boolean } | null
   /** selected category per browse screen */
   group: Partial<Record<'live' | 'movies' | 'series', string>>
+  syncStatus: { state: 'off' | 'syncing' | 'ok' | 'error'; message?: string }
 }
 
 export const useApp = create<State>(() => ({
+  ...STORE_DEFAULTS,
   booted: false,
-  settings: DEFAULT_SETTINGS,
-  sources: [],
-  favorites: [],
-  history: [],
   library: null,
   epg: null,
   loading: false,
@@ -68,7 +70,8 @@ export const useApp = create<State>(() => ({
   ambient: null,
   toast: null,
   sourceSheet: null,
-  group: {}
+  group: {},
+  syncStatus: { state: 'off' }
 }))
 
 const set = useApp.setState
@@ -81,19 +84,45 @@ export function persist<K extends keyof StoreShape>(key: K, value: StoreShape[K]
   api.setStore(key, value)
 }
 
+type Synced = 'sources' | 'favorites' | 'watchlist' | 'history'
+
+/** Persist a synced collection and record what changed (and what was deleted) for the merge */
+export function persistSynced<K extends Synced>(key: K, value: StoreShape[K], changed: string[] = [], removed: string[] = []) {
+  const now = Date.now()
+  const meta = { at: { ...get().meta.at }, tomb: { ...get().meta.tomb } }
+  for (const id of changed) (meta.at[`${key}:${id}`] = now), delete meta.tomb[`${key}:${id}`]
+  for (const id of removed) (meta.tomb[`${key}:${id}`] = now), delete meta.at[`${key}:${id}`]
+  persist(key, value)
+  persist('meta', meta)
+  scheduleSync()
+}
+
 export function updateSettings(patch: Partial<Settings>) {
   const settings = { ...get().settings, ...patch }
   persist('settings', settings)
   applyAppearance(settings)
   if (patch.material) api.win.setMaterial(patch.material)
-  if (patch.theme) api.win.setTheme(patch.theme)
+  if (Object.keys(patch).some((k) => (sync.SYNCED_PREFS as readonly string[]).includes(k))) {
+    persist('meta', { ...get().meta, at: { ...get().meta.at, prefs: Date.now() } })
+    scheduleSync()
+  }
 }
 
 export function applyAppearance(s: Settings) {
+  const t = themeById(s.theme)
   const root = document.documentElement
-  root.dataset.theme = s.theme
+  root.dataset.theme = t.mode
   root.dataset.material = api.platform === 'win32' ? s.material : 'none'
-  root.style.setProperty('--accent', s.accent)
+  root.dataset.device = api.device
+  const vars: Record<string, string> = {
+    '--fg-rgb': t.fg,
+    '--base-rgb': t.base,
+    '--accent-rgb': s.accent ? hexToRgb(s.accent) : t.accent,
+    '--glow-1': t.glow[0],
+    '--glow-2': t.glow[1]
+  }
+  for (const [k, v] of Object.entries(vars)) root.style.setProperty(k, v)
+  api.win.setTheme(t.mode)
 }
 
 /* ---------------- boot & loading ---------------- */
@@ -104,8 +133,10 @@ export async function boot() {
   applyAppearance(s.settings)
   const [library, epg] = await Promise.all([api.getLibrary(), api.getEpg()])
   set({ library, epg })
+  startSync()
   if (!s.sources.length) return
-  const stale = !library || Date.now() - library.updatedAt > s.settings.refreshHours * 3600_000
+  const empty = !library || !(library.channels.length || library.movies.length || library.series.length)
+  const stale = empty || Date.now() - library!.updatedAt > s.settings.refreshHours * 3600_000
   if (stale) await refreshLibrary()
   else if (!epg || Date.now() - epg.updatedAt > 6 * 3600_000) refreshEpg()
 }
@@ -157,16 +188,99 @@ export const openSourceSheet = (kind: Source['kind'], source?: Source, file?: bo
 /* ---------------- favorites & history ---------------- */
 
 export const isFavorite = (id: string) => get().favorites.some((f) => f.id === id)
+export const inWatchlist = (id: string) => get().watchlist.some((f) => f.id === id)
+
+// M3U series carry every episode inline; the snapshot doesn't need them (they come from the library)
+const snapshot = <T extends Item>(item: T): T => (item.kind === 'series' ? { ...item, episodes: undefined } : item)
 
 export function toggleFavorite(item: Item) {
   const favs = get().favorites
   const on = favs.some((f) => f.id === item.id)
-  persist('favorites', on ? favs.filter((f) => f.id !== item.id) : [item, ...favs])
+  persistSynced('favorites', on ? favs.filter((f) => f.id !== item.id) : [snapshot(item), ...favs], on ? [] : [item.id], on ? [item.id] : [])
   toast(on ? `Removed “${item.name}” from Favorites` : `Added “${item.name}” to Favorites`)
 }
 
+export function toggleWatchlist(item: Movie | Show) {
+  const list = get().watchlist
+  const on = list.some((f) => f.id === item.id)
+  persistSynced('watchlist', on ? list.filter((f) => f.id !== item.id) : [snapshot(item), ...list], on ? [] : [item.id], on ? [item.id] : [])
+  toast(on ? `Removed “${item.name}” from your Watchlist` : `Added “${item.name}” to your Watchlist`)
+}
+
 export function saveProgress(e: HistoryEntry) {
-  persist('history', [e, ...get().history.filter((h) => h.id !== e.id)].slice(0, 300))
+  const all = [e, ...get().history.filter((h) => h.id !== e.id)]
+  persistSynced('history', all.slice(0, 300), [e.id], all.slice(300).map((h) => h.id))
+}
+
+export function saveSources(list: Source[], changed: string[], removed: string[] = []) {
+  persistSynced('sources', list, changed, removed)
+  refreshLibrary()
+}
+
+export function clearCollection(key: 'favorites' | 'history' | 'watchlist') {
+  persistSynced(key, [], [], get()[key].map((x) => x.id))
+}
+
+/* ---------------- sync ---------------- */
+
+let syncTimer: ReturnType<typeof setTimeout> | undefined
+let syncing: Promise<void> | null = null
+
+export function scheduleSync(delay = 2500) {
+  if (!get().sync.code) return
+  clearTimeout(syncTimer)
+  syncTimer = setTimeout(syncNow, delay)
+}
+
+const localDoc = (): sync.SyncDoc => {
+  const s = get()
+  const prefs = Object.fromEntries(sync.SYNCED_PREFS.map((k) => [k, s.settings[k]])) as sync.Prefs
+  return { v: 1, sources: s.sources, favorites: s.favorites, watchlist: s.watchlist, history: s.history, prefs, meta: s.meta }
+}
+
+/** Pull, merge, apply locally, push back. Safe to call often; concurrent calls share one run. */
+export function syncNow(): Promise<void> {
+  const code = get().sync.code
+  if (!code || !sync.supported()) return Promise.resolve()
+  return (syncing ??= (async () => {
+    set({ syncStatus: { state: 'syncing' } })
+    try {
+      const local = localDoc()
+      const merged = sync.merge(local, await sync.pull(code))
+      const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
+      for (const k of sync.COLLECTIONS) if (!same(local[k], merged[k])) persist(k, merged[k] as never)
+      persist('meta', merged.meta)
+      if (!same(local.prefs, merged.prefs)) {
+        const settings = { ...get().settings, ...merged.prefs }
+        persist('settings', settings)
+        applyAppearance(settings)
+      }
+      await sync.push(code, merged)
+      persist('sync', { ...get().sync, lastSync: Date.now() })
+      set({ syncStatus: { state: 'ok' } })
+      if (!same(local.sources, merged.sources)) refreshLibrary()
+    } catch (e) {
+      set({ syncStatus: { state: 'error', message: (e as Error).message } })
+    } finally {
+      syncing = null
+    }
+  })())
+}
+
+let started = false
+function startSync() {
+  if (started) return
+  started = true
+  syncNow()
+  // pick up changes from other devices (e.g. something added to the watchlist on the PC shows up on the TV)
+  setInterval(() => document.visibilityState === 'visible' && syncNow(), 60_000)
+  document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && syncNow())
+}
+
+export function setSyncCode(code: string) {
+  persist('sync', { code: code ? sync.normalize(code).match(/.{1,4}/g)!.join('-') : '', lastSync: 0 })
+  set({ syncStatus: { state: code ? 'syncing' : 'off' } })
+  if (code) syncNow()
 }
 
 export const historyFor = (id: string) => get().history.find((h) => h.id === id)

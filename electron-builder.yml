@@ -20,3 +20,9 @@ nsis:
   createDesktopShortcut: true
   shortcutName: Lumen
 npmRebuild: false
+# Auto-update: the installed app checks GitHub Releases of this repo (needs a public repo)
+publish:
+  provider: github
+  owner: Willel09
+  repo: apple-iptv
+  releaseType: release
