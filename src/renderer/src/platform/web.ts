@@ -139,8 +139,18 @@ export function createWebApi(): IptvApi {
       close: () => window.tizen?.application.getCurrentApplication().exit(),
       setFullscreen: (on) => {
         if (tv) return
-        if (on) document.documentElement.requestFullscreen?.().catch(() => {})
-        else if (document.fullscreenElement) document.exitFullscreen().catch(() => {})
+        const orientation = screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> }
+        if (on) {
+          const root = document.documentElement
+          if (root.requestFullscreen)
+            // phones: fullscreen video always plays sideways (Android Chrome; ignored on desktop)
+            root.requestFullscreen().then(() => orientation?.lock?.('landscape')).catch(() => {})
+          // iPhone Safari has no element fullscreen: use the native video player instead
+          else (document.querySelector('video') as HTMLVideoElement & { webkitEnterFullscreen?: () => void } | null)?.webkitEnterFullscreen?.()
+        } else {
+          try { orientation?.unlock() } catch { /* not locked */ }
+          if (document.fullscreenElement) document.exitFullscreen().catch(() => {})
+        }
       },
       setMaterial: () => {},
       setTheme: () => {}

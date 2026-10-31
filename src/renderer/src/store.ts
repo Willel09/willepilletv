@@ -49,6 +49,8 @@ interface State extends StoreShape {
   tab: Tab
   detail: Movie | Show | null
   player: PlayRequest | null
+  /** player shrunk into the floating mini player (Windows + web) */
+  playerMini: boolean
   ambient: string | null
   toast: { id: number; text: string } | null
   sourceSheet: { kind: Source['kind']; source?: Source; file?: boolean } | null
@@ -67,6 +69,7 @@ export const useApp = create<State>(() => ({
   tab: 'home',
   detail: null,
   player: null,
+  playerMini: false,
   ambient: null,
   toast: null,
   sourceSheet: null,
@@ -290,8 +293,11 @@ export const resumable = (h?: HistoryEntry) => !!h && h.kind !== 'live' && h.pos
 
 /* ---------------- playback ---------------- */
 
-export const play = (req: PlayRequest) => set({ player: req })
-export const closePlayer = () => set({ player: null })
+export const play = (req: PlayRequest) => set({ player: req, playerMini: false })
+export const closePlayer = () => set({ player: null, playerMini: false })
+export const canMiniPlayer = api.device !== 'tv'
+export const minimizePlayer = () => canMiniPlayer && set({ playerMini: true })
+export const expandPlayer = () => set({ playerMini: false })
 
 export function playChannel(channel: Channel, channels?: Channel[]) {
   play({ kind: 'live', id: channel.id, url: channel.url, title: channel.name, poster: channel.logo, channel, channels })

@@ -30,6 +30,12 @@ const api: IptvApi = {
   },
   onWindowState: (cb) => on('win:state', cb),
   onProgress: (cb) => on('progress', cb),
+  tvInstall: {
+    localIps: () => ipcRenderer.invoke('tv:ips'),
+    discover: () => ipcRenderer.invoke('tv:discover'),
+    checkDevMode: (ip) => ipcRenderer.invoke('tv:devmode', ip),
+    openInstaller: () => ipcRenderer.invoke('tv:installer')
+  },
   update: {
     check: () => ipcRenderer.send('update:check'),
     install: () => ipcRenderer.send('update:install'),

@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import {
-  AlertTriangle, Captions, ChevronDown, ChevronLeft, ChevronUp, Copy, ExternalLink, Gauge, Heart, Languages, Maximize, Minimize,
+  AlertTriangle, Captions, Maximize2, X, ChevronDown, ChevronLeft, ChevronUp, Copy, ExternalLink, Gauge, Heart, Languages, Maximize, Minimize,
   Moon, Pause, PictureInPicture2, Play, RotateCcw, RotateCw, SkipForward, Volume1, Volume2, VolumeX
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
@@ -8,7 +8,7 @@ import { Spinner } from '../components/ui'
 import { nowNext, useNow } from '../lib/epg'
 import { cleanName, clock, duration } from '../lib/format'
 import { sheetSpring, spring } from '../lib/motion'
-import { api, closePlayer, index, isFavorite, playChannel, playEpisode, saveProgress, toast, toggleFavorite, useApp, type PlayRequest } from '../store'
+import { api, canMiniPlayer, closePlayer, expandPlayer, index, isFavorite, minimizePlayer, playChannel, playEpisode, saveProgress, toast, toggleFavorite, useApp, type PlayRequest } from '../store'
 
 const desktop = api.device === 'desktop'
 const tv = api.device === 'tv'
@@ -101,13 +101,14 @@ function SeekBar({ time, dur, buffered, onSeek }: { time: number; dur: number; b
 
 interface SessionProps {
   req: PlayRequest
+  mini: boolean
   fullscreen: boolean
   sleepAt: number
   setSleepAt: (t: number) => void
 }
 
 /** One playback session. Re-keyed on every channel zap / episode so all state resets cleanly. */
-function Session({ req, fullscreen, sleepAt, setSleepAt }: SessionProps) {
+function Session({ req, mini, fullscreen, sleepAt, setSleepAt }: SessionProps) {
   const settings = useApp((s) => s.settings)
   const epg = useApp((s) => s.epg)
   useApp((s) => s.favorites)
@@ -269,7 +270,8 @@ function Session({ req, fullscreen, sleepAt, setSleepAt }: SessionProps) {
     if (!tracks.subs.length) return toast('No subtitles in this stream')
     engine.current?.setSub(tracks.cs >= 0 ? -1 : 0)
   }
-  const close = () => (fullscreen ? api.win.setFullscreen(false) : closePlayer())
+  // Esc/Back: leave fullscreen first, then shrink to the mini player (TV: close)
+  const close = () => (fullscreen ? api.win.setFullscreen(false) : canMiniPlayer ? minimizePlayer() : closePlayer())
 
   // Channel number entry ("1", "0", "4" → channel 104)
   useEffect(() => {
@@ -287,7 +289,7 @@ function Session({ req, fullscreen, sleepAt, setSleepAt }: SessionProps) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (useApp.getState().sourceSheet) return
+      if (mini || useApp.getState().sourceSheet) return
       show()
       const k = e.key.length === 1 ? e.key.toLowerCase() : e.key
       switch (k) {
@@ -341,13 +343,13 @@ function Session({ req, fullscreen, sleepAt, setSleepAt }: SessionProps) {
     return () => clearInterval(id)
   }, [sleepAt, setSleepAt])
 
-  const shown = visible || !playing || !!menu || !!error
+  const shown = !mini && (visible || !playing || !!menu || !!error)
   const { now, next, progress } = live ? nowNext(epg?.programmes[req.id], t) : {}
   const VolIcon = muted || volume === 0 ? VolumeX : volume < 0.5 ? Volume1 : Volume2
   const fav = req.channel && isFavorite(req.channel.id)
 
   return (
-    <div className="absolute inset-0" style={{ cursor: shown ? 'default' : 'none' }} onMouseMove={show} onClick={() => setMenu(null)}>
+    <div className="absolute inset-0" style={{ cursor: shown || mini ? 'default' : 'none' }} onMouseMove={show} onClick={() => setMenu(null)}>
       <video
         ref={video}
         className="absolute inset-0 size-full bg-black object-contain"
@@ -389,9 +391,9 @@ function Session({ req, fullscreen, sleepAt, setSleepAt }: SessionProps) {
       </AnimatePresence>
 
       {/* top bar */}
-      <motion.div animate={{ opacity: shown ? 1 : 0, y: shown ? 0 : -20 }} transition={spring} className={`drag absolute inset-x-0 top-0 flex items-start justify-between bg-gradient-to-b from-black/70 to-transparent px-8 pb-16 pt-7 ${shown ? '' : 'pointer-events-none'}`}>
+      <motion.div animate={{ opacity: shown ? 1 : 0, y: shown ? 0 : -20 }} transition={spring} className={`${mini ? '' : 'drag'} absolute inset-x-0 top-0 flex items-start justify-between gap-3 bg-gradient-to-b from-black/70 to-transparent px-4 pb-16 pt-5 sm:px-8 sm:pt-7 ${shown ? '' : 'pointer-events-none'}`}>
         <div className="no-drag flex min-w-0 items-center gap-4">
-          <CtrlBtn label="Back (Esc)" onClick={closePlayer}><ChevronLeft className="size-6" /></CtrlBtn>
+          <CtrlBtn label={canMiniPlayer ? 'Mini player (Esc)' : 'Back'} onClick={canMiniPlayer ? minimizePlayer : closePlayer}><ChevronLeft className="size-6" /></CtrlBtn>
           <div className="min-w-0">
             <div className="flex items-center gap-3">
               {live && req.channel?.num !== undefined && <span className="text-[15px] font-semibold tabular-nums text-white/50">{req.channel.num}</span>}
@@ -401,13 +403,14 @@ function Session({ req, fullscreen, sleepAt, setSleepAt }: SessionProps) {
           </div>
         </div>
         <div className="no-drag flex shrink-0 items-center gap-2">
-          {live && <span className="flex items-center gap-1.5 rounded-full bg-red-500/90 px-3 py-1 text-[11.5px] font-bold uppercase tracking-[0.1em] text-white"><span className="size-1.5 animate-pulse rounded-full bg-white" />Live</span>}
-          {res && <span className="glass-thin rounded-full px-3 py-1 text-[11.5px] font-bold text-white/85">{res}</span>}
+          {live && <span className="hidden items-center gap-1.5 rounded-full bg-red-500/90 sm:flex px-3 py-1 text-[11.5px] font-bold uppercase tracking-[0.1em] text-white"><span className="size-1.5 animate-pulse rounded-full bg-white" />Live</span>}
+          {res && <span className="glass-thin hidden rounded-full px-3 py-1 sm:inline text-[11.5px] font-bold text-white/85">{res}</span>}
           {req.channel && (
             <CtrlBtn label={fav ? 'Remove from Favorites' : 'Add to Favorites'} onClick={() => toggleFavorite(req.channel!)}>
               <Heart className={`size-5 ${fav ? 'fill-rose-400 text-rose-400' : ''}`} />
             </CtrlBtn>
           )}
+          {canMiniPlayer && <CtrlBtn label="Close" onClick={closePlayer}><X className="size-5" /></CtrlBtn>}
         </div>
       </motion.div>
 
@@ -427,7 +430,7 @@ function Session({ req, fullscreen, sleepAt, setSleepAt }: SessionProps) {
         className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent pb-8 pt-24 ${shown ? '' : 'pointer-events-none'}`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="glass-strong mx-auto w-[min(1120px,92%)] rounded-[30px] px-6 pb-4 pt-4">
+        <div className="glass-strong mx-auto w-[min(1120px,94%)] rounded-[30px] px-3 pb-3 pt-3 sm:px-6 sm:pb-4 sm:pt-4">
           {live ? (
             <div className="flex items-center gap-4 px-1 text-[12.5px] tabular-nums text-white/60">
               {now ? (
@@ -465,14 +468,14 @@ function Session({ req, fullscreen, sleepAt, setSleepAt }: SessionProps) {
               </>
             )}
 
-            <div className="group/vol ml-3 flex items-center gap-1">
+            <div className="group/vol ml-3 hidden items-center gap-1 sm:flex">
               <CtrlBtn label="Mute (M)" onClick={() => (v().muted = !v().muted)}><VolIcon className="size-5" /></CtrlBtn>
-              <input data-nav-ignore type="range" hidden={matchMedia('(max-width: 640px)').matches} min={0} max={1} step={0.01} value={muted ? 0 : volume} onChange={(e) => setVol(+e.target.value)} aria-label="Volume" className="w-24 cursor-pointer" />
+              <input data-nav-ignore type="range" min={0} max={1} step={0.01} value={muted ? 0 : volume} onChange={(e) => setVol(+e.target.value)} aria-label="Volume" className="w-24 cursor-pointer" />
             </div>
 
             <div className="flex-1" />
 
-            <div className="relative" onClick={(e) => e.stopPropagation()}>
+            <div className="relative hidden sm:block" onClick={(e) => e.stopPropagation()}>
               <CtrlBtn label="Audio" active={menu === 'audio'} onClick={() => setMenu(menu === 'audio' ? null : 'audio')}><Languages className="size-5" /></CtrlBtn>
               <AnimatePresence>
                 {menu === 'audio' && (
@@ -502,7 +505,7 @@ function Session({ req, fullscreen, sleepAt, setSleepAt }: SessionProps) {
                 </AnimatePresence>
               </div>
             )}
-            <div className="relative" onClick={(e) => e.stopPropagation()}>
+            <div className="relative hidden sm:block" onClick={(e) => e.stopPropagation()}>
               <CtrlBtn label="Sleep timer" active={menu === 'sleep' || !!sleepAt} onClick={() => setMenu(menu === 'sleep' ? null : 'sleep')}><Moon className="size-5" /></CtrlBtn>
               <AnimatePresence>
                 {menu === 'sleep' && (
@@ -516,16 +519,46 @@ function Session({ req, fullscreen, sleepAt, setSleepAt }: SessionProps) {
                 )}
               </AnimatePresence>
             </div>
-            {!tv && <CtrlBtn label="Picture in Picture (P)" onClick={pip}><PictureInPicture2 className="size-5" /></CtrlBtn>}
+            {!tv && <div className="hidden sm:block"><CtrlBtn label="Picture in Picture (P)" onClick={pip}><PictureInPicture2 className="size-5" /></CtrlBtn></div>}
             {desktop && <CtrlBtn label="Open in VLC" onClick={vlc}><ExternalLink className="size-5" /></CtrlBtn>}
             {!tv && <CtrlBtn label="Fullscreen (F)" onClick={() => api.win.setFullscreen(!fullscreen)}>{fullscreen ? <Minimize className="size-5" /> : <Maximize className="size-5" />}</CtrlBtn>}
           </div>
         </div>
       </motion.div>
 
+      {/* mini player overlay: click to expand */}
+      {mini && (
+        <div className="group absolute inset-0 cursor-pointer" onClick={expandPlayer}>
+          <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-black/40 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+          <div className="absolute inset-x-3 top-3 flex items-start justify-between gap-2 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+            <div className="min-w-0 pt-1 text-white">
+              <div className="truncate text-[13px] font-semibold">{cleanName(req.title)}</div>
+              {(req.subtitle || now) && <div className="truncate text-[11.5px] text-white/65">{req.subtitle ?? now?.title}</div>}
+            </div>
+            <div className="flex shrink-0 gap-1.5" onClick={(e) => e.stopPropagation()}>
+              <button aria-label="Expand" onClick={expandPlayer} className="glass-thin grid size-8 place-items-center rounded-full text-white hover:bg-white/20"><Maximize2 className="size-4" /></button>
+              <button aria-label="Close" onClick={closePlayer} className="glass-thin grid size-8 place-items-center rounded-full text-white hover:bg-white/20"><X className="size-4" /></button>
+            </div>
+          </div>
+          <button
+            aria-label={playing ? 'Pause' : 'Play'}
+            onClick={(e) => (e.stopPropagation(), toggle())}
+            className="absolute left-1/2 top-1/2 grid size-12 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-white/90 text-black opacity-0 shadow-xl transition-opacity duration-300 group-hover:opacity-100"
+          >
+            {playing ? <Pause className="size-5 fill-black" /> : <Play className="ml-0.5 size-5 fill-black" />}
+          </button>
+          {live ? (
+            <span className="absolute bottom-3 left-3 flex items-center gap-1 rounded-full bg-red-500/90 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] text-white"><span className="size-1 rounded-full bg-white" />Live</span>
+          ) : (
+            <div className="absolute inset-x-0 bottom-0 h-1 bg-white/20"><div className="h-full bg-white" style={{ width: `${dur ? (time / dur) * 100 : 0}%` }} /></div>
+          )}
+          {error && <div className="absolute inset-0 grid place-items-center bg-black/70 p-4 text-center text-[12.5px] font-medium text-white">Can't play this {live ? 'channel' : 'video'}. Click to see why.</div>}
+        </div>
+      )}
+
       {/* up next */}
       <AnimatePresence>
-        {upNext !== null && nextEp && (
+        {!mini && upNext !== null && nextEp && (
           <motion.div initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 40 }} transition={sheetSpring} className="glass-strong absolute bottom-40 right-10 w-80 rounded-[26px] p-5" onClick={(e) => e.stopPropagation()}>
             <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-white/50">Up Next in {upNext}</div>
             <div className="mt-1 truncate text-[16px] font-semibold text-white">S{nextEp.season} E{nextEp.episode} · {nextEp.title}</div>
@@ -539,7 +572,7 @@ function Session({ req, fullscreen, sleepAt, setSleepAt }: SessionProps) {
 
       {/* error */}
       <AnimatePresence>
-        {error && (
+        {error && !mini && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 grid place-items-center bg-black/55 backdrop-blur-md" onClick={(e) => e.stopPropagation()}>
             <motion.div initial={{ y: 30, scale: 0.95 }} animate={{ y: 0, scale: 1 }} transition={sheetSpring} className="glass-strong w-[500px] max-w-[92vw] rounded-[32px] p-8 text-center">
               <div className="mx-auto mb-5 grid size-16 place-items-center rounded-full bg-amber-400/15 text-amber-300"><AlertTriangle className="size-8" /></div>
@@ -568,6 +601,20 @@ function Session({ req, fullscreen, sleepAt, setSleepAt }: SessionProps) {
 export default function Player({ req }: { req: PlayRequest }) {
   const [fullscreen, setFullscreen] = useState(false)
   const [sleepAt, setSleepAt] = useState(0)
+  const mini = useApp((s) => s.playerMini)
+  // where the mini player was dragged to (relative to its corner); kept for the next time it shrinks
+  const [offset, setOffset] = useState({ x: 0, y: 0 })
+  const [dragging, setDragging] = useState(false)
+  const dragged = useRef(false)
+  // the visible area (visualViewport) — on phones innerWidth can include off-screen layout width
+  const viewport = () => ({ w: visualViewport?.width ?? innerWidth, h: visualViewport?.height ?? innerHeight })
+  const [vp, setVp] = useState(viewport)
+  useEffect(() => {
+    const onResize = () => setVp(viewport())
+    addEventListener('resize', onResize)
+    visualViewport?.addEventListener('resize', onResize)
+    return () => (removeEventListener('resize', onResize), visualViewport?.removeEventListener('resize', onResize))
+  }, [])
   useEffect(() => api.onWindowState((s) => setFullscreen(s.fullscreen)), [])
   useEffect(
     () => () => {
@@ -576,17 +623,59 @@ export default function Player({ req }: { req: PlayRequest }) {
     },
     []
   )
+  useEffect(() => {
+    if (mini) api.win.setFullscreen(false)
+  }, [mini])
+
+  // Position and size are animated as plain properties (no layout transforms), and the drag offset
+  // is part of the same target, so shrinking, dragging and expanding never fight each other.
+  const margin = vp.w < 520 ? 12 : 24
+  const mw = Math.min(420, vp.w - margin * 2)
+  const mh = Math.round((mw * 9) / 16)
+  const left = vp.w - mw - margin
+  const top = vp.h - mh - margin
+  const box = mini
+    ? { top, left, width: mw, height: mh, borderRadius: 22, ...offset }
+    // percentages, not innerWidth: phone browsers can report a layout viewport wider than the screen
+    : { top: 0, left: 0, width: '100%', height: '100%', borderRadius: 0, x: 0, y: 0 }
+
+  const startDrag = (e: React.PointerEvent) => {
+    if (!mini || e.button !== 0) return
+    const start = { px: e.clientX, py: e.clientY, ...offset }
+    let moved = false
+    const move = (ev: PointerEvent) => {
+      const dx = ev.clientX - start.px
+      const dy = ev.clientY - start.py
+      if (!moved && Math.hypot(dx, dy) < 6) return
+      moved = true
+      setDragging(true)
+      // keep the whole mini player on screen
+      setOffset({ x: Math.min(12, Math.max(12 - left, start.x + dx)), y: Math.min(12, Math.max(12 - top, start.y + dy)) })
+    }
+    const up = () => {
+      removeEventListener('pointermove', move)
+      removeEventListener('pointerup', up)
+      setDragging(false)
+      if (moved) (dragged.current = true), setTimeout(() => (dragged.current = false), 50)
+    }
+    addEventListener('pointermove', move)
+    addEventListener('pointerup', up)
+  }
+
   return (
     <motion.div
       data-theme="dark"
-      data-nav-scope
-      className="force-dark fixed inset-0 z-50 overflow-hidden bg-black text-fg"
-      initial={{ opacity: 0, scale: 1.06, filter: 'blur(12px)' }}
-      animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
-      exit={{ opacity: 0, scale: 1.03, filter: 'blur(8px)' }}
-      transition={sheetSpring}
+      data-nav-scope={mini ? undefined : ''}
+      onPointerDown={startDrag}
+      // a drag that ends over the player must not count as "click to expand"
+      onClickCapture={(e) => dragged.current && e.stopPropagation()}
+      className={`force-dark no-drag fixed z-50 overflow-hidden bg-black text-fg ${mini ? `shadow-[0_30px_80px_-10px_rgb(0_0_0/0.8)] ring-1 ring-white/15 ${dragging ? 'cursor-grabbing' : ''}` : ''}`}
+      initial={{ opacity: 0, scale: 1.06, filter: 'blur(12px)', ...box }}
+      animate={{ opacity: 1, scale: 1, filter: 'blur(0px)', ...box }}
+      exit={{ opacity: 0, scale: mini ? 0.9 : 1.03, filter: 'blur(8px)' }}
+      transition={dragging ? { duration: 0 } : sheetSpring}
     >
-      <Session key={req.id} req={req} fullscreen={fullscreen} sleepAt={sleepAt} setSleepAt={setSleepAt} />
+      <Session key={req.id} req={req} mini={mini} fullscreen={fullscreen} sleepAt={sleepAt} setSleepAt={setSleepAt} />
     </motion.div>
   )
 }

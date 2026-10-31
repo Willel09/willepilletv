@@ -1,4 +1,5 @@
-import { Check, Cloud, CloudOff, Copy, Download, FileText, FolderOpen, Globe, Keyboard, Link2, MonitorSmartphone, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { AnimatePresence } from 'framer-motion'
+import { Check, Cloud, CloudOff, Copy, Download, FileText, FolderOpen, Globe, Keyboard, Link2, MonitorSmartphone, Pencil, Plus, RefreshCw, Trash2, Tv } from 'lucide-react'
 import { useEffect, useState, type ReactNode } from 'react'
 import { DEFAULT_UA, type Source, type UpdateState } from '../../../shared/types'
 import { Sheet } from '../components/Sheet'
@@ -6,6 +7,7 @@ import { Button, Field, IconButton, Segmented, Toggle } from '../components/ui'
 import { ago } from '../lib/format'
 import { newPairCode, newSyncCode, receivePairing, sendPairing, supported as syncSupported } from '../lib/sync'
 import { THEMES } from '../lib/themes'
+import { TvInstallSheet } from './TvInstall'
 import { api, clearCollection, openSourceSheet, refreshEpg, refreshLibrary, saveSources, setSyncCode, setTab, syncNow, toast, updateSettings, useApp } from '../store'
 
 const ACCENTS = ['#0a84ff', '#5e5ce6', '#bf5af2', '#ff375f', '#ff9f0a', '#30d158', '#64d2ff']
@@ -265,7 +267,7 @@ function UpdateCard() {
 const KEYS_DESKTOP: [string, string][] = [
   ['Arrow keys', 'Move focus'], ['Enter', 'Select / play'], ['Esc / Backspace', 'Back'], ['Ctrl + 1…6', 'Switch tabs'], ['/ or Ctrl + F', 'Search'],
   ['Space / K', 'Play / pause'], ['← / →', 'Seek 10 s (VOD)'], ['↑ / ↓ · PgUp / PgDn', 'Channel up / down'], ['0–9', 'Jump to channel number'],
-  ['F', 'Fullscreen'], ['M', 'Mute'], ['P', 'Picture in Picture'], ['C', 'Subtitles on / off'], ['Ctrl + V', 'Play a copied stream URL']
+  ['Esc (player)', 'Mini player'], ['F', 'Fullscreen'], ['M', 'Mute'], ['P', 'Picture in Picture'], ['C', 'Subtitles on / off'], ['Ctrl + V', 'Play a copied stream URL']
 ]
 const KEYS_TV: [string, string][] = [
   ['Arrows / OK', 'Move / select'], ['Back', 'Back (exit on Home)'], ['Play / Pause', 'Play / pause'], ['◀◀ / ▶▶', 'Seek 10 s'],
@@ -279,6 +281,7 @@ export default function Settings() {
   const epg = useApp((x) => x.epg)
   const loading = useApp((x) => x.loading)
   const matched = epg ? Object.keys(epg.programmes).length : 0
+  const [tvSheet, setTvSheet] = useState(false)
 
   const remove = (src: Source) => {
     if (!confirm(`Remove “${src.name}”? Its channels will disappear from Lumen.`)) return
@@ -334,6 +337,15 @@ export default function Settings() {
         <Card title="Sync & Devices" action={<MonitorSmartphone className="size-5 text-fg/40" />}>
           <SyncCard />
         </Card>
+
+        {api.tvInstall && (
+          <Card title="Samsung TV" action={<Tv className="size-5 text-fg/40" />}>
+            <Line label="Watch Lumen on your Samsung TV" hint="A guided install: no terminal, about 5 minutes the first time. Afterwards the TV updates itself.">
+              <Button variant="primary" icon={<Tv className="size-4" />} onClick={() => setTvSheet(true)}>Install on TV</Button>
+            </Line>
+          </Card>
+        )}
+        <AnimatePresence>{tvSheet && <TvInstallSheet key="tv" onClose={() => setTvSheet(false)} />}</AnimatePresence>
 
         <Card title="Appearance">
           <div className="py-3.5">

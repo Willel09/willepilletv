@@ -5,97 +5,34 @@ Lumen is an IPTV **player**. It ships with no channels: you add your own M3U pla
 | Device | How it runs | Updates |
 | --- | --- | --- |
 | **Windows** | Electron app (`Lumen-Setup-x.y.z.exe`) | Downloads new versions in the background, then offers **Restart to update** |
-| **Samsung TV** (Tizen 6.5+, 2022 models and newer) | `Lumen.wgt`, installed with [smarttv-installer](https://github.com/Krishnakant010/smarttv-installer) | Loads the newest version from GitHub Pages every time it starts. No reinstall needed |
-| **Web / phone** | <https://willel09.github.io/apple-iptv/> | Always the latest |
+| **Samsung TV** (Tizen 6.5+, 2022 models and newer) | `Lumen.wgt`, installed from Lumen for Windows (*Settings → Samsung TV*) | Loads the newest version from GitHub Pages every time it starts. No reinstall needed |
+| **Web / phone** | <https://willel09.github.io/willepilletv/> | Always the latest |
 
 **Stack:** Electron · React 19 · TypeScript · Vite · Tailwind CSS 4 · Framer Motion · hls.js · mpegts.js · electron-store · electron-updater · Supabase (sync)
 
 ---
 
-## Quick start (Windows)
+## Install — no terminal needed
 
-You need **Node.js 22 LTS** (or 20.19+) from <https://nodejs.org>.
+### Windows
 
-```bash
-npm install          # downloads all dependencies + the Electron runtime (one time, ~2 min)
-npm run dev          # starts the app with hot reload — edit a file and the window updates
-npm run dist         # builds the Windows installer → dist\Lumen-Setup-1.1.0.exe
-```
+1. Open **[the latest release](https://github.com/Willel09/willepilletv/releases/latest)** and download **`Lumen-Setup-x.y.z.exe`**.
+2. Open the file and follow the installer.
 
-| Command | What it does |
-| --- | --- |
-| `npm test` | Runs the unit tests (M3U/XMLTV parsers, sync merge, TV CSS compatibility) |
-| `npm run typecheck` | Type-checks all code |
-| `npm run build:tv` | Builds the TV package `dist\Lumen.wgt` and the web app in `dist\web` |
-| `npm run dev:web` | Runs the TV/web version in your browser with hot reload (handy for TV layout work) |
-| `npm run preview` | Runs the compiled desktop build |
-| `npm run dist:dir` | Builds an unpacked app in `dist\win-unpacked\Lumen.exe` (faster, no installer) |
+> The installer isn't code-signed, so the first time Windows may say "Windows protected your PC". Click **More info → Run anyway**.
 
-> The installer is not code-signed, so Windows SmartScreen will say "Windows protected your PC" the first time. Click **More info → Run anyway**.
+After that Lumen updates itself: when a new version is out, *Settings → Updates* (and a prompt) offer **Restart to update**.
 
----
+### Samsung TV (2022 models and newer)
 
-## One-time setup: releases and auto-update
+Everything happens in Lumen for Windows: **Settings → Samsung TV → Install on TV**. The assistant walks you through it.
 
-Updates come from **GitHub Releases** (Windows) and **GitHub Pages** (TV and web). Do this once:
+1. **Developer Mode.** On the TV: **Apps** → press **1 2 3 4 5** → *Developer mode: On* → type the PC's IP address that the assistant shows → restart the TV fully (hold the power button).
+2. **Find the TV.** The assistant searches your network and shows ✓ when Developer Mode is answering. You can also type the TV's IP.
+3. **Install.** Click **Open TV Installer**. Lumen downloads and opens [SmartTV Installer](https://github.com/Krishnakant010/smarttv-installer), a free open-source tool. Choose **Samsung**, enter the TV IP, pick **Custom GitHub Repository** → `Willel09/willepilletv` (both have copy buttons in the assistant), then press **Install**. The first time, a Samsung account sign-in opens in the browser to create the TV's developer certificate.
+4. **Link.** On the TV choose **Already use Lumen on another device? Link it**. On the PC: *Settings → Sync & Devices → Link a device*, then type the code the TV shows. Your sources and lists appear on the TV with no typing on the remote.
 
-1. Make the repository **public**: GitHub → *Settings → General → Danger Zone → Change visibility*. Releases and Pages must be downloadable without logging in.
-2. Turn on Pages: GitHub → *Settings → Pages → Build and deployment → Source: **GitHub Actions***.
-
-### Shipping a new version
-
-From then on, every update you make reaches every device with two commands:
-
-```bash
-npm version minor
-```
-```bash
-git push --follow-tags
-```
-
-`npm version minor` bumps 1.1.0 → 1.2.0, commits and tags it. Use `patch` for small fixes (1.1.0 → 1.1.1). Pushing the tag starts the **Release** workflow (`.github/workflows/release.yml`, about 10 minutes), which:
-
-- builds the Windows installer and publishes it with `latest.yml` to a GitHub Release, so installed apps update themselves;
-- builds `Lumen.wgt` and attaches it to the same release;
-- deploys the web app to GitHub Pages, so TVs pick up the new version the next time Lumen is opened.
-
-Follow it under the repo's **Actions** tab.
-
----
-
-## Install on a Samsung TV
-
-Lumen for Samsung is the same app as on Windows, packaged as a Tizen web app (`Lumen.wgt`). It is installed with [smarttv-installer](https://github.com/Krishnakant010/smarttv-installer), which signs the package with a developer certificate for *your* TV.
-
-**1. Turn on Developer Mode on the TV** (once):
-Open **Apps** → press **1 2 3 4 5** on the remote → set **Developer mode: On** → enter your **PC's IP address** as Host PC IP → restart the TV fully (hold the power button until the logo appears).
-
-**2. Get smarttv-installer** (once) on the same PC:
-
-```bash
-git clone https://github.com/Krishnakant010/smarttv-installer.git
-```
-```bash
-cd smarttv-installer
-```
-```bash
-npm install
-```
-
-**3. Install Lumen.** Replace `192.168.1.50` with your TV's IP address (TV → Settings → General → Network → Network Status → IP Settings).
-
-Install the latest release:
-```bash
-node cli.js --ip 192.168.1.50 --repo Willel09/apple-iptv --tag latest
-```
-…or a package you built yourself with `npm run build:tv`:
-```bash
-node cli.js --ip 192.168.1.50 --file ..\apple-iptv\dist\Lumen.wgt
-```
-
-There's also a GUI: run `npm start` in the smarttv-installer folder.
-
-**4. Link the TV with your PC** so you never have to type a password with the remote. On the TV, the Welcome screen has **Already use Lumen on another device? Link it**, which shows a code. On the PC, go to *Settings → Sync & Devices → Link a device* and type that code. Your sources, watchlist, favorites, resume positions and theme appear on the TV within seconds.
+The TV loads new versions by itself every time Lumen starts. You only reinstall if the TV package itself changes (rare).
 
 **TV remote:**
 
@@ -108,7 +45,39 @@ There's also a GUI: run `npm start` in the smarttv-installer folder.
 | 0–9 | Jump to a channel number |
 | Red / Green (in the player) | Favorite the channel / toggle subtitles |
 
-> You only need to reinstall the `.wgt` if the TV package itself changes (rare: new permissions or app id). Normal updates load automatically.
+### Phone / any browser
+
+Open <https://willel09.github.io/willepilletv/>. On a phone, use the browser's *Add to Home screen*. In fullscreen the video turns to landscape on Android; on iPhone it uses the native player, which follows the phone's rotation.
+
+---
+
+## How releases happen (automatic)
+
+Whenever the `version` in `package.json` changes on the default branch, the **Release** workflow (`.github/workflows/release.yml`, about 10–15 minutes) builds and publishes everything:
+
+- the Windows installer + `latest.yml` to a GitHub Release, so installed apps update themselves;
+- `Lumen.wgt` attached to the same release, for SmartTV Installer;
+- the web app to GitHub Pages, where TVs and phones pick up the new version on next start.
+
+You can also start it by hand: GitHub → **Actions → Release → Run workflow**. Pushes that don't change the version are skipped.
+
+**One-time setting:** GitHub → *Settings → Pages → Build and deployment → Source: **GitHub Actions***. Without it the Windows installer is still published, but TV/web updates aren't.
+
+---
+
+## For developers
+
+You need **Node.js 22 LTS** from <https://nodejs.org>.
+
+| Command | What it does |
+| --- | --- |
+| `npm install` | Install dependencies (one time) |
+| `npm run dev` | Windows app with hot reload |
+| `npm run dev:web` | TV/web version in the browser with hot reload |
+| `npm test` | Unit tests (parsers, sync merge, TV CSS compatibility) |
+| `npm run typecheck` | Type-check all code |
+| `npm run dist` | Build the Windows installer locally → `dist\Lumen-Setup-x.y.z.exe` |
+| `npm run build:tv` | Build `dist\Lumen.wgt` + the web app in `dist\web` |
 
 ---
 
@@ -130,7 +99,7 @@ There's also a GUI: run `npm start` in the smarttv-installer folder.
 
 ## Web app (phone, tablet, any browser)
 
-<https://willel09.github.io/apple-iptv/> runs the same app. Link it like the TV (Settings → Sync → Link with another device) to see and manage your watchlist, favorites and Continue Watching from your phone.
+<https://willel09.github.io/willepilletv/> runs the same app. Link it like the TV (Settings → Sync → Link with another device) to see and manage your watchlist, favorites and Continue Watching from your phone.
 
 > **Limitation:** browsers block plain `http://` IPTV servers on secure (`https://`) pages, and most providers don't allow browser access (CORS). So on the web you can usually *manage* your lists, but playback works only if your provider supports it. The Windows and TV apps aren't affected.
 
@@ -143,7 +112,7 @@ There's also a GUI: run `npm start` in the smarttv-installer folder.
 - **Watchlist:** add movies and series from the hero (＋) or the detail page. It also appears as a category under Movies and Series, and syncs between devices.
 - **Live TV:** a filterable category sidebar, a virtualised channel list with now/next, an info panel with the upcoming schedule, and a full **TV guide grid**.
 - **Movies & Series:** a virtualised poster grid (newest, A–Z, top rated), and detail pages with backdrop, cast, season/episode picker and "More Like This".
-- **Player:** a glass control bar; audio/subtitle tracks; speed; sleep timer; PiP; fullscreen; channel zapping and number entry; resume; Up Next autoplay; automatic engine fallback; error messages written for people; Open in VLC (Windows).
+- **Player:** a glass control bar; a draggable **mini player** (Esc or ‹ shrinks it to a corner so you can keep browsing; click to expand); audio/subtitle tracks; speed; sleep timer; PiP; fullscreen; channel zapping and number entry; resume; Up Next autoplay; automatic engine fallback; error messages written for people; Open in VLC (Windows).
 - **Themes:** Graphite (default), Midnight (OLED black), Crimson, Nordic, Ember, Forest, Rosé, Aurora, Daylight and Sand. You can also set a custom accent colour and choose **Artwork glow: Vivid / Subtle / Off** for how much posters tint the background.
 - **Updates:** see *Settings → Updates* for the current version and **Check for updates**.
 - **Keyboard / remote navigation** everywhere, Windows 11 Mica/Acrylic, and Reduced Motion support.
@@ -160,6 +129,7 @@ There's also a GUI: run `npm start` in the smarttv-installer folder.
 | ← / → | Seek 10 s |
 | ↑ / ↓, PgUp / PgDn | Channel up / down (live) |
 | 0–9 | Jump to channel number |
+| Esc | Shrink to the mini player (leaves fullscreen first) |
 | F · M · P · C · N | Fullscreen · Mute · PiP · Subtitles · Next episode |
 
 ---
@@ -195,6 +165,6 @@ apple-iptv/
 
 - **A channel won't play.** The error card explains why. Try **Try HLS / Try MPEG-TS** (Xtream), or **Open in VLC** on Windows. If there's no sound on Windows, the stream probably uses AC3/DTS audio. Samsung TVs can usually decode those.
 - **The provider blocks the app.** Change the user agent in Settings → Playback (Windows).
-- **The TV install fails.** Make sure Developer Mode shows your PC's IP, the TV was fully restarted, and both are on the same network.
+- **The TV install fails.** In the assistant, Developer Mode must show ✓. Check that the TV has your PC's IP, that it was fully restarted, and that both are on the same network.
 - **No TV guide.** Check that the channels have `tvg-id` values matching the guide, or matching names.
 - **Fresh start:** on Windows delete `%APPDATA%\Lumen`. On TV, uninstall and reinstall Lumen.

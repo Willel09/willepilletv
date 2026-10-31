@@ -58,7 +58,8 @@ export default function App() {
     const offNav = initSpatialNav()
     const onKey = (e: KeyboardEvent) => {
       const s = useApp.getState()
-      if (s.player || s.sourceSheet) return
+      // the full-screen player owns the keyboard; a mini player leaves the app navigable
+      if ((s.player && !s.playerMini) || s.sourceSheet) return
       if ((e.ctrlKey && e.key === 'f') || (e.key === '/' && !isTyping())) {
         e.preventDefault()
         return setTab('search')

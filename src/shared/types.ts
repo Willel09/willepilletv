@@ -196,6 +196,13 @@ export const DEFAULT_SETTINGS: Settings = {
 
 export type WindowState = { maximized: boolean; fullscreen: boolean }
 
+export interface SamsungTv {
+  ip: string
+  name: string
+  /** Developer Mode answers on port 26101 */
+  devMode: boolean
+}
+
 export type UpdateState =
   | { status: 'idle' | 'checking' | 'none' | 'unsupported' }
   | { status: 'available' | 'downloading'; version: string; percent?: number }
@@ -241,5 +248,12 @@ export interface IptvApi {
     check(): void
     install(): void
     onState(cb: (s: UpdateState) => void): () => void
+  }
+  /** Windows app only: helpers for installing Lumen on a Samsung TV */
+  tvInstall?: {
+    localIps(): Promise<string[]>
+    discover(): Promise<SamsungTv[]>
+    checkDevMode(ip: string): Promise<boolean>
+    openInstaller(): Promise<{ ok: boolean; error?: string }>
   }
 }

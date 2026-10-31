@@ -10,7 +10,7 @@ import { zipSync } from 'fflate'
 
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'))
 // Where newer versions are published (GitHub Pages of this repo). Override with LUMEN_UPDATE_URL.
-const UPDATE_URL = process.env.LUMEN_UPDATE_URL ?? 'https://willel09.github.io/apple-iptv/'
+const UPDATE_URL = process.env.LUMEN_UPDATE_URL ?? 'https://willel09.github.io/willepilletv/'
 const OUT = 'dist/web'
 
 await build({ configFile: 'vite.web.config.mts', logLevel: 'warn' })
@@ -72,7 +72,7 @@ writeFileSync(
 
 // 2. Samsung Tizen package
 const config = `<?xml version="1.0" encoding="UTF-8"?>
-<widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets" id="https://github.com/Willel09/apple-iptv" version="${pkg.version}" viewmodes="maximized">
+<widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets" id="https://github.com/Willel09/willepilletv" version="${pkg.version}" viewmodes="maximized">
   <tizen:application id="LumenTvApp.Lumen" package="LumenTvApp" required_version="6.5"/>
   <content src="index.html"/>
   <feature name="http://tizen.org/feature/screen.size.normal.1080.1920"/>

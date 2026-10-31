@@ -9,6 +9,7 @@ import { buildEpg, buildLibrary, emptyLibrary } from '../shared/core/library'
 import { xtreamInfo } from '../shared/core/xtream'
 import { getText } from './http'
 import { readCache, writeCache } from './library'
+import { devModeOn, discoverTvs, localIps, openTvInstaller } from './tvinstall'
 
 // Lets <video> expose audioTracks for multi-language MP4/MKV files
 app.commandLine.appendSwitch('enable-blink-features', 'AudioVideoTracks')
@@ -141,6 +142,10 @@ function registerIpc() {
     spawn(exe, [url, `--http-user-agent=${s.userAgent}`, `--meta-title=${title}`], { detached: true, stdio: 'ignore' }).unref()
     return { ok: true }
   })
+  ipcMain.handle('tv:ips', () => localIps())
+  ipcMain.handle('tv:discover', () => discoverTvs())
+  ipcMain.handle('tv:devmode', (_e, ip: string) => devModeOn(String(ip)))
+  ipcMain.handle('tv:installer', () => openTvInstaller(progress))
   ipcMain.on('win:minimize', () => win?.minimize())
   ipcMain.on('win:toggleMaximize', () => (win?.isMaximized() ? win.unmaximize() : win?.maximize()))
   ipcMain.on('win:close', () => win?.close())

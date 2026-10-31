@@ -24,6 +24,7 @@ function TabBar() {
           <button
             key={id}
             onClick={() => setTab(id)}
+            aria-label={label}
             aria-current={active ? 'page' : undefined}
             className={`relative flex h-9 items-center gap-2 rounded-full px-4 text-[13.5px] font-semibold tracking-[-0.01em] transition-colors duration-200 ${active ? 'text-fg' : 'text-fg/60 hover:text-fg'}`}
           >
