@@ -33,7 +33,7 @@ export function Hero({ items }: { items: (Movie | Show)[] }) {
   const listed = inWatchlist(item.id)
 
   return (
-    <section className="relative h-[min(78vh,760px)] min-h-[540px] overflow-hidden" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
+    <section className="relative h-[78vh] max-h-[760px] min-h-[540px] overflow-hidden" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
       {/* Masked so the artwork dissolves into the ambient background instead of ending in a hard edge */}
       <div className="absolute inset-0 [mask-image:linear-gradient(to_bottom,black_45%,transparent_96%)]">
         <AnimatePresence initial={false}>
@@ -92,7 +92,7 @@ export function Hero({ items }: { items: (Movie | Show)[] }) {
               <span className="rounded-md bg-fg/12 px-2 py-0.5 text-fg/80">{item.kind === 'series' ? 'Series' : 'Movie'}</span>
               <span className="truncate">{item.group}</span>
             </div>
-            <h1 className="text-[clamp(40px,5.4vw,76px)] font-[800] leading-[0.95] tracking-[-0.045em] [text-wrap:balance] drop-shadow-[0_4px_30px_rgb(0_0_0/0.4)]">
+            <h1 className="text-[44px] font-[800] lg:text-[60px] 2xl:text-[76px] leading-[0.95] tracking-[-0.045em] [text-wrap:balance] drop-shadow-[0_4px_30px_rgb(0_0_0/0.4)]">
               {cleanName(item.name)}
             </h1>
             <div className="mt-4 flex items-center gap-3 text-[14px] font-medium text-fg/70">

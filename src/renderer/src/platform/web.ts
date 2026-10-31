@@ -2,6 +2,7 @@
 // Same core loaders as the desktop app; networking happens in-page (Tizen allows cross-origin
 // requests for packaged apps via <access origin="*"> in config.xml).
 
+import { gunzipSync } from 'fflate'
 import { buildEpg, buildLibrary, emptyLibrary } from '../../../shared/core/library'
 import { HTTP_HINT } from '../../../shared/core/net'
 import { xtreamInfo } from '../../../shared/core/xtream'
@@ -55,11 +56,8 @@ async function getText(url: string, timeoutMs = 180_000): Promise<string> {
   }
   if (!res.ok) throw new Error(HTTP_HINT(res.status, res.statusText))
   const buf = new Uint8Array(await res.arrayBuffer())
-  if (buf[0] === 0x1f && buf[1] === 0x8b) {
-    if (typeof DecompressionStream === 'undefined') throw new Error('This device cannot unpack .gz guides. Use an uncompressed XMLTV URL.')
-    return new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'))).text()
-  }
-  return new TextDecoder().decode(buf)
+  // fflate instead of DecompressionStream, which older TVs (Chromium < 80) don't have
+  return new TextDecoder().decode(buf[0] === 0x1f && buf[1] === 0x8b ? gunzipSync(buf) : buf)
 }
 
 /* ---------- OTA updates (TV + web): newer builds are published to GitHub Pages ---------- */

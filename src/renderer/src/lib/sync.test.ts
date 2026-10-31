@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { merge, type SyncDoc } from './sync.ts'
+import { derive, merge, type SyncDoc } from './sync.ts'
 
 const movie = (id: string) => ({ kind: 'movie' as const, id, sourceId: 's', name: id, group: 'g', url: 'u' })
 const doc = (p: Partial<SyncDoc>): SyncDoc => ({ v: 1, sources: [], favorites: [], watchlist: [], history: [], prefs: {}, meta: { at: {}, tomb: {} }, ...p })
@@ -42,4 +42,13 @@ test('items saved before change-tracking existed (no timestamp) are kept on both
   assert.equal(merge(fresh, legacy).sources.length, 1)
   assert.equal(merge(legacy, legacy).favorites.length, 1)
   assert.equal(merge(fresh, legacy).favorites[0].id, 'old')
+})
+
+test('WebCrypto and the pure-JS fallback produce interchangeable ciphertext', async () => {
+  const code = 'ABCD-EFGH-JKLM-NPQR-STUV'
+  const [web, js] = await Promise.all([derive(code, 'sync'), derive(code, 'sync', true)])
+  assert.equal(web.id, js.id)
+  const doc = { hello: 'TV', n: [1, 2, 3] }
+  assert.deepEqual(await js.open(await web.seal(doc)), doc)
+  assert.deepEqual(await web.open(await js.seal(doc)), doc)
 })

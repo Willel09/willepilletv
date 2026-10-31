@@ -126,7 +126,7 @@ export default function Detail({ item }: { item: Movie | Show }) {
               <ChevronLeft className="size-5" />
             </IconButton>
             <div className="mb-3 text-[12px] font-semibold uppercase tracking-[0.14em] text-fg/55">{item.group}</div>
-            <h1 className="text-[clamp(38px,5vw,72px)] font-[800] leading-[0.95] tracking-[-0.045em] [text-wrap:balance]">{cleanName(item.name)}</h1>
+            <h1 className="text-[40px] font-[800] lg:text-[56px] 2xl:text-[72px] leading-[0.95] tracking-[-0.045em] [text-wrap:balance]">{cleanName(item.name)}</h1>
             <div className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[14px] font-medium text-fg/65">
               {year && <span>{year}</span>}
               {!!rating && (

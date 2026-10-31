@@ -28,7 +28,7 @@ export function PosterGrid<T>({ items, render, aspect = 1.5, extra = 44, resetKe
     <div ref={ref} className="min-h-0 flex-1 overflow-y-auto px-7 pb-10 pt-4">
       <div className="relative" style={{ height: v.getTotalSize() }}>
         {v.getVirtualItems().map((row) => (
-          <div key={row.key} className="absolute inset-x-0 flex" style={{ transform: `translateY(${row.start}px)`, gap: GAP }}>
+          <div key={row.key} className="absolute inset-x-0 grid" style={{ transform: `translateY(${row.start}px)`, gap: GAP, gridTemplateColumns: `repeat(${cols}, ${cw}px)` }}>
             {items.slice(row.index * cols, row.index * cols + cols).map((it) => render(it, cw))}
           </div>
         ))}

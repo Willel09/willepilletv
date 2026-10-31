@@ -5,7 +5,7 @@ Lumen is an IPTV **player**. It ships with no channels: you add your own M3U pla
 | Device | How it runs | Updates |
 | --- | --- | --- |
 | **Windows** | Electron app (`Lumen-Setup-x.y.z.exe`) | Downloads new versions in the background, then offers **Restart to update** |
-| **Samsung TV** (Tizen 6.5+, 2022 models and newer) | `Lumen.wgt`, installed from Lumen for Windows (*Settings → Samsung TV*) | Loads the newest version from GitHub Pages every time it starts. No reinstall needed |
+| **Samsung TV** (Tizen 6.0+, 2021 models and newer, e.g. QN90A) | `Lumen.wgt`, installed from Lumen for Windows (*Settings → Samsung TV*) | Loads the newest version from GitHub Pages every time it starts. No reinstall needed |
 | **Web / phone** | <https://willel09.github.io/willepilletv/> | Always the latest |
 
 **Stack:** Electron · React 19 · TypeScript · Vite · Tailwind CSS 4 · Framer Motion · hls.js · mpegts.js · electron-store · electron-updater · Supabase (sync)
@@ -23,7 +23,7 @@ Lumen is an IPTV **player**. It ships with no channels: you add your own M3U pla
 
 After that Lumen updates itself: when a new version is out, *Settings → Updates* (and a prompt) offer **Restart to update**.
 
-### Samsung TV (2022 models and newer)
+### Samsung TV (2021 models and newer)
 
 Everything happens in Lumen for Windows: **Settings → Samsung TV → Install on TV**. The assistant walks you through it.
 
@@ -32,7 +32,19 @@ Everything happens in Lumen for Windows: **Settings → Samsung TV → Install o
 3. **Install.** Click **Open TV Installer**. Lumen downloads and opens [SmartTV Installer](https://github.com/Krishnakant010/smarttv-installer), a free open-source tool. Choose **Samsung**, enter the TV IP, pick **Custom GitHub Repository** → `Willel09/willepilletv` (both have copy buttons in the assistant), then press **Install**. The first time, a Samsung account sign-in opens in the browser to create the TV's developer certificate.
 4. **Link.** On the TV choose **Already use Lumen on another device? Link it**. On the PC: *Settings → Sync & Devices → Link a device*, then type the code the TV shows. Your sources and lists appear on the TV with no typing on the remote.
 
-The TV loads new versions by itself every time Lumen starts. You only reinstall if the TV package itself changes (rare).
+The TV loads new versions by itself every time Lumen starts (requires GitHub Pages to be on, see below). You only reinstall if the TV package itself changes (rare).
+
+#### Samsung QN90A and other 2021 models (Tizen 6.0)
+
+These TVs run an older browser engine (Chromium 76), so the TV build is made specifically for it:
+
+- the app ships as one classic script (no ES modules, which TV apps loading from `file://` can't use);
+- the CSS is lowered: no `:is/:where`, logical properties, `@layer` or `min()/clamp()`, plus flex-gap, aspect-ratio and focus-ring fallbacks. The build **fails** if anything unsupported is left (`npm run build:tv`);
+- **sync works without WebCrypto:** if the TV doesn't give apps `crypto.subtle`, Lumen uses the audited pure-JS `@noble` libraries, which produce exactly the same encryption. Linking takes a few extra seconds the first time;
+- animations switch to JS mode where the TV lacks newer Web Animations features;
+- `.gz` guides are unpacked in JS.
+
+**Tip for the QN90A remote (Solar Cell remote):** Play/Pause, CH ▲▼ and Back work directly. The coloured and number keys are under the **123** button.
 
 **TV remote:**
 

@@ -17,3 +17,28 @@ test('color-mix, layers, supports and transforms are lowered', () => {
   assert.ok(out.includes('-webkit-mask-image:linear-gradient(red,blue)'))
   assert.ok(out.includes('--tw-scale-x:.97;--tw-scale-y:.97;transform:'))
 })
+
+import { legacyCompat, legacyLeftovers, lowerSelector } from './css-compat.mts'
+
+test('selectors without :is/:where for Chromium 76', () => {
+  assert.deepEqual(lowerSelector('abbr:where([title])'), ['abbr[title]'])
+  assert.deepEqual(lowerSelector('.group-hover\\:h-2:is(:where(.group):hover *)'), ['.group:hover .group-hover\\:h-2'])
+  assert.deepEqual(lowerSelector('.peer-x:is(:where(.peer):checked ~ *)'), ['.peer:checked~.peer-x'])
+  assert.deepEqual(lowerSelector('input:where([type=button],[type=reset])'), ['input[type=button]', 'input[type=reset]'])
+  assert.deepEqual(lowerSelector(':where(.space-y-2>:not(:last-child))'), ['.space-y-2>:not(:last-child)'])
+  assert.deepEqual(lowerSelector('a:not(.b,.c)'), ['a:not(.b):not(.c)'])
+  assert.deepEqual(lowerSelector('[hidden]:where(:not([hidden=until-found]))'), ['[hidden]:not([hidden=until-found])'])
+})
+
+test('legacy lowering leaves nothing Chromium 76 cannot parse', () => {
+  const css = `.inset-0{inset:calc(var(--spacing) * 0)}.inset-x-0{inset-inline:0}.px-4{padding-inline:calc(var(--spacing) * 4)}.mx-auto{margin-inline:auto}abbr:where([title]){text-decoration:underline}.gap-5{gap:calc(var(--spacing) * 5)}.aspect-video{aspect-ratio:16/9}:focus-visible{outline:2px solid red}@media (hover:hover){.g\\:o:is(:where(.group):hover *){opacity:1}}`
+  const out = legacyCompat(css)
+  assert.deepEqual(legacyLeftovers(out), [])
+  assert.ok(out.includes('.inset-0{top:calc(var(--spacing) * 0);right:calc(var(--spacing) * 0);bottom:calc(var(--spacing) * 0);left:calc(var(--spacing) * 0)}'))
+  assert.ok(out.includes('padding-left:calc(var(--spacing) * 4);padding-right:calc(var(--spacing) * 4)'))
+  assert.ok(out.includes('.group:hover .g\\:o{opacity:1}'))
+  assert.ok(out.includes('[data-device=tv] :focus{outline:2px solid red}'))
+  assert.ok(out.includes('@supports not (aspect-ratio:1/1){'))
+  assert.ok(out.includes('.gap-5:not(.grid):not(.inline-grid):not(.flex-col)>*+*{margin-left:calc(var(--spacing) * 5)}'))
+  assert.ok(out.includes('padding-bottom:56.2500%'))
+})

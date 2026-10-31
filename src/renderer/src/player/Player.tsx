@@ -430,7 +430,7 @@ function Session({ req, mini, fullscreen, sleepAt, setSleepAt }: SessionProps) {
         className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent pb-8 pt-24 ${shown ? '' : 'pointer-events-none'}`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="glass-strong mx-auto w-[min(1120px,94%)] rounded-[30px] px-3 pb-3 pt-3 sm:px-6 sm:pb-4 sm:pt-4">
+        <div className="glass-strong mx-auto w-[94%] max-w-[1120px] rounded-[30px] px-3 pb-3 pt-3 sm:px-6 sm:pb-4 sm:pt-4">
           {live ? (
             <div className="flex items-center gap-4 px-1 text-[12.5px] tabular-nums text-white/60">
               {now ? (

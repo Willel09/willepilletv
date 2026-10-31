@@ -107,5 +107,12 @@ jobs:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
+      - id: enabled
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh api "repos/$GITHUB_REPOSITORY/pages" > /dev/null 2>&1; then echo "on=true" >> "$GITHUB_OUTPUT"
+          else echo "on=false" >> "$GITHUB_OUTPUT"; echo "::warning::GitHub Pages is off, so TVs and the web app won't auto-update. Turn it on: Settings → Pages → Source: GitHub Actions."; fi
       - id: deploy
+        if: steps.enabled.outputs.on == 'true'
         uses: actions/deploy-pages@v4

@@ -7,6 +7,7 @@ import { build } from 'vite'
 import { readFileSync, writeFileSync, readdirSync, statSync, copyFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { zipSync } from 'fflate'
+import { legacyLeftovers } from '../tools/css-compat.mts'
 
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'))
 // Where newer versions are published (GitHub Pages of this repo). Override with LUMEN_UPDATE_URL.
@@ -17,16 +18,20 @@ await build({ configFile: 'vite.web.config.mts', logLevel: 'warn' })
 
 // 1. Swap Vite's direct <script>/<link> for a tiny loader that can pick a newer build from UPDATE_URL
 let html = readFileSync(join(OUT, 'index.html'), 'utf8')
-const js = html.match(/<script type="module" crossorigin src="\.\/([^"]+)"><\/script>/)?.[1]
-const css = html.match(/<link rel="stylesheet" crossorigin href="\.\/([^"]+)">/)?.[1]
+const js = html.match(/<script[^>]*src="\.\/([^"]+\.js)"><\/script>/)?.[1]
+const css = html.match(/<link rel="stylesheet"[^>]*href="\.\/([^"]+\.css)">/)?.[1]
 if (!js || !css) throw new Error('Could not find entry assets in index.html')
+
+// Guard: the TV package must not contain CSS that Samsung 2021 TVs (Chromium 76) can't parse
+const leftovers = legacyLeftovers(readFileSync(join(OUT, css), 'utf8'))
+if (leftovers.length) throw new Error(`CSS not supported by Tizen 6.0 TVs:\n${leftovers.join('\n')}`)
 const manifest = { version: pkg.version, js, css }
 html = html
-  .replace(/\s*<script type="module" crossorigin src="[^"]+"><\/script>/, '')
-  .replace(/\s*<link rel="stylesheet" crossorigin href="[^"]+">/, '')
+  .replace(/\s*<script[^>]*src="[^"]+\.js"><\/script>/, '')
+  .replace(/\s*<link rel="stylesheet"[^>]*href="[^"]+\.css">/, '')
+  // file:// (TV) makes CSP 'self' unreliable; the page only loads its own bundle and the update host
+  .replace(/\s*<meta\s+http-equiv="Content-Security-Policy"[\s\S]*?\/>/, '')
   .replace('</body>', '    <script src="./boot.js"></script>\n  </body>')
-  // allow scripts/styles/fonts from the update host
-  .replace(/(script-src|style-src|font-src) ([^;"]+)/g, (_, d, v) => `${d} ${v} ${new URL(UPDATE_URL).origin}`)
   .replace('<title>Lumen</title>', '<title>Lumen</title>\n    <link rel="manifest" href="./app.webmanifest" />\n    <meta name="theme-color" content="#0b0b0d" />\n    <link rel="apple-touch-icon" href="./icon.png" />')
 writeFileSync(join(OUT, 'index.html'), html)
 writeFileSync(join(OUT, 'manifest.json'), JSON.stringify(manifest))
@@ -47,10 +52,11 @@ writeFileSync(
     started = true;
     window.__LUMEN_BOOT__ = { manifestUrl: REMOTE + 'manifest.json', running: m.version, base: base };
     var l = document.createElement('link');
-    l.rel = 'stylesheet'; l.crossOrigin = ''; l.href = base + m.css;
+    l.rel = 'stylesheet'; l.href = base + m.css;
     document.head.appendChild(l);
     var s = document.createElement('script');
-    s.type = 'module'; s.crossOrigin = ''; s.src = base + m.js;
+    // classic script (IIFE bundle): type=module is blocked on file:// TV apps
+    s.src = base + m.js;
     s.onerror = function () { if (base !== './') { started = false; start('./', LOCAL); } };
     document.body.appendChild(s);
   }
@@ -73,7 +79,7 @@ writeFileSync(
 // 2. Samsung Tizen package
 const config = `<?xml version="1.0" encoding="UTF-8"?>
 <widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets" id="https://github.com/Willel09/willepilletv" version="${pkg.version}" viewmodes="maximized">
-  <tizen:application id="LumenTvApp.Lumen" package="LumenTvApp" required_version="6.5"/>
+  <tizen:application id="LumenTvApp.Lumen" package="LumenTvApp" required_version="6.0"/>
   <content src="index.html"/>
   <feature name="http://tizen.org/feature/screen.size.normal.1080.1920"/>
   <icon src="icon.png"/>
