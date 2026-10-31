@@ -5,7 +5,7 @@ import { PosterCard } from '../components/Cards'
 import { CategorySidebar } from '../components/CategorySidebar'
 import { PosterGrid } from '../components/PosterGrid'
 import { Empty, Segmented } from '../components/ui'
-import { openDetail, setGroup, useApp, useIndex } from '../store'
+import { openDetail, setGroup, toggleWatchlist, useApp, useIndex } from '../store'
 import { ALL, FAV } from './Live'
 
 const RECENT = '__recent'
@@ -81,7 +81,7 @@ export default function Browse({ kind }: { kind: 'movies' | 'series' }) {
           <PosterGrid
             items={items}
             resetKey={`${group}:${sort}`}
-            render={(it, w) => <PosterCard key={it.id} name={it.name} poster={it.poster} rating={it.rating} width={w} onClick={() => openDetail(it)} />}
+            render={(it, w) => <PosterCard key={it.id} name={it.name} poster={it.poster} rating={it.rating} width={w} onClick={() => openDetail(it)} onRemove={group === WATCH ? () => toggleWatchlist(it as Movie | Show) : undefined} />}
           />
         ) : (
           <Empty icon={group === WATCH ? <BookmarkCheck className="size-8" /> : <Heart className="size-8" />} title="Nothing here yet" text={group === WATCH ? 'Add movies and series to your Watchlist from their detail page.' : 'Titles you favorite will show up here.'} />

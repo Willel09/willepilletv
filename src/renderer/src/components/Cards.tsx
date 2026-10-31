@@ -1,5 +1,5 @@
 import { motion, useMotionTemplate, useMotionValue, useSpring, useTransform } from 'framer-motion'
-import { Heart, Play, Star } from 'lucide-react'
+import { Heart, Play, Star, X } from 'lucide-react'
 import type { PointerEvent, ReactNode } from 'react'
 import { cleanName } from '../lib/format'
 import { spring } from '../lib/motion'
@@ -89,8 +89,8 @@ const Title = ({ children }: { children: ReactNode }) => (
   <div className="mt-3 truncate px-1 text-[13px] font-medium text-fg/65 transition-colors group-hover:text-fg group-focus:text-fg">{children}</div>
 )
 
-export function PosterCard({ name, poster, rating, onClick, width = 176, badge }: { name: string; poster?: string; rating?: number; onClick: () => void; width?: number | string; badge?: ReactNode }) {
-  return (
+export function PosterCard({ name, poster, rating, onClick, width = 176, badge, onRemove }: { name: string; poster?: string; rating?: number; onClick: () => void; width?: number | string; badge?: ReactNode; onRemove?: () => void }) {
+  const card = (
     <CardShell
       aspect="aspect-[2/3]"
       width={width}
@@ -110,6 +110,21 @@ export function PosterCard({ name, poster, rating, onClick, width = 176, badge }
       }
       footer={<Title>{cleanName(name)}</Title>}
     />
+  )
+  if (!onRemove) return card
+  // sibling of the card button (a button can't contain a button), always visible so it's easy to find
+  return (
+    <div className="relative shrink-0" style={{ width }}>
+      {card}
+      <button
+        aria-label={`Remove “${cleanName(name)}” from Watchlist`}
+        title="Remove from Watchlist"
+        onClick={onRemove}
+        className="absolute left-2.5 top-2.5 z-10 flex h-8 items-center gap-1.5 rounded-full bg-black/65 pl-2 pr-3 text-[12px] font-semibold text-white ring-1 ring-white/20 backdrop-blur-md transition hover:bg-red-500 focus-visible:bg-red-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+      >
+        <X className="size-4" strokeWidth={2.5} /> Remove
+      </button>
+    </div>
   )
 }
 

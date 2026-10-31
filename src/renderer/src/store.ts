@@ -14,7 +14,7 @@ import {
   type Source,
   type StoreShape
 } from '../../shared/types'
-import { fold } from './lib/format'
+import { cleanName, fold } from './lib/format'
 import * as sync from './lib/sync'
 import { hexToRgb, themeById } from './lib/themes'
 import { createWebApi } from './platform/web'
@@ -208,7 +208,7 @@ export function toggleWatchlist(item: Movie | Show) {
   const list = get().watchlist
   const on = list.some((f) => f.id === item.id)
   persistSynced('watchlist', on ? list.filter((f) => f.id !== item.id) : [snapshot(item), ...list], on ? [] : [item.id], on ? [item.id] : [])
-  toast(on ? `Removed “${item.name}” from your Watchlist` : `Added “${item.name}” to your Watchlist`)
+  toast(on ? `Removed “${cleanName(item.name)}” from your Watchlist` : `Added “${cleanName(item.name)}” to your Watchlist`)
 }
 
 export function saveProgress(e: HistoryEntry) {

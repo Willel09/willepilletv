@@ -7,7 +7,7 @@ import { Row } from '../components/Row'
 import { Button, Spinner } from '../components/ui'
 import { nowNext } from '../lib/epg'
 import { softSpring } from '../lib/motion'
-import { openDetail, openSourceSheet, playChannel, playMovie, resume, resumable, setGroup, setTab, useApp, useIndex } from '../store'
+import { openDetail, openSourceSheet, playChannel, playMovie, resume, resumable, setGroup, setTab, toggleWatchlist, useApp, useIndex } from '../store'
 import type { Item } from '../../../shared/types'
 import { startPairing } from './Settings'
 
@@ -98,7 +98,7 @@ export default function Home() {
             ))}
           </Row>
         )}
-        {watchlist.length > 0 && <Row title="My Watchlist" count={watchlist.length}>{watchlist.slice(0, 40).map(poster)}</Row>}
+        {watchlist.length > 0 && <Row title="My Watchlist" count={watchlist.length}>{watchlist.slice(0, 40).map((it) => <PosterCard key={it.id} name={it.name} poster={it.poster} rating={it.rating} onClick={() => openDetail(it)} onRemove={() => toggleWatchlist(it)} />)}</Row>}
         {favorites.length > 0 && <Row title="Favorites">{favorites.slice(0, 40).map(poster)}</Row>}
         {recentLive.length > 0 && (
           <Row title="Recently Watched Channels">
