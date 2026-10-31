@@ -1,0 +1,176 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Inter Variable', 'Segoe UI Variable Text', system-ui, sans-serif;
+  --color-fg: var(--fg);
+  --color-accent: var(--accent);
+  --color-bg: var(--base);
+}
+
+/* ---------- Theme tokens ---------- */
+:root {
+  --accent: #0a84ff;
+}
+/* [data-theme=dark] also matches the player, which always stays dark */
+:root,
+[data-theme='dark'] {
+  --fg: #f5f5f7;
+  --base: #07070b;
+  --app-bg: var(--base);
+  --glass-fill: rgb(255 255 255 / 0.085);
+  --glass-strong: rgb(28 28 34 / 0.55);
+  --glass-hi: rgb(255 255 255 / 0.14);
+  --glass-edge: rgb(255 255 255 / 0.12);
+  --glass-top: rgb(255 255 255 / 0.3);
+  --glass-shadow: 0 30px 80px -20px rgb(0 0 0 / 0.65), 0 10px 30px -10px rgb(0 0 0 / 0.45);
+  --card-bg: rgb(255 255 255 / 0.06);
+  color-scheme: dark;
+}
+[data-theme='light'] {
+  --fg: #1d1d1f;
+  --base: #eceef3;
+  --glass-fill: rgb(255 255 255 / 0.5);
+  --glass-strong: rgb(255 255 255 / 0.72);
+  --glass-hi: rgb(255 255 255 / 0.65);
+  --glass-edge: rgb(255 255 255 / 0.75);
+  --glass-top: rgb(255 255 255 / 1);
+  --glass-shadow: 0 30px 70px -24px rgb(30 40 80 / 0.28), 0 8px 24px -10px rgb(30 40 80 / 0.16);
+  --card-bg: rgb(0 0 0 / 0.05);
+  color-scheme: light;
+}
+/* Let Windows 11 Mica / Acrylic shine through the window */
+[data-material='mica'],
+[data-material='acrylic'] {
+  --app-bg: color-mix(in srgb, var(--base) 62%, transparent);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+body {
+  margin: 0;
+  overflow: hidden;
+  background: var(--app-bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  /* Inter alternates that read closer to SF: single-storey a, open digits, flat-top t */
+  font-feature-settings: 'cv11', 'ss01', 'ss03', 'cv05';
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  cursor: default;
+}
+input,
+textarea {
+  user-select: text;
+}
+img {
+  -webkit-user-drag: none;
+}
+
+/* ---------- Liquid glass ---------- */
+@utility glass {
+  background:
+    radial-gradient(120% 70% at 15% -20%, var(--glass-hi), transparent 55%),
+    linear-gradient(180deg, var(--glass-hi), transparent 42%),
+    var(--glass-fill);
+  backdrop-filter: blur(36px) saturate(180%);
+  box-shadow:
+    inset 0 1px 0 0 var(--glass-top),
+    inset 0 0 0 1px var(--glass-edge),
+    var(--glass-shadow);
+}
+@utility glass-thin {
+  background:
+    linear-gradient(180deg, var(--glass-hi), transparent 60%),
+    var(--glass-fill);
+  backdrop-filter: blur(24px) saturate(180%);
+  box-shadow:
+    inset 0 1px 0 0 var(--glass-top),
+    inset 0 0 0 1px var(--glass-edge);
+}
+@utility glass-strong {
+  background:
+    radial-gradient(120% 70% at 15% -20%, var(--glass-hi), transparent 55%),
+    linear-gradient(180deg, var(--glass-hi), transparent 40%),
+    var(--glass-strong);
+  backdrop-filter: blur(40px) saturate(180%);
+  box-shadow:
+    inset 0 1px 0 0 var(--glass-top),
+    inset 0 0 0 1px var(--glass-edge),
+    0 40px 100px -20px rgb(0 0 0 / 0.7);
+}
+@utility drag {
+  -webkit-app-region: drag;
+}
+@utility no-drag {
+  -webkit-app-region: no-drag;
+}
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* ---------- Focus (keyboard / remote style) ---------- */
+:focus {
+  outline: none;
+}
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 14px;
+}
+.card:focus-visible,
+input:focus-visible {
+  outline: none;
+}
+.card {
+  /* keep focused cards clear of the floating tab bar when scrolled into view */
+  scroll-margin: 110px 64px 48px 64px;
+}
+
+/* ---------- Scrollbars ---------- */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--fg) 16%, transparent);
+  border: 4px solid transparent;
+  border-radius: 99px;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in srgb, var(--fg) 30%, transparent);
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* ---------- Video subtitles ---------- */
+video::cue {
+  font-family: var(--font-sans);
+  font-size: 1.35em;
+  font-weight: 500;
+  background: rgb(0 0 0 / 0.55);
+  color: #fff;
+}
+
+/* ---------- Misc ---------- */
+@keyframes shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+.skeleton {
+  background: linear-gradient(90deg, var(--card-bg) 0%, color-mix(in srgb, var(--fg) 10%, transparent) 50%, var(--card-bg) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.6s linear infinite;
+}
+input[type='range'] {
+  accent-color: var(--accent);
+}
