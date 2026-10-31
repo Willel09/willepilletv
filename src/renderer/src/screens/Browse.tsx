@@ -9,7 +9,7 @@ import { fold } from '../lib/format'
 import { openDetail, setGroup, toggleWatchlist, useApp, useIndex } from '../store'
 import { ALL, FAV } from './Live'
 
-const RECENT = '__recent'
+export const RECENT = '__recent'
 const WATCH = '__watch'
 type Sort = 'added' | 'az' | 'rating'
 

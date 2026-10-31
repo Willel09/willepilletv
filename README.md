@@ -120,7 +120,7 @@ You need **Node.js 22 LTS** from <https://nodejs.org>.
 ## Features
 
 - **Sources:** M3U/M3U8 by URL or local file (Windows; shared with your TV through Sync), Xtream Codes (Live, Movies, Series), and XMLTV guides (`.xml` / `.xml.gz`, found automatically from Xtream or the M3U `url-tvg` header).
-- **Home:** an auto-rotating hero, then rows: Continue Watching, **My Watchlist**, Favorites, Recently Watched Channels, and one row per category.
+- **Home:** an auto-rotating hero, then curated rows: Continue Watching, **For You** (from the categories you watch and save), My Watchlist, **Newest Movies**, **Newest Series**, **Because you watched …**, **Top Rated**, Favorites and Recently Watched Channels. Categories live under Movies / Series / Live TV.
 - **Watchlist:** add movies and series from the hero (＋) or the detail page; remove them with the **✕ Remove** button on each card. Clicking a card opens its detail page. It also appears as a category under Movies and Series, and syncs between devices.
 - **Live TV:** a filterable category sidebar, a virtualised channel list with now/next, an info panel with the upcoming schedule, and a full **TV guide grid**.
 - **One movie, many copies:** when a provider lists the same film several times ("SE-4K - Kubo", "EN - Kubo (2016)", once per category), Lumen shows it once. The detail page lists every copy under **Versions** (e.g. *SE-4K*, *EN · 1080P*) so you choose which to play. Matching ignores provider tags, quality words and punctuation; films with the same title but different years (remakes) stay separate.

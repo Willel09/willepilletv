@@ -6,9 +6,12 @@ import { Hero } from '../components/Hero'
 import { Row } from '../components/Row'
 import { Button, Spinner } from '../components/ui'
 import { nowNext } from '../lib/epg'
+import { cleanName } from '../lib/format'
+import { forYou, newest, topRated } from '../lib/recommend'
 import { softSpring } from '../lib/motion'
 import { openDetail, openSourceSheet, playChannel, playMovie, resume, resumable, setGroup, setTab, toggleWatchlist, useApp, useIndex } from '../store'
-import type { Item } from '../../../shared/types'
+import type { Item, Movie, Show } from '../../../shared/types'
+import { RECENT } from './Browse'
 import { startPairing } from './Settings'
 
 function Welcome() {
@@ -56,6 +59,34 @@ export default function Home() {
     return sorted.sort(() => Math.random() - 0.5).slice(0, 6)
   }, [idx])
 
+  // curated rows instead of one row per category
+  const picks = useMemo(() => {
+    const byId = new Map<string, Movie | Show>()
+    for (const m of idx.movies) {
+      byId.set(m.id, m)
+      for (const v of m.versions ?? []) byId.set(v.id, m)
+    }
+    for (const s of idx.series) byId.set(s.id, s)
+    const watched = history
+      .filter((h) => h.kind !== 'live')
+      .map((h) => byId.get(h.kind === 'episode' && h.parentId ? h.parentId : h.id))
+      .filter((x): x is Movie | Show => !!x)
+    const saved = [...watchlist, ...favorites].filter((x): x is Movie | Show => x.kind === 'movie' || x.kind === 'series')
+    const gs = (x: Movie | Show) => (x.kind === 'movie' && x.groups) || [x.group]
+    const last = watched[0]
+    const similar = last
+      ? newest([...(last.kind === 'movie' ? idx.movies : idx.series)].filter((x) => x.id !== last.id && gs(x).some((g) => gs(last).includes(g))), 30)
+      : []
+    return {
+      forYou: forYou([...watched, ...saved], [...idx.movies, ...idx.series]),
+      newMovies: newest(idx.movies),
+      newSeries: newest(idx.series),
+      topRated: topRated([...idx.movies, ...idx.series]),
+      last,
+      similar
+    }
+  }, [idx, history, watchlist, favorites])
+
   if (!sources.length) return <Welcome />
   if (!idx.channels.length && !idx.movies.length && !idx.series.length && !watchlist.length && !favorites.length && !history.length)
     return (
@@ -81,11 +112,8 @@ export default function Home() {
       <PosterCard key={it.id} name={it.name} poster={it.poster} rating={it.rating} onClick={() => open(it)} />
     )
 
-  const rows = [
-    ...idx.movieGroups.slice(0, 10).map((g) => ({ g, screen: 'movies' as const })),
-    ...idx.seriesGroups.slice(0, 8).map((g) => ({ g, screen: 'series' as const })),
-    ...idx.liveGroups.slice(0, 6).map((g) => ({ g, screen: 'live' as const }))
-  ]
+  const seeAll = (screen: 'movies' | 'series' | 'live', group: string) => () => (setGroup(screen, group), setTab(screen))
+  const titleCard = (it: Movie | Show) => <PosterCard key={it.id} name={it.name} poster={it.poster} rating={it.rating} onClick={() => openDetail(it)} />
 
   return (
     <div className="h-full overflow-y-auto overflow-x-hidden">
@@ -98,7 +126,12 @@ export default function Home() {
             ))}
           </Row>
         )}
+        {picks.forYou.length > 0 && <Row title="For You">{picks.forYou.map(titleCard)}</Row>}
         {watchlist.length > 0 && <Row title="My Watchlist" count={watchlist.length}>{watchlist.slice(0, 40).map((it) => <PosterCard key={it.id} name={it.name} poster={it.poster} rating={it.rating} onClick={() => openDetail(it)} onRemove={() => toggleWatchlist(it)} />)}</Row>}
+        {picks.newMovies.length > 0 && <Row title="Newest Movies" onSeeAll={seeAll('movies', RECENT)}>{picks.newMovies.map(titleCard)}</Row>}
+        {picks.newSeries.length > 0 && <Row title="Newest Series" onSeeAll={seeAll('series', RECENT)}>{picks.newSeries.map(titleCard)}</Row>}
+        {picks.last && picks.similar.length > 0 && <Row title={`Because you watched ${cleanName(picks.last.name)}`}>{picks.similar.map(titleCard)}</Row>}
+        {picks.topRated.length > 0 && <Row title="Top Rated">{picks.topRated.map(titleCard)}</Row>}
         {favorites.length > 0 && <Row title="Favorites">{favorites.slice(0, 40).map(poster)}</Row>}
         {recentLive.length > 0 && (
           <Row title="Recently Watched Channels">
@@ -107,19 +140,6 @@ export default function Home() {
             ))}
           </Row>
         )}
-        {rows.map(({ g, screen }) => (
-          <Row
-            key={`${screen}:${g.name}`}
-            title={g.name}
-            count={g.items.length}
-            onSeeAll={() => {
-              setGroup(screen, g.name)
-              setTab(screen)
-            }}
-          >
-            {g.items.slice(0, 30).map(poster)}
-          </Row>
-        ))}
       </div>
     </div>
   )
