@@ -17,7 +17,7 @@ export function ago(ms: number) {
 }
 
 /** Strip common IPTV prefixes like "EN | " or "|UK| " for nicer titles */
-export const cleanName = (s: string) => s.replace(/^\s*(\|[^|]{1,6}\|\s*|[A-Z]{2,4}\s*[|:-]\s+)/, '').trim()
+export { stripTag as cleanName } from '../../../shared/core/dedupe'
 
 export const hue = (s: string) => {
   let h = 0

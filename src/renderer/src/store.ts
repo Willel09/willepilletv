@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { mergeMovies } from '../../shared/core/dedupe'
 import {
   STORE_DEFAULTS,
   type Channel,
@@ -361,12 +362,15 @@ export interface LibraryIndex {
   keys: Map<string, string>
 }
 
-function groupBy<T extends { group: string }>(items: T[]): Group<T>[] {
+/** A merged movie is listed in every category one of its copies came from */
+function groupBy<T extends { group: string; groups?: string[] }>(items: T[]): Group<T>[] {
   const map = new Map<string, T[]>()
   for (const it of items) {
-    const list = map.get(it.group)
-    if (list) list.push(it)
-    else map.set(it.group, [it])
+    for (const g of it.groups ?? [it.group]) {
+      const list = map.get(g)
+      if (list) list.push(it)
+      else map.set(g, [it])
+    }
   }
   return [...map].map(([name, items]) => ({ name, items }))
 }
@@ -380,7 +384,7 @@ export function index(): LibraryIndex {
   const words = settings.hiddenGroups.split(',').map((w) => fold(w.trim())).filter(Boolean)
   const keep = <T extends { group: string }>(xs: T[]) => (words.length ? xs.filter((x) => !words.some((w) => fold(x.group).includes(w))) : xs)
   const channels = keep(lib?.channels ?? [])
-  const movies = keep(lib?.movies ?? [])
+  const movies = mergeMovies(keep(lib?.movies ?? []))
   const series = keep(lib?.series ?? [])
   const keys = new Map<string, string>()
   for (const x of [...channels, ...movies, ...series]) keys.set(x.id, fold(x.name))

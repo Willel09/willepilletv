@@ -52,6 +52,8 @@ export default function Detail({ item }: { item: Movie | Show }) {
   const [info, setInfo] = useState<MediaInfo>({})
   const [loading, setLoading] = useState(false)
   const [season, setSeason] = useState<number>()
+  /** Merged duplicates: which copy to play (0 = the best one) */
+  const [ver, setVer] = useState(0)
   useApp((s) => s.favorites)
   useApp((s) => s.watchlist)
   const history = useApp((s) => s.history)
@@ -92,13 +94,16 @@ export default function Detail({ item }: { item: Movie | Show }) {
   const lastEp = item.kind === 'series' ? history.find((h) => h.parentId === item.id || h.id.startsWith(`${item.id}:`)) : undefined
   const nextEp = lastEp && episodes.find((e) => `${item.id}:${e.id}` === lastEp.id)
 
+  const versions = item.kind === 'movie' ? item.versions : undefined
+  // keep the merged id so resume/history work whichever copy you pick
+  const movie = item.kind === 'movie' && versions?.[ver] ? { ...item, url: versions[ver].url, sourceId: versions[ver].sourceId, vodId: versions[ver].vodId } : item
   const playMain = () => {
-    if (item.kind === 'movie') return playMovie(item)
+    if (movie.kind === 'movie') return playMovie(movie)
     const ep = nextEp ?? episodes[0]
-    if (ep) playEpisode(item, ep, episodes)
+    if (ep && item.kind === 'series') playEpisode(item, ep, episodes)
   }
   const vlc = async () => {
-    const url = item.kind === 'movie' ? item.url : (nextEp ?? episodes[0])?.url
+    const url = movie.kind === 'movie' ? movie.url : (nextEp ?? episodes[0])?.url
     if (!url) return
     const r = await api.openInVlc(url, item.name)
     if (!r.ok) toast(r.error!)
@@ -139,6 +144,22 @@ export default function Detail({ item }: { item: Movie | Show }) {
               {item.kind === 'series' && seasons.length > 0 && <span>{seasons.length} Season{seasons.length > 1 ? 's' : ''}</span>}
               {loading && <Spinner className="size-4 text-fg/40" />}
             </div>
+            {versions && (
+              <div className="mt-5 flex flex-wrap items-center gap-2" role="radiogroup" aria-label="Version">
+                <span className="mr-1 text-[12px] font-semibold uppercase tracking-[0.14em] text-fg/50">{versions.length} versions</span>
+                {versions.map((v, i) => (
+                  <button
+                    key={v.id}
+                    role="radio"
+                    aria-checked={i === ver}
+                    onClick={() => setVer(i)}
+                    className={`h-9 rounded-full px-4 text-[13px] font-semibold transition-colors ${i === ver ? 'bg-fg text-bg' : 'glass-thin text-fg/70 hover:text-fg'}`}
+                  >
+                    {versions.findIndex((w) => w.label === v.label) === i ? v.label : `${v.label} (${i + 1})`}
+                  </button>
+                ))}
+              </div>
+            )}
             {plot && <p className="mt-5 max-w-2xl text-[16px] leading-relaxed text-fg/80">{plot}</p>}
             {(info.cast || info.director) && (
               <div className="mt-4 max-w-2xl space-y-1 text-[13px] text-fg/50">
@@ -153,7 +174,7 @@ export default function Detail({ item }: { item: Movie | Show }) {
                   : nextEp ? `Continue S${nextEp.season} E${nextEp.episode}` : 'Play S1 E1'}
               </Button>
               {item.kind === 'movie' && resumable(movieH) && (
-                <Button size="lg" icon={<RotateCcw className="size-4.5" />} onClick={() => playMovie(item, true)}>
+                <Button size="lg" icon={<RotateCcw className="size-4.5" />} onClick={() => movie.kind === 'movie' && playMovie(movie, true)}>
                   From Beginning
                 </Button>
               )}

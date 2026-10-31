@@ -44,6 +44,19 @@ export interface Movie {
   added?: number
   /** Xtream VOD id, used to fetch details */
   vodId?: number
+  /** Set when duplicates were merged into this entry: every copy, best first */
+  versions?: MovieVersion[]
+  /** Every category the merged copies came from */
+  groups?: string[]
+}
+
+export interface MovieVersion {
+  id: string
+  sourceId: string
+  url: string
+  vodId?: number
+  /** e.g. "SE-4K", "EN · 1080P" or the category */
+  label: string
 }
 
 export interface Episode {
