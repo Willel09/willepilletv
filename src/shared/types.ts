@@ -150,6 +150,8 @@ export interface Settings {
   userAgent: string
   vlcPath: string
   hiddenGroups: string
+  /** Hide Arabic and Indian channels, movies and series */
+  removeBs: boolean
   autoplayNext: boolean
   refreshHours: number
 }
@@ -203,6 +205,7 @@ export const DEFAULT_SETTINGS: Settings = {
   userAgent: DEFAULT_UA,
   vlcPath: '',
   hiddenGroups: '',
+  removeBs: false,
   autoplayNext: true,
   refreshHours: 12
 }

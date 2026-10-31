@@ -419,6 +419,9 @@ export default function Settings() {
           <Line label="Refresh sources every">
             <Segmented layoutId="refresh" value={String(s.refreshHours)} onChange={(v) => updateSettings({ refreshHours: +v })} options={[{ value: '6', label: '6 h' }, { value: '12', label: '12 h' }, { value: '24', label: '1 day' }, { value: '168', label: '1 week' }]} />
           </Line>
+          <Line label="Remove BS" hint="Hides Arabic and Indian channels, movies and series everywhere">
+            <Toggle label="Remove BS" checked={s.removeBs} onChange={(removeBs) => updateSettings({ removeBs })} />
+          </Line>
           <div className="py-3.5">
             <LazyField label="Hide categories containing" placeholder="adult, xxx, 24/7" value={s.hiddenGroups} onCommit={(hiddenGroups) => updateSettings({ hiddenGroups })} hint="Comma-separated words. Matching categories are hidden everywhere." />
           </div>

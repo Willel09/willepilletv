@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { mergeMovies } from '../../shared/core/dedupe'
+import { isArabicOrIndian } from '../../shared/core/filter'
 import {
   STORE_DEFAULTS,
   type Channel,
@@ -380,9 +381,11 @@ let cache: { lib: Library | null; hidden: string; idx: LibraryIndex } | null = n
 /** Memoised across all components: rebuilding indexes for 50k items is not free */
 export function index(): LibraryIndex {
   const { library: lib, settings } = get()
-  if (cache && cache.lib === lib && cache.hidden === settings.hiddenGroups) return cache.idx
+  const hidden = `${settings.hiddenGroups}|${settings.removeBs}`
+  if (cache && cache.lib === lib && cache.hidden === hidden) return cache.idx
   const words = settings.hiddenGroups.split(',').map((w) => fold(w.trim())).filter(Boolean)
-  const keep = <T extends { group: string }>(xs: T[]) => (words.length ? xs.filter((x) => !words.some((w) => fold(x.group).includes(w))) : xs)
+  const keep = <T extends { group: string; name: string }>(xs: T[]) =>
+    words.length || settings.removeBs ? xs.filter((x) => !words.some((w) => fold(x.group).includes(w)) && !(settings.removeBs && isArabicOrIndian(x))) : xs
   const channels = keep(lib?.channels ?? [])
   const movies = mergeMovies(keep(lib?.movies ?? []))
   const series = keep(lib?.series ?? [])
@@ -394,12 +397,13 @@ export function index(): LibraryIndex {
     channelById: new Map(channels.map((c) => [c.id, c])),
     keys
   }
-  cache = { lib, hidden: settings.hiddenGroups, idx }
+  cache = { lib, hidden, idx }
   return idx
 }
 
 export function useIndex() {
   useApp((s) => s.library)
   useApp((s) => s.settings.hiddenGroups)
+  useApp((s) => s.settings.removeBs)
   return index()
 }
