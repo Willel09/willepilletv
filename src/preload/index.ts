@@ -20,6 +20,11 @@ const api: IptvApi = {
   mediaInfo: (sourceId, kind, id) => ipcRenderer.invoke('media:info', sourceId, kind, id),
   pickPlaylistFile: () => ipcRenderer.invoke('dialog:playlist'),
   readPlaylistFile: (path) => ipcRenderer.invoke('file:read', path),
+  cast: {
+    discover: () => ipcRenderer.invoke('cast:discover'),
+    start: (id, media) => ipcRenderer.invoke('cast:start', id, media),
+    stop: () => ipcRenderer.invoke('cast:stop')
+  },
   openInVlc: (url, title) => ipcRenderer.invoke('vlc:open', url, title),
   win: {
     minimize: () => ipcRenderer.send('win:minimize'),

@@ -128,6 +128,7 @@ You need **Node.js 22 LTS** from <https://nodejs.org>.
 - **Search inside Movies and Series:** a search field above the poster grid filters the current category.
 - **Movies & Series:** a virtualised poster grid (newest, A–Z, top rated), and detail pages with backdrop, cast, season/episode picker and "More Like This".
 - **Player:** a glass control bar; a draggable **mini player** (Esc or ‹ shrinks it to a corner so you can keep browsing; click to expand); audio/subtitle tracks; speed; sleep timer; PiP; fullscreen; channel zapping and number entry; resume; Up Next autoplay; automatic engine fallback; error messages written for people; Open in VLC (Windows).
+- **Cast to TV** (Windows app): the cast button in the player (or **Cast to TV** on the error card) finds Chromecast / Google TV and Samsung (DLNA) TVs on your network and plays the stream there. Channel zapping follows to the TV; **Stop casting** brings playback back to the PC. Handy when the PC can't play a format (MKV, AC3) that the TV can.
 - **Themes:** Graphite (default), Midnight (OLED black), Crimson, Nordic, Ember, Forest, Rosé, Aurora, Daylight and Sand. You can also set a custom accent colour and choose **Artwork glow: Vivid / Subtle / Off** for how much posters tint the background.
 - **Updates:** see *Settings → Updates* for the current version and **Check for updates**.
 - **Keyboard / remote navigation** everywhere, Windows 11 Mica/Acrylic, and Reduced Motion support.

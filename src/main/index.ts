@@ -6,9 +6,10 @@ import { fileURLToPath } from 'url'
 import { join } from 'path'
 import Store from 'electron-store'
 import { autoUpdater } from 'electron-updater'
-import { DEFAULT_SETTINGS, STORE_DEFAULTS, type Library, type Settings, type StoreShape, type UpdateState } from '../shared/types'
+import { DEFAULT_SETTINGS, STORE_DEFAULTS, type CastMedia, type Library, type Settings, type StoreShape, type UpdateState } from '../shared/types'
 import { buildEpg, buildLibrary, emptyLibrary } from '../shared/core/library'
 import { xtreamInfo } from '../shared/core/xtream'
+import { discoverCast, startCast, stopCast } from './cast'
 import { getText } from './http'
 import { readCache, writeCache } from './library'
 import { devModeOn, discoverTvs, localIps, openTvInstaller } from './tvinstall'
@@ -133,6 +134,9 @@ function registerIpc() {
     const st = await stat(path.startsWith('file:') ? fileURLToPath(path) : path)
     return { text: await get(path), sig: `${st.mtimeMs}:${st.size}` }
   })
+  ipcMain.handle('cast:discover', () => discoverCast())
+  ipcMain.handle('cast:start', (_e, id: string, media: CastMedia) => startCast(id, media))
+  ipcMain.handle('cast:stop', () => stopCast())
   ipcMain.handle('vlc:open', (_e, url: string, title: string) => {
     // Only hand real stream URLs to VLC so a crafted playlist entry can't pass VLC command-line options
     if (!/^(https?|rtmp|rtsp|rtp|udp|mms):\/\//i.test(url)) return { ok: false, error: 'This stream address cannot be opened in VLC.' }

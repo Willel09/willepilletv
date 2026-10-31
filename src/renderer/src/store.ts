@@ -53,6 +53,8 @@ interface State extends StoreShape {
   player: PlayRequest | null
   /** player shrunk into the floating mini player (Windows + web) */
   playerMini: boolean
+  /** TV the player is casting to (Windows app) */
+  castTo: { id: string; name: string } | null
   ambient: string | null
   toast: { id: number; text: string } | null
   sourceSheet: { kind: Source['kind']; source?: Source; file?: boolean } | null
@@ -72,6 +74,7 @@ export const useApp = create<State>(() => ({
   detail: null,
   player: null,
   playerMini: false,
+  castTo: null,
   ambient: null,
   toast: null,
   sourceSheet: null,
@@ -312,7 +315,11 @@ export const resumable = (h?: HistoryEntry) => !!h && h.kind !== 'live' && h.pos
 /* ---------------- playback ---------------- */
 
 export const play = (req: PlayRequest) => set({ player: req, playerMini: false })
-export const closePlayer = () => set({ player: null, playerMini: false })
+export const closePlayer = () => {
+  if (get().castTo) void api.cast?.stop()
+  set({ player: null, playerMini: false, castTo: null })
+}
+export const setCastTo = (castTo: { id: string; name: string } | null) => set({ castTo })
 export const canMiniPlayer = api.device !== 'tv'
 export const minimizePlayer = () => canMiniPlayer && set({ playerMini: true })
 export const expandPlayer = () => set({ playerMini: false })

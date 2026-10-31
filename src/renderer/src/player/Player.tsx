@@ -1,14 +1,15 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   AlertTriangle, Captions, Maximize2, X, ChevronDown, ChevronLeft, ChevronUp, Copy, ExternalLink, Gauge, Heart, Languages, Maximize, Minimize,
-  Moon, Pause, PictureInPicture2, Play, RotateCcw, RotateCw, SkipForward, Volume1, Volume2, VolumeX
+  Cast, Moon, Pause, PictureInPicture2, Play, RotateCcw, RotateCw, SkipForward, Volume1, Volume2, VolumeX
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Spinner } from '../components/ui'
 import { nowNext, useNow } from '../lib/epg'
 import { cleanName, clock, duration } from '../lib/format'
 import { sheetSpring, spring } from '../lib/motion'
-import { api, canMiniPlayer, closePlayer, expandPlayer, index, isFavorite, minimizePlayer, playChannel, playEpisode, saveProgress, toast, toggleFavorite, useApp, type PlayRequest } from '../store'
+import type { CastDevice } from '../../../shared/types'
+import { api, canMiniPlayer, closePlayer, setCastTo, expandPlayer, index, isFavorite, minimizePlayer, playChannel, playEpisode, saveProgress, toast, toggleFavorite, useApp, type PlayRequest } from '../store'
 
 const desktop = api.device === 'desktop'
 const tv = api.device === 'tv'
@@ -131,7 +132,11 @@ function Session({ req, mini, fullscreen, sleepAt, setSleepAt }: SessionProps) {
   const [muted, setMuted] = useState(false)
   const [res, setRes] = useState('')
   const [rate, setRate] = useState(1)
-  const [menu, setMenu] = useState<'audio' | 'subs' | 'speed' | 'sleep' | null>(null)
+  const [menu, setMenu] = useState<'audio' | 'subs' | 'speed' | 'sleep' | 'cast' | null>(null)
+  const castTo = useApp((s) => s.castTo)
+  const casting = useRef(false)
+  casting.current = !!castTo
+  const [castDevices, setCastDevices] = useState<CastDevice[] | null>(null)
   const [tracks, setTracks] = useState<{ audio: Track[]; subs: Track[]; ca: number; cs: number }>({ audio: [], subs: [], ca: -1, cs: -1 })
   const [visible, setVisible] = useState(true)
   const [numBuf, setNumBuf] = useState('')
@@ -142,6 +147,30 @@ function Session({ req, mini, fullscreen, sleepAt, setSleepAt }: SessionProps) {
   const fmt = req.channel?.xt ? (altFormat ? (settings.liveFormat === 'ts' ? 'm3u8' : 'ts') : settings.liveFormat) : null
   const url = fmt ? req.url.replace(/\.(ts|m3u8)$/, `.${fmt}`) : req.url
   const engines = useMemo(() => pickEngines(url, live), [url, live])
+
+  // casting: hand the stream to the TV (again after zapping) and keep the local video paused
+  useEffect(() => {
+    if (!castTo || !api.cast) return
+    video.current?.pause()
+    const at = video.current?.currentTime || req.startAt
+    api.cast
+      .start(castTo.id, { url: req.channel?.xt ? req.url.replace(/\.(ts|m3u8)$/, '.ts') : url, hlsUrl: req.channel?.xt ? req.url.replace(/\.(ts|m3u8)$/, '.m3u8') : undefined, title: cleanName(req.title), poster: req.poster ?? req.channel?.logo, live, startAt: at })
+      .then((r) => {
+        if (r.ok) return toast(`Playing on ${castTo.name}`)
+        toast(r.error!)
+        setCastTo(null)
+      })
+  }, [castTo?.id, url]) // eslint-disable-line react-hooks/exhaustive-deps
+  const openCast = () => {
+    setMenu(menu === 'cast' ? null : 'cast')
+    setCastDevices(null)
+    api.cast!.discover().then(setCastDevices)
+  }
+  const stopCast = () => {
+    void api.cast?.stop()
+    setCastTo(null)
+    video.current?.play().catch(() => {})
+  }
 
   const nextEp = useMemo(() => {
     if (!req.episodes || !req.episode) return undefined
@@ -356,7 +385,7 @@ function Session({ req, mini, fullscreen, sleepAt, setSleepAt }: SessionProps) {
         playsInline
         onClick={toggle}
         onDoubleClick={() => api.win.setFullscreen(!fullscreen)}
-        onPlay={() => setPlaying(true)}
+        onPlay={(e) => (casting.current ? e.currentTarget.pause() : setPlaying(true))}
         onPause={() => setPlaying(false)}
         onWaiting={() => setBuffering(true)}
         onPlaying={() => (setBuffering(false), setError(null))}
@@ -378,9 +407,23 @@ function Session({ req, mini, fullscreen, sleepAt, setSleepAt }: SessionProps) {
         onEnded={onEnded}
       />
 
+      {/* casting */}
+      {castTo && !mini && (
+        <div className="absolute inset-0 grid place-items-center bg-black/80">
+          <div className="glass-strong flex flex-col items-center gap-4 rounded-[28px] px-10 py-8 text-center">
+            <Cast className="size-10 text-white" />
+            <div>
+              <div className="text-[13px] font-semibold uppercase tracking-[0.14em] text-white/55">Playing on</div>
+              <div className="mt-1 text-[22px] font-bold text-white">{castTo.name}</div>
+            </div>
+            <button onClick={stopCast} className="rounded-full bg-white px-6 py-2.5 text-[14px] font-semibold text-black hover:bg-white/90">Stop casting</button>
+          </div>
+        </div>
+      )}
+
       {/* buffering */}
       <AnimatePresence>
-        {buffering && !error && (
+        {buffering && !error && !castTo && (
           <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }} className="pointer-events-none absolute inset-0 grid place-items-center">
             <div className="glass-strong flex flex-col items-center gap-3 rounded-[28px] px-8 py-6">
               <Spinner className="size-8 text-white" />
@@ -519,6 +562,25 @@ function Session({ req, mini, fullscreen, sleepAt, setSleepAt }: SessionProps) {
                 )}
               </AnimatePresence>
             </div>
+            {api.cast && (
+              <div className="relative" onClick={(e) => e.stopPropagation()}>
+                <CtrlBtn label="Cast to TV" active={menu === 'cast' || !!castTo} onClick={openCast}><Cast className="size-5" /></CtrlBtn>
+                <AnimatePresence>
+                  {menu === 'cast' && (
+                    <Menu
+                      title="Cast to"
+                      value={castTo?.id ?? ''}
+                      options={[
+                        ...(castDevices ?? []).map((d) => ({ value: d.id, label: `${d.name}${d.kind === 'dlna' ? ' · DLNA' : ''}` })),
+                        ...(castTo ? [{ value: '__stop', label: 'Stop casting' }] : [])
+                      ]}
+                      onPick={(id) => (setMenu(null), id === '__stop' ? stopCast() : setCastTo({ id, name: castDevices!.find((d) => d.id === id)!.name }))}
+                      footer={castDevices === null ? 'Searching your network…' : !castDevices.length ? 'No TVs found. Chromecast / Google TV and Samsung TVs must be on and on the same network as this PC.' : undefined}
+                    />
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
             {!tv && <div className="hidden sm:block"><CtrlBtn label="Picture in Picture (P)" onClick={pip}><PictureInPicture2 className="size-5" /></CtrlBtn></div>}
             {desktop && <CtrlBtn label="Open in VLC" onClick={vlc}><ExternalLink className="size-5" /></CtrlBtn>}
             {!tv && <CtrlBtn label="Fullscreen (F)" onClick={() => api.win.setFullscreen(!fullscreen)}>{fullscreen ? <Minimize className="size-5" /> : <Maximize className="size-5" />}</CtrlBtn>}
@@ -552,7 +614,7 @@ function Session({ req, mini, fullscreen, sleepAt, setSleepAt }: SessionProps) {
           ) : (
             <div className="absolute inset-x-0 bottom-0 h-1 bg-white/20"><div className="h-full bg-white" style={{ width: `${dur ? (time / dur) * 100 : 0}%` }} /></div>
           )}
-          {error && <div className="absolute inset-0 grid place-items-center bg-black/70 p-4 text-center text-[12.5px] font-medium text-white">Can't play this {live ? 'channel' : 'video'}. Click to see why.</div>}
+          {error && !castTo && <div className="absolute inset-0 grid place-items-center bg-black/70 p-4 text-center text-[12.5px] font-medium text-white">Can't play this {live ? 'channel' : 'video'}. Click to see why.</div>}
         </div>
       )}
 
@@ -572,7 +634,7 @@ function Session({ req, mini, fullscreen, sleepAt, setSleepAt }: SessionProps) {
 
       {/* error */}
       <AnimatePresence>
-        {error && !mini && (
+        {error && !mini && !castTo && menu !== 'cast' && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 grid place-items-center bg-black/55 backdrop-blur-md" onClick={(e) => e.stopPropagation()}>
             <motion.div initial={{ y: 30, scale: 0.95 }} animate={{ y: 0, scale: 1 }} transition={sheetSpring} className="glass-strong w-[500px] max-w-[92vw] rounded-[32px] p-8 text-center">
               <div className="mx-auto mb-5 grid size-16 place-items-center rounded-full bg-amber-400/15 text-amber-300"><AlertTriangle className="size-8" /></div>
@@ -585,6 +647,7 @@ function Session({ req, mini, fullscreen, sleepAt, setSleepAt }: SessionProps) {
                     Try {fmt === 'ts' ? 'HLS' : 'MPEG-TS'}
                   </button>
                 )}
+                {api.cast && <button onClick={openCast} className="glass-thin flex h-10 items-center gap-2 rounded-full px-5 text-[13.5px] font-semibold text-white"><Cast className="size-4" /> Cast to TV</button>}
                 {desktop && <button onClick={vlc} className="glass-thin flex h-10 items-center gap-2 rounded-full px-5 text-[13.5px] font-semibold text-white"><ExternalLink className="size-4" /> Open in VLC</button>}
                 {!tv && <button onClick={copy} className="glass-thin flex h-10 items-center gap-2 rounded-full px-5 text-[13.5px] font-semibold text-white"><Copy className="size-4" /> Copy URL</button>}
               </div>

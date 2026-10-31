@@ -249,6 +249,12 @@ export interface IptvApi {
   refreshEpg(): Promise<Epg>
   mediaInfo(sourceId: string, kind: 'movie' | 'series', id: number): Promise<MediaInfo>
   pickPlaylistFile(): Promise<string | null>
+  /** Desktop: cast to Chromecast / Google TV and DLNA (Samsung) TVs on the network */
+  cast?: {
+    discover(): Promise<CastDevice[]>
+    start(deviceId: string, media: CastMedia): Promise<{ ok: boolean; error?: string }>
+    stop(): Promise<void>
+  }
   /** Desktop: read a local playlist file so sync can share it with the TV. `sig` changes when the file does. */
   readPlaylistFile?(path: string): Promise<{ text: string; sig: string }>
   openInVlc(url: string, title: string): Promise<{ ok: boolean; error?: string }>
@@ -274,4 +280,22 @@ export interface IptvApi {
     checkDevMode(ip: string): Promise<boolean>
     openInstaller(): Promise<{ ok: boolean; error?: string }>
   }
+}
+
+export interface CastDevice {
+  id: string
+  name: string
+  kind: 'chromecast' | 'dlna'
+  model?: string
+  host: string
+}
+
+export interface CastMedia {
+  url: string
+  /** HLS variant of an Xtream live stream: Chromecast can't play raw .ts */
+  hlsUrl?: string
+  title: string
+  poster?: string
+  live: boolean
+  startAt?: number
 }

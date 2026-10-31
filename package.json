@@ -1,7 +1,7 @@
 {
   "name": "lumen-iptv",
   "productName": "Lumen",
-  "version": "1.2.5",
+  "version": "1.2.6",
   "description": "A premium IPTV player for Windows. Bring your own M3U, Xtream Codes and XMLTV sources.",
   "author": "Lumen",
   "license": "MIT",
@@ -12,7 +12,7 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
-    "test": "node --experimental-strip-types --test src/**/*.test.ts tools/*.test.ts",
+    "test": "node --experimental-strip-types --test \"src/**/*.test.ts\" \"tools/*.test.ts\"",
     "dist": "npm run build && electron-builder --win --publish never",
     "dist:dir": "npm run build && electron-builder --win --dir --publish never",
     "dev:web": "vite --config vite.web.config.mts",
