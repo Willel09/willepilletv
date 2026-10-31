@@ -19,6 +19,7 @@ const api: IptvApi = {
   refreshEpg: () => ipcRenderer.invoke('epg:refresh'),
   mediaInfo: (sourceId, kind, id) => ipcRenderer.invoke('media:info', sourceId, kind, id),
   pickPlaylistFile: () => ipcRenderer.invoke('dialog:playlist'),
+  readPlaylistFile: (path) => ipcRenderer.invoke('file:read', path),
   openInVlc: (url, title) => ipcRenderer.invoke('vlc:open', url, title),
   win: {
     minimize: () => ipcRenderer.send('win:minimize'),

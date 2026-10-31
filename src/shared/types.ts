@@ -233,6 +233,8 @@ export interface IptvApi {
   refreshEpg(): Promise<Epg>
   mediaInfo(sourceId: string, kind: 'movie' | 'series', id: number): Promise<MediaInfo>
   pickPlaylistFile(): Promise<string | null>
+  /** Desktop: read a local playlist file so sync can share it with the TV. `sig` changes when the file does. */
+  readPlaylistFile?(path: string): Promise<{ text: string; sig: string }>
   openInVlc(url: string, title: string): Promise<{ ok: boolean; error?: string }>
   win: {
     minimize(): void

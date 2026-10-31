@@ -6,6 +6,7 @@ import { gunzipSync } from 'fflate'
 import { buildEpg, buildLibrary, emptyLibrary } from '../../../shared/core/library'
 import { HTTP_HINT } from '../../../shared/core/net'
 import { xtreamInfo } from '../../../shared/core/xtream'
+import { pullFile } from '../lib/sync'
 import { DEFAULT_SETTINGS, STORE_DEFAULTS, type Epg, type IptvApi, type Library, type StoreShape, type UpdateState } from '../../../shared/types'
 
 declare const __APP_VERSION__: string
@@ -39,8 +40,21 @@ async function idb<T>(mode: 'get' | 'put', key: string, value?: unknown): Promis
 }
 
 /* ---------- networking ---------- */
+const read = <T,>(k: string): T | null => {
+  try { return JSON.parse(localStorage.getItem(`lumen:${k}`) ?? 'null') as T } catch { return null }
+}
+/** An M3U file added on the PC: Lumen for Windows shares it through sync (see shareFiles in store.ts).
+    shortcut: edits to the file reach this device on its next library refresh (Refresh or the auto-refresh timer), not instantly. */
+async function syncedFile(path: string): Promise<string> {
+  const code = read<StoreShape['sync']>('sync')?.code
+  const src = read<StoreShape['sources']>('sources')?.find((s) => s.url === path)
+  const text = code && src ? await pullFile(code, src.id) : null
+  if (text == null) throw new Error('This playlist file is on your PC. Open Lumen on the PC with Sync turned on, and it will be shared with this device.')
+  return text
+}
+
 async function getText(url: string, timeoutMs = 180_000): Promise<string> {
-  if (!/^https?:\/\//i.test(url)) throw new Error('Local playlist files only work on the PC that added them.')
+  if (!/^https?:\/\//i.test(url)) return syncedFile(url)
   const ctl = new AbortController()
   const timer = setTimeout(() => ctl.abort(), timeoutMs)
   let res: Response

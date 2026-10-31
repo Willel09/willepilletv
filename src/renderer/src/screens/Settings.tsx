@@ -109,6 +109,7 @@ export function SourceSheet({ sheet }: { sheet: NonNullable<ReturnType<typeof us
             </Button>
           </div>
         )}
+        {kind === 'file' && <p className="text-[12px] leading-relaxed text-fg/40">With Sync on, this file is shared with your TV and phone (encrypted), so they can load it too.</p>}
         <Field
           label="TV guide (XMLTV) URL — optional"
           placeholder={kind === 'xtream' ? 'Leave empty to use the provider guide' : 'https://…/guide.xml.gz'}

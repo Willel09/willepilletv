@@ -1,6 +1,8 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, session, shell } from 'electron'
 import { spawn } from 'child_process'
 import { existsSync } from 'fs'
+import { stat } from 'fs/promises'
+import { fileURLToPath } from 'url'
 import { join } from 'path'
 import Store from 'electron-store'
 import { autoUpdater } from 'electron-updater'
@@ -124,6 +126,12 @@ function registerIpc() {
       filters: [{ name: 'Playlists', extensions: ['m3u', 'm3u8', 'txt'] }]
     })
     return r.canceled ? null : r.filePaths[0]
+  })
+  ipcMain.handle('file:read', async (_e, path: string) => {
+    // only files the user added as a source, so the renderer can't read arbitrary files
+    if (!store.get('sources').some((s) => s.kind === 'm3u' && s.url === path)) throw new Error('Not a playlist source')
+    const st = await stat(path.startsWith('file:') ? fileURLToPath(path) : path)
+    return { text: await get(path), sig: `${st.mtimeMs}:${st.size}` }
   })
   ipcMain.handle('vlc:open', (_e, url: string, title: string) => {
     // Only hand real stream URLs to VLC so a crafted playlist entry can't pass VLC command-line options

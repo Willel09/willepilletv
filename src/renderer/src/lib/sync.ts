@@ -5,6 +5,7 @@
 import { gcm } from '@noble/ciphers/aes.js'
 import { pbkdf2Async } from '@noble/hashes/pbkdf2.js'
 import { sha256 } from '@noble/hashes/sha2.js'
+import { gunzipSync, gzipSync } from 'fflate'
 import type { HistoryEntry, Item, Movie, Settings, Show, Source, SyncMeta } from '../../../shared/types'
 
 const SB_URL = 'https://cbqjczxbcodebmgawknz.supabase.co/rest/v1/rpc'
@@ -58,9 +59,18 @@ const unb64 = (s: string) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0))
 
 interface Box {
   id: string
+  sealBytes(data: Uint8Array): Promise<string>
+  openBytes(data: string): Promise<Uint8Array>
   seal(data: unknown): Promise<string>
   open<T>(data: string): Promise<T>
 }
+
+/** JSON on top of the byte-level cipher */
+const withJson = (b: Pick<Box, 'id' | 'sealBytes' | 'openBytes'>): Box => ({
+  ...b,
+  seal: (data) => b.sealBytes(enc.encode(JSON.stringify(data))),
+  open: async (data) => JSON.parse(new TextDecoder().decode(await b.openBytes(data)))
+})
 
 const ITERATIONS = 150_000
 const boxes = new Map<string, Promise<Box>>()
@@ -79,32 +89,31 @@ async function makeBox(k: string, secret: string, salt: string, forceJs: boolean
   if (subtle) {
     const base = await subtle.importKey('raw', enc.encode(secret), 'PBKDF2', false, ['deriveKey'])
     const key = await subtle.deriveKey({ name: 'PBKDF2', salt: enc.encode(salt), iterations: ITERATIONS, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt'])
-    return {
+    return withJson({
       id,
-      async seal(data) {
+      async sealBytes(data) {
         const iv = crypto.getRandomValues(new Uint8Array(12))
-        const ct = new Uint8Array(await subtle.encrypt({ name: 'AES-GCM', iv }, key, enc.encode(JSON.stringify(data))))
-        return b64(concat(iv, ct))
+        return b64(concat(iv, new Uint8Array(await subtle.encrypt({ name: 'AES-GCM', iv }, key, data as Uint8Array<ArrayBuffer>))))
       },
-      async open(data) {
+      async openBytes(data) {
         const raw = unb64(data)
-        return JSON.parse(new TextDecoder().decode(await subtle.decrypt({ name: 'AES-GCM', iv: raw.subarray(0, 12) }, key, raw.subarray(12))))
+        return new Uint8Array(await subtle.decrypt({ name: 'AES-GCM', iv: raw.subarray(0, 12) }, key, raw.subarray(12)))
       }
-    }
+    })
   }
   // asyncTick keeps the TV UI responsive while the key is derived
   const key = await pbkdf2Async(sha256, enc.encode(secret), enc.encode(salt), { c: ITERATIONS, dkLen: 32, asyncTick: 20 })
-  return {
+  return withJson({
     id,
-    async seal(data) {
+    async sealBytes(data) {
       const iv = crypto.getRandomValues(new Uint8Array(12))
-      return b64(concat(iv, gcm(key, iv).encrypt(enc.encode(JSON.stringify(data)))))
+      return b64(concat(iv, gcm(key, iv).encrypt(data)))
     },
-    async open(data) {
+    async openBytes(data) {
       const raw = unb64(data)
-      return JSON.parse(new TextDecoder().decode(gcm(key, raw.subarray(0, 12)).decrypt(raw.subarray(12))))
+      return gcm(key, raw.subarray(0, 12)).decrypt(raw.subarray(12))
     }
-  }
+  })
 }
 
 const concat = (a: Uint8Array, b: Uint8Array) => {
@@ -161,6 +170,46 @@ export async function receivePairing(pairCode: string): Promise<string | null> {
   const { code } = await box.open<{ code: string }>(rows[0].data)
   await rpc('sync_delete', { p_id: box.id })
   return code
+}
+
+/* ---------------- playlist files ----------------
+   A local M3U file added on the PC is shared with your other devices: gzipped, encrypted with the
+   sync key and split into blobs under the server's 4 MB limit (a 50 MB playlist is ~10 blobs). */
+
+const CHUNK = 2_900_000 // bytes before base64 (+33%) stays under 4,000,000 chars
+const MAX_CHUNKS = 24
+const fileId = (code: string, sourceId: string, part: number | 'head') => hex(sha256(enc.encode(`lumen-file:${normalize(code)}:${sourceId}:${part}`)))
+interface FileHead { sig: string; n: number }
+
+async function fileHead(code: string, sourceId: string): Promise<FileHead | null> {
+  const rows = await rpc<{ data: string }[]>('sync_get', { p_id: fileId(code, sourceId, 'head') })
+  return rows.length ? (await derive(code, 'sync')).open<FileHead>(rows[0].data) : null
+}
+
+/** Upload a playlist file unless the server already has this version (`sig` = mtime + size) */
+export async function pushFile(code: string, sourceId: string, text: string, sig: string) {
+  if ((await fileHead(code, sourceId))?.sig === sig) return
+  const box = await derive(code, 'sync')
+  const gz = gzipSync(enc.encode(text), { level: 6 })
+  const n = Math.ceil(gz.length / CHUNK)
+  if (n > MAX_CHUNKS) throw new Error('This playlist file is too large to sync. Use its URL instead.')
+  for (let i = 0; i < n; i++) await rpc('sync_put', { p_id: fileId(code, sourceId, i), p_data: await box.sealBytes(gz.subarray(i * CHUNK, (i + 1) * CHUNK)) })
+  // the head goes last, so another device never sees a half-uploaded file
+  await rpc('sync_put', { p_id: fileId(code, sourceId, 'head'), p_data: await box.seal({ sig, n }) })
+}
+
+/** Download a playlist file shared by the PC, or null if it was never uploaded */
+export async function pullFile(code: string, sourceId: string): Promise<string | null> {
+  const head = await fileHead(code, sourceId)
+  if (!head) return null
+  const box = await derive(code, 'sync')
+  const parts: Uint8Array[] = []
+  for (let i = 0; i < head.n; i++) {
+    const rows = await rpc<{ data: string }[]>('sync_get', { p_id: fileId(code, sourceId, i) })
+    if (!rows.length) throw new Error('The playlist file is still uploading from your PC. Try again in a minute.')
+    parts.push(await box.openBytes(rows[0].data))
+  }
+  return new TextDecoder().decode(gunzipSync(parts.reduce(concat, new Uint8Array(0))))
 }
 
 /* ---------------- merge ---------------- */

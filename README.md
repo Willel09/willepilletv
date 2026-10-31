@@ -98,7 +98,7 @@ You need **Node.js 22 LTS** from <https://nodejs.org>.
 *Settings → Sync & Devices* keeps these in sync between your PC, TV and the web app:
 
 - watchlist, favorites, watch history and resume positions;
-- sources (Xtream logins and playlists), so only one device needs typing;
+- sources (Xtream logins and playlists), so only one device needs typing. **M3U files added from the PC's disk are shared too:** Lumen for Windows uploads the file (compressed and encrypted, up to ~70 MB) so the TV and phone can load it. Edits to the file reach other devices on their next refresh;
 - theme, accent, artwork glow, extra guide URL, hidden categories, stream format and autoplay.
 
 **Privacy:** everything is encrypted on your device (AES-256-GCM, with a key derived from your sync code) before it is sent. The server stores only ciphertext under a SHA-256 hash of the code, so it never sees the code, your logins or your lists. Anyone who has your **sync code** can read your synced data, so keep it private. Turning sync off on a device keeps its local data.
@@ -119,7 +119,7 @@ You need **Node.js 22 LTS** from <https://nodejs.org>.
 
 ## Features
 
-- **Sources:** M3U/M3U8 by URL or local file (Windows), Xtream Codes (Live, Movies, Series), and XMLTV guides (`.xml` / `.xml.gz`, found automatically from Xtream or the M3U `url-tvg` header).
+- **Sources:** M3U/M3U8 by URL or local file (Windows; shared with your TV through Sync), Xtream Codes (Live, Movies, Series), and XMLTV guides (`.xml` / `.xml.gz`, found automatically from Xtream or the M3U `url-tvg` header).
 - **Home:** an auto-rotating hero, then rows: Continue Watching, **My Watchlist**, Favorites, Recently Watched Channels, and one row per category.
 - **Watchlist:** add movies and series from the hero (＋) or the detail page. It also appears as a category under Movies and Series, and syncs between devices.
 - **Live TV:** a filterable category sidebar, a virtualised channel list with now/next, an info panel with the upcoming schedule, and a full **TV guide grid**.
@@ -179,4 +179,5 @@ apple-iptv/
 - **The provider blocks the app.** Change the user agent in Settings → Playback (Windows).
 - **The TV install fails.** In the assistant, Developer Mode must show ✓. Check that the TV has your PC's IP, that it was fully restarted, and that both are on the same network.
 - **No TV guide.** Check that the channels have `tvg-id` values matching the guide, or matching names.
+- **Huge providers** (hundreds of thousands of channels and titles) are supported; lists are virtualised and loading was tested with 300,000 channels + 75,000 movies + 10,000 series.
 - **Fresh start:** on Windows delete `%APPDATA%\Lumen`. On TV, uninstall and reinstall Lumen.

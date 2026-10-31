@@ -52,3 +52,32 @@ test('WebCrypto and the pure-JS fallback produce interchangeable ciphertext', as
   assert.deepEqual(await js.open(await web.seal(doc)), doc)
   assert.deepEqual(await web.open(await js.seal(doc)), doc)
 })
+
+test('playlist file: chunked upload, skip unchanged, readable from another device', async () => {
+  const { pushFile, pullFile } = await import('./sync.ts')
+  const blobs = new Map<string, string>()
+  let puts = 0
+  const realFetch = globalThis.fetch
+  globalThis.fetch = (async (url: string, init: { body: string }) => {
+    const body = JSON.parse(init.body)
+    const fn = url.split('/').pop()
+    if (fn === 'sync_put') (puts++, blobs.set(body.p_id, body.p_data))
+    const row = blobs.get(body.p_id)
+    return new Response(JSON.stringify(fn === 'sync_get' ? (row ? [{ data: row }] : []) : null), { status: 200 })
+  }) as typeof fetch
+  try {
+    // ~6 MB of random-ish text that gzip can't shrink below one chunk
+    const rnd = () => Math.random().toString(36).slice(2)
+    const text = '#EXTM3U\n' + Array.from({ length: 160_000 }, (_, i) => `#EXTINF:-1,${rnd()}${i}\nhttp://x/${rnd()}${rnd()}.ts`).join('\n')
+    await pushFile('AAAA-BBBB-CCCC-DDDD-EEEE', 'src1', text, 'v1')
+    assert.ok(puts > 2, `expected several chunks, got ${puts - 1}`)
+    assert.ok([...blobs.values()].every((d) => d.length < 4_000_000))
+    const before = puts
+    await pushFile('AAAA-BBBB-CCCC-DDDD-EEEE', 'src1', text, 'v1')
+    assert.equal(puts, before, 'unchanged file is not re-uploaded')
+    assert.equal(await pullFile('aaaabbbbccccddddeeee', 'src1'), text)
+    assert.equal(await pullFile('AAAA-BBBB-CCCC-DDDD-EEEE', 'other'), null)
+  } finally {
+    globalThis.fetch = realFetch
+  }
+})

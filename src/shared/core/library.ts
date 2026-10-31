@@ -6,6 +6,16 @@ import { loadXtream, xtEpgUrl } from './xtream'
 
 export const emptyLibrary = (): Library => ({ channels: [], movies: [], series: [], epgUrls: [], providerEpgUrls: [], accounts: {}, errors: [], updatedAt: Date.now() })
 
+/** push(...big) overflows the call stack past ~100k items, so append in a loop */
+const append = <T>(to: T[], from: T[]) => {
+  for (const x of from) to.push(x)
+}
+const add = (lib: Library, r: Pick<Library, 'channels' | 'movies' | 'series'>) => {
+  append(lib.channels, r.channels)
+  append(lib.movies, r.movies)
+  append(lib.series, r.series)
+}
+
 /** Load every source. A failing source is reported in `errors` instead of breaking the others. */
 export async function buildLibrary(sources: Source[], s: Settings, get: GetText, progress: (m: string) => void): Promise<Library> {
   const lib = emptyLibrary()
@@ -14,9 +24,7 @@ export async function buildLibrary(sources: Source[], s: Settings, get: GetText,
       try {
         if (src.kind === 'xtream') {
           const r = await loadXtream(src, get, progress)
-          lib.channels.push(...r.channels)
-          lib.movies.push(...r.movies)
-          lib.series.push(...r.series)
+          add(lib, r)
           lib.accounts[src.id] = r.account
           if (src.epgUrl) lib.epgUrls.push(src.epgUrl)
           else lib.providerEpgUrls.push(xtEpgUrl(src))
@@ -25,9 +33,7 @@ export async function buildLibrary(sources: Source[], s: Settings, get: GetText,
           progress(`${src.name}: downloading playlist…`)
           const r = parseM3u(await get(src.url), src.id)
           if (!r.channels.length && !r.movies.length && !r.series.length) throw new Error('The playlist is empty or not a valid M3U file.')
-          lib.channels.push(...r.channels)
-          lib.movies.push(...r.movies)
-          lib.series.push(...r.series)
+          add(lib, r)
           if (src.epgUrl) lib.epgUrls.push(src.epgUrl)
           else if (r.epgUrl) lib.providerEpgUrls.push(r.epgUrl)
         }

@@ -258,9 +258,11 @@ export function syncNow(): Promise<void> {
         persist('settings', settings)
         applyAppearance(settings)
       }
+      // local playlist files go up before the source list, so other devices can load them right away
+      const fileError = await shareFiles(code, merged.sources)
       await sync.push(code, merged)
       persist('sync', { ...get().sync, lastSync: Date.now() })
-      set({ syncStatus: { state: 'ok' } })
+      set({ syncStatus: fileError ? { state: 'error', message: fileError } : { state: 'ok' } })
       if (!same(local.sources, merged.sources)) refreshLibrary()
     } catch (e) {
       set({ syncStatus: { state: 'error', message: (e as Error).message } })
@@ -268,6 +270,20 @@ export function syncNow(): Promise<void> {
       syncing = null
     }
   })())
+}
+
+/** PC only: share M3U files added from disk with the TV/web (unchanged files are skipped) */
+async function shareFiles(code: string, sources: Source[]): Promise<string | undefined> {
+  if (!api.readPlaylistFile) return
+  for (const s of sources) {
+    if (s.kind !== 'm3u' || !s.url || /^https?:\/\//i.test(s.url)) continue
+    try {
+      const { text, sig } = await api.readPlaylistFile(s.url)
+      await sync.pushFile(code, s.id, text, sig)
+    } catch (e) {
+      return `${s.name}: ${(e as Error).message}`
+    }
+  }
 }
 
 let started = false
