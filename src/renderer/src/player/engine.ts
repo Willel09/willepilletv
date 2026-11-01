@@ -69,12 +69,16 @@ interface NativeTrackList<T> extends ArrayLike<T> {
 }
 type NativeAudio = { label: string; language: string; enabled: boolean }
 
+/** Samsung TVs: video buffers live in the same limited memory as the app, so keep them short */
+const TV = typeof (window as { tizen?: unknown }).tizen !== 'undefined'
+
 export function createEngine(kind: EngineKind, video: HTMLVideoElement, url: string, live: boolean, onFatal: (msg: string) => void, onTracks: () => void): Engine {
   if (kind === 'hls') {
     const hls = new Hls({
       enableWorker: true,
-      backBufferLength: 30,
-      maxBufferLength: live ? 20 : 60,
+      backBufferLength: TV ? 10 : 30,
+      maxBufferLength: live ? 20 : TV ? 30 : 60,
+      maxBufferSize: (TV ? 30 : 60) * 1000 * 1000,
       liveDurationInfinity: true,
       manifestLoadingMaxRetry: 2,
       fragLoadingMaxRetry: 4
@@ -113,7 +117,12 @@ export function createEngine(kind: EngineKind, video: HTMLVideoElement, url: str
   if (kind === 'mpegts') {
     const p = mpegts.createPlayer(
       { type: /\.flv(\?|$)/i.test(url) ? 'flv' : 'mpegts', isLive: live, url },
-      { enableWorker: true, lazyLoad: !live, liveBufferLatencyChasing: live, liveBufferLatencyMaxLatency: 8, liveBufferLatencyMinRemain: 2, autoCleanupSourceBuffer: true }
+      {
+        enableWorker: true, lazyLoad: !live, liveBufferLatencyChasing: live, liveBufferLatencyMaxLatency: 8, liveBufferLatencyMinRemain: 2,
+        autoCleanupSourceBuffer: true,
+        // default keeps 3 minutes of watched video (hundreds of MB at 4K bitrates): too much for a TV
+        ...(TV ? { autoCleanupMaxBackwardDuration: 30, autoCleanupMinBackwardDuration: 15, lazyLoadMaxDuration: 60 } : {})
+      }
     )
     p.on(mpegts.Events.ERROR, (type: string, detail: string, info?: { code?: number; msg?: string }) => onFatal(describeMpegts(type, detail, info)))
     p.attachMediaElement(video)

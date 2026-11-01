@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { parseM3u, hash } from './m3u.ts'
-import { parseXmltv, parseXmltvTime, matchEpg, normName } from './epg.ts'
+import { parseXmltv, parseXmltvTime, matchEpg, normName, XmltvParser } from './epg.ts'
 
 test('parseM3u splits live, movies and series', () => {
   const m3u = `#EXTM3U url-tvg="http://epg.example/guide.xml.gz"
@@ -67,4 +67,21 @@ test('descriptions are dropped after descUntil to keep big guides small', () => 
 <programme start="20240101200000 +0000" stop="20240101210000 +0000" channel="a"><title>B</title><desc>drop</desc></programme>`
   const d = parseXmltv(xml, Date.UTC(2024, 0, 1), Date.UTC(2024, 0, 2), Date.UTC(2024, 0, 1, 15))
   assert.deepEqual(d.programmes.get('a')!.map((p) => p.desc), ['keep', undefined])
+})
+
+test('XMLTV parsed in chunks (split mid-tag) equals parsing the whole file', () => {
+  const t = (h: number) => `202401011${h}0000 +0000`
+  const xml = `<?xml version="1.0"?><tv><channel id="a"><display-name>A &amp; B</display-name></channel><channel id="b"><display-name>B</display-name></channel>` +
+    Array.from({ length: 6 }, (_, i) => `<programme start="${t(i)}" stop="${t(i + 1)}" channel="${i % 2 ? 'a' : 'b'}"><title>Show ${i}</title><desc>About ${i}</desc></programme>`).join('\n') + '</tv>'
+  const from = Date.UTC(2024, 0, 1), to = from + 2 * 86400_000
+  const whole = parseXmltv(xml, from, to)
+  for (const size of [1, 7, 33, 100]) {
+    const p = new XmltvParser(from, to)
+    for (let i = 0; i < xml.length; i += size) p.push(xml.slice(i, i + size))
+    const got = p.finish()
+    assert.deepEqual([...got.names], [...whole.names], `names, chunk ${size}`)
+    assert.deepEqual([...got.programmes], [...whole.programmes], `programmes, chunk ${size}`)
+  }
+  assert.equal(whole.programmes.get('a')?.length, 3)
+  assert.deepEqual(whole.names.get('a'), ['A & B'])
 })

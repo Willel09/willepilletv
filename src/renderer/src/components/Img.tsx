@@ -1,8 +1,9 @@
 import { useState, type ImgHTMLAttributes } from 'react'
-import { cleanName, hue } from '../lib/format'
+import { artUrl, cleanName, hue } from '../lib/format'
 
 /** Artwork with a tasteful generated fallback when the provider image is missing or broken */
-export function Img({ src, name, className = '', contain, ...rest }: ImgHTMLAttributes<HTMLImageElement> & { name: string; contain?: boolean }) {
+export function Img({ src: raw, name, className = '', contain, size = 342, ...rest }: ImgHTMLAttributes<HTMLImageElement> & { name: string; contain?: boolean; size?: 342 | 780 }) {
+  const src = artUrl(raw, size)
   const [failed, setFailed] = useState<string | undefined>()
   if (!src || failed === src) {
     const h = hue(name)

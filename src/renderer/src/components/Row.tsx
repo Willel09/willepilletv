@@ -1,12 +1,24 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { useRef, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 
-/** Netflix-style horizontal shelf. content-visibility lets the browser skip off-screen rows entirely. */
+/**
+ * Netflix-style horizontal shelf. Its cards only exist while the row is near the screen: older TV
+ * browsers (Chromium 76) ignore content-visibility, and every poster costs decoded-image memory.
+ */
 export function Row({ title, onSeeAll, children, count }: { title: string; onSeeAll?: () => void; children: ReactNode; count?: number }) {
   const ref = useRef<HTMLDivElement>(null)
+  const section = useRef<HTMLElement>(null)
+  const [near, setNear] = useState(false)
+  useEffect(() => {
+    // measured against the scrolling page, so the margin really pre-loads the next rows
+    const root = section.current!.closest('.overflow-y-auto')
+    const io = new IntersectionObserver(([e]) => setNear(e.isIntersecting), { root, rootMargin: '800px 0px' })
+    io.observe(section.current!)
+    return () => io.disconnect()
+  }, [])
   const page = (dir: number) => ref.current?.scrollBy({ left: dir * ref.current.clientWidth * 0.8, behavior: 'smooth' })
   return (
-    <section className="group/row relative [contain-intrinsic-size:auto_360px] [content-visibility:auto]">
+    <section ref={section} className="group/row relative [contain-intrinsic-size:auto_360px] [content-visibility:auto]">
       <header className="mb-1 flex items-baseline gap-3 px-14">
         <h2 className="text-[21px] font-semibold tracking-[-0.025em]">{title}</h2>
         {count !== undefined && <span className="text-[13px] font-medium text-fg/40">{count.toLocaleString()}</span>}
@@ -16,8 +28,8 @@ export function Row({ title, onSeeAll, children, count }: { title: string; onSee
           </button>
         )}
       </header>
-      <div ref={ref} className="no-scrollbar flex scroll-px-14 gap-5 overflow-x-auto px-14 pb-10 pt-6">
-        {children}
+      <div ref={ref} className={`no-scrollbar flex ${near ? "" : "min-h-[300px]"} scroll-px-14 gap-5 overflow-x-auto px-14 pb-10 pt-6`}>
+        {near && children}
       </div>
       {(['left', 'right'] as const).map((side) => (
         <button

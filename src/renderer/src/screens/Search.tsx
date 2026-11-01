@@ -19,7 +19,7 @@ export default function Search() {
     const terms = fold(dq).split(/\s+/).filter(Boolean)
     if (!terms.length) return null
     const hit = (x: Item) => {
-      const k = idx.keys.get(x.id) ?? ''
+      const k = idx.key(x)
       return terms.every((t) => k.includes(t))
     }
     const take = <T extends Item>(xs: T[]) => {

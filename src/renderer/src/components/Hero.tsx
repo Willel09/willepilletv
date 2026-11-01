@@ -2,7 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { Check, Info, Play, Plus, Star } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { Movie, Show } from '../../../shared/types'
-import { cleanName } from '../lib/format'
+import { artUrl, cleanName } from '../lib/format'
 import { softSpring } from '../lib/motion'
 import { inWatchlist, openDetail, playMovie, setAmbient, toggleWatchlist, useApp } from '../store'
 import { Button, IconButton } from './ui'
@@ -47,7 +47,7 @@ export function Hero({ items }: { items: (Movie | Show)[] }) {
           >
             {art && (
               <img
-                src={art}
+                src={artUrl(art, 1280)}
                 alt=""
                 referrerPolicy="no-referrer"
                 className={`absolute inset-0 size-full object-cover object-[center_22%] ${wide ? '' : `scale-110 blur-2xl saturate-150 ${BACKDROP[glow]}`}`}
@@ -65,7 +65,7 @@ export function Hero({ items }: { items: (Movie | Show)[] }) {
         {!wide && art && (
           <motion.img
             key={item.id}
-            src={art}
+            src={artUrl(art, 780)}
             alt=""
             referrerPolicy="no-referrer"
             initial={{ opacity: 0, y: 30, rotate: -2 }}

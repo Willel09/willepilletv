@@ -204,6 +204,11 @@ export async function boot() {
   const [library, epg] = await Promise.all([api.getLibrary(), api.getEpg()])
   set({ library, epg })
   startSync()
+  // the guide only covers the next hours (12 on TVs): keep it fresh while the app stays open
+  setInterval(() => {
+    const epg = get().epg
+    if (get().sources.length && !get().loading && (!epg || Date.now() - epg.updatedAt > (api.device === 'tv' ? 4 : 6) * 3600_000)) refreshEpg()
+  }, 30 * 60_000)
   if (!s.sources.length) return
   const empty = !library || !(library.channels.length || library.movies.length || library.series.length)
   const stale = empty || Date.now() - library!.updatedAt > s.settings.refreshHours * 3600_000
@@ -458,7 +463,8 @@ export interface LibraryIndex {
   movieGroups: Group<Movie>[]
   seriesGroups: Group<Show>[]
   channelById: Map<string, Channel>
-  keys: Map<string, string>
+  /** search key (folded name); the table is built on the first search, not at startup */
+  key: (x: { id: string; name: string }) => string
 }
 
 /** A merged movie is listed in every category one of its copies came from */
@@ -487,13 +493,19 @@ export function index(): LibraryIndex {
   const channels = keep(lib?.channels ?? [])
   const movies = mergeMovies(keep(lib?.movies ?? []))
   const series = keep(lib?.series ?? [])
-  const keys = new Map<string, string>()
-  for (const x of [...channels, ...movies, ...series]) keys.set(x.id, fold(x.name))
+  let keys: Map<string, string> | null = null
+  const key = (x: { id: string; name: string }) => {
+    if (!keys) {
+      keys = new Map()
+      for (const list of [channels, movies, series] as { id: string; name: string }[][]) for (const y of list) keys.set(y.id, fold(y.name))
+    }
+    return keys.get(x.id) ?? fold(x.name)
+  }
   const idx: LibraryIndex = {
     channels, movies, series,
     liveGroups: groupBy(channels), movieGroups: groupBy(movies), seriesGroups: groupBy(series),
     channelById: new Map(channels.map((c) => [c.id, c])),
-    keys
+    key
   }
   cache = { lib, hidden, idx }
   return idx

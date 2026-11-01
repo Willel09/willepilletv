@@ -43,7 +43,13 @@ function displayName(info: string): string {
   return ''
 }
 
+/** Copy out of the playlist text: V8 substrings point at the whole parent string (same as own() in epg.ts) */
+const own = (s: string) => (' ' + s).slice(1)
+
 export function parseM3u(text: string, sourceId: string): M3uResult {
+  // categories repeat thousands of times: keep one copy of each
+  const groups = new Map<string, string>()
+  const groupOf = (g: string) => groups.get(g) ?? (groups.set(g, own(g)), groups.get(g)!)
   const lines = text.replace(/^﻿/, '').split(/\r?\n/)
   const res: M3uResult = { channels: [], movies: [], series: [] }
   const shows = new Map<string, Show>()
@@ -72,16 +78,16 @@ export function parseM3u(text: string, sourceId: string): M3uResult {
     if (line.startsWith('#')) continue
 
     // A URL line closes the current entry
-    const url = line
+    const url = own(line)
     const a = info ?? {}
-    const title = name || a['tvg-name'] || url.split('/').pop() || 'Untitled'
-    const group = a['group-title'] || extGroup || 'Uncategorized'
-    const logo = a['tvg-logo'] || undefined
+    const title = own(name || a['tvg-name'] || url.split('/').pop() || 'Untitled')
+    const group = groupOf(a['group-title'] || extGroup || 'Uncategorized')
+    const logo = a['tvg-logo'] ? own(a['tvg-logo']) : undefined
     const id = `${sourceId}:${hash(`${group}|${title}|${url}`)}`
     const ep = /\/series\//i.test(url) ? title.match(EPISODE) : null
 
     if (ep) {
-      const showName = ep[1].trim() || title
+      const showName = own(ep[1].trim()) || title
       const key = `${group}|${showName}`
       let show = shows.get(key)
       if (!show) {
@@ -97,7 +103,7 @@ export function parseM3u(text: string, sourceId: string): M3uResult {
       const num = parseInt(a['tvg-chno'] || '', 10)
       res.channels.push({
         kind: 'live', id, sourceId, name: title, group, url, logo,
-        epgId: a['tvg-id'] || undefined,
+        epgId: a['tvg-id'] ? own(a['tvg-id']) : undefined,
         num: Number.isFinite(num) ? num : undefined
       })
     }
@@ -106,5 +112,7 @@ export function parseM3u(text: string, sourceId: string): M3uResult {
     extGroup = ''
   }
   for (const s of res.series) s.episodes!.sort((x, y) => x.season - y.season || x.episode - y.episode)
+  if (res.epgUrl) res.epgUrl = own(res.epgUrl)
+  void /x/.test('x') // drop V8's reference to the last regex input (the playlist)
   return res
 }

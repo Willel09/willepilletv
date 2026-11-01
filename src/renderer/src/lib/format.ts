@@ -24,3 +24,11 @@ export const hue = (s: string) => {
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 360
   return h
 }
+
+/**
+ * Many providers link TMDB artwork at its original size (often 2000×3000). A decoded image costs
+ * width × height × 4 bytes, ~24 MB each, which is what runs a TV out of memory. Ask TMDB for a size
+ * that fits instead; other hosts are left alone.
+ */
+export const artUrl = (src: string | undefined, width: 342 | 780 | 1280) =>
+  src?.replace(/^(https?:\/\/image\.tmdb\.org\/t\/p\/)[^/]+\//, `$1w${width}/`)

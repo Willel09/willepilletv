@@ -186,5 +186,10 @@ apple-iptv/
 - **Casting to a Samsung TV fails.** If the TV refuses the provider's link, Lumen streams it through the PC with the content type and DLNA headers Samsung expects. Windows asks once whether Lumen may use the network: choose **Allow** (private networks).
 - **The TV install fails.** In the assistant, Developer Mode must show ✓. Check that the TV has your PC's IP, that it was fully restarted, and that both are on the same network.
 - **No TV guide.** Check that the channels have `tvg-id` values matching the guide, or matching names.
-- **Huge providers** (hundreds of thousands of channels and titles) are supported; lists are virtualised and loading was tested with 300,000 channels + 75,000 movies + 10,000 series.
+- **Huge providers** are supported, also on Samsung TVs. Tested with 110,791 channels + 398,072 movies + 96,259 series and an 8,000-channel guide, with the browser limited to a TV-like 384 MB of memory. What makes that work on a TV:
+  - provider lists and the TV guide are parsed **while they download**, so a 100 MB JSON list or XMLTV file never sits in memory whole;
+  - the library is cached in **pieces** (a single IndexedDB value over ~128 MB is refused, which used to leave the TV stuck on *Loading your library…*);
+  - TMDB artwork is requested at the size it's shown instead of the original (a 2000×3000 poster costs ~24 MB once decoded);
+  - home rows only exist near the screen, cards have no 3D tilt layers, and there are no backdrop blurs on TV;
+  - the TV keeps a 12-hour guide (refreshed automatically) and shorter video buffers.
 - **Fresh start:** on Windows delete `%APPDATA%\Lumen`. On TV, uninstall and reinstall Lumen.

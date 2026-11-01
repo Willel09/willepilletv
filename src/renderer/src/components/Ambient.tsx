@@ -1,4 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion'
+import { artUrl } from '../lib/format'
 import { useApp } from '../store'
 
 const LEVEL = { strong: { opacity: 0.42, sat: 'saturate-[1.6]' }, subtle: { opacity: 0.2, sat: 'saturate-[1.1]' }, off: null }
@@ -14,7 +15,7 @@ export function Ambient() {
         {level && src && (
           <motion.img
             key={src}
-            src={src}
+            src={artUrl(src, 342)}
             alt=""
             referrerPolicy="no-referrer"
             onError={(e) => (e.currentTarget.style.display = 'none')}

@@ -6,7 +6,7 @@ import { PosterCard } from '../components/Cards'
 import { Img } from '../components/Img'
 import { Row } from '../components/Row'
 import { Button, IconButton, Spinner } from '../components/ui'
-import { cleanName, duration } from '../lib/format'
+import { artUrl, cleanName, duration } from '../lib/format'
 import { sheetSpring, softSpring, spring } from '../lib/motion'
 import { api, closeDetail, historyFor, inWatchlist, index, isFavorite, openDetail, playEpisode, playMovie, resumable, setAmbient, toast, toggleFavorite, toggleWatchlist, useApp } from '../store'
 
@@ -24,7 +24,7 @@ function EpisodeCard({ show, ep, episodes, art }: { show: Show; ep: Episode; epi
       className="card group glass-thin flex flex-col overflow-hidden rounded-[22px] text-left"
     >
       <div className="relative aspect-video overflow-hidden">
-        <Img src={ep.still || art} name={ep.title} className="size-full" />
+        <Img src={ep.still || art} name={ep.title} size={780} className="size-full" />
         <div className="absolute inset-0 grid place-items-center bg-black/0 transition group-hover:bg-black/30 group-focus:bg-black/30">
           <span className="grid size-12 scale-75 place-items-center rounded-full bg-white/90 opacity-0 shadow-xl transition group-hover:scale-100 group-hover:opacity-100 group-focus:scale-100 group-focus:opacity-100">
             <Play className="ml-0.5 size-5 fill-black text-black" />
@@ -120,7 +120,7 @@ export default function Detail({ item }: { item: Movie | Show }) {
     >
       <div className="relative min-h-[88vh]">
         <motion.div className="absolute inset-0 overflow-hidden [mask-image:linear-gradient(to_bottom,black_50%,transparent)]" initial={{ scale: 1.08 }} animate={{ scale: 1 }} transition={{ duration: 1.6, ease: [0.2, 0.7, 0.2, 1] }}>
-          {art && <img src={art} alt="" referrerPolicy="no-referrer" className={`size-full object-cover object-[center_20%] ${info.backdrop || (item.kind === 'series' && item.backdrop) ? '' : 'scale-110 blur-2xl saturate-150'}`} onError={(e) => (e.currentTarget.style.display = 'none')} />}
+          {art && <img src={artUrl(art, 1280)} alt="" referrerPolicy="no-referrer" className={`size-full object-cover object-[center_20%] ${info.backdrop || (item.kind === 'series' && item.backdrop) ? '' : 'scale-110 blur-2xl saturate-150'}`} onError={(e) => (e.currentTarget.style.display = 'none')} />}
         </motion.div>
         <div className="absolute inset-0 bg-gradient-to-r from-[rgb(var(--base-rgb)/0.92)] via-[rgb(var(--base-rgb)/0.6)] to-transparent" />
         <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-[rgb(var(--base-rgb)/0.55)] to-transparent" />

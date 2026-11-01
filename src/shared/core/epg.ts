@@ -34,29 +34,78 @@ export interface XmltvData {
 }
 
 /**
- * Regex scan instead of a DOM parser: XMLTV files are often 100MB+, this keeps memory flat and is fast.
- * Descriptions are only kept until `descUntil` so a 10k-channel guide stays small enough to ship to the UI.
+ * Copies a substring out of its source text. V8 keeps substrings as "slices" that point at the whole
+ * parent, so one programme title would otherwise keep an entire 100 MB guide (or playlist) in memory.
  */
+export const own = (s: string) => (' ' + s).slice(1)
+
+/** V8 also keeps the last string a regex ran on (RegExp.lastMatch); point it at something tiny */
+export const releaseRegexInput = () => void /x/.test('x')
+
+/**
+ * Regex scan instead of a DOM parser: XMLTV files are often 100MB+. Text can be pushed in chunks while
+ * it downloads, so the whole file never has to be in memory. Descriptions are only kept until `descUntil`.
+ */
+export class XmltvParser {
+  private rest = ''
+  /** titles repeat across channels and days ("News", "Weather"): keep one copy of each */
+  private titles = new Map<string, string>()
+  readonly names = new Map<string, string[]>()
+  readonly programmes = new Map<string, Programme[]>()
+  private from: number
+  private to: number
+  private descUntil: number
+  constructor(from: number, to: number, descUntil = to) {
+    this.from = from
+    this.to = to
+    this.descUntil = descUntil
+  }
+
+  push(chunk: string) {
+    const buf = this.rest + chunk
+    // <channel> and <programme> are flat siblings: everything up to the last closing tag is complete
+    const end = Math.max(buf.lastIndexOf('</programme>'), buf.lastIndexOf('</channel>'))
+    if (end < 0) return void (this.rest = buf)
+    const cut = buf.indexOf('>', end) + 1
+    this.scan(buf.slice(0, cut))
+    this.rest = own(buf.slice(cut))
+  }
+
+  finish(): XmltvData {
+    this.scan(this.rest)
+    this.rest = ''
+    this.titles.clear()
+    for (const list of this.programmes.values()) list.sort((a, b) => a.start - b.start)
+    releaseRegexInput()
+    return { names: this.names, programmes: this.programmes }
+  }
+
+  private scan(xml: string) {
+    for (const m of xml.matchAll(/<channel\b([^>]*)>([\s\S]*?)<\/channel>/g)) {
+      const id = own(decodeXml(attr(m[1], 'id')))
+      this.names.set(id, [...m[2].matchAll(/<display-name[^>]*>([\s\S]*?)<\/display-name>/g)].map((x) => own(decodeXml(x[1]))))
+    }
+    for (const m of xml.matchAll(/<programme\b([^>]*)>([\s\S]*?)<\/programme>/g)) {
+      const start = parseXmltvTime(attr(m[1], 'start'))
+      const stop = parseXmltvTime(attr(m[1], 'stop'))
+      if (!(stop > this.from && start < this.to)) continue
+      const ch = decodeXml(attr(m[1], 'channel'))
+      const desc = start < this.descUntil ? tag(m[2], 'desc') : undefined
+      const t = tag(m[2], 'title') || 'Untitled'
+      let title = this.titles.get(t)
+      if (title === undefined) this.titles.set((title = own(t)), title)
+      const p: Programme = { start, stop, title, desc: desc ? own(desc.slice(0, 280)) : undefined }
+      const list = this.programmes.get(ch)
+      if (list) list.push(p)
+      else this.programmes.set(own(ch), [p])
+    }
+  }
+}
+
 export function parseXmltv(xml: string, from: number, to: number, descUntil = to): XmltvData {
-  const names = new Map<string, string[]>()
-  for (const m of xml.matchAll(/<channel\b([^>]*)>([\s\S]*?)<\/channel>/g)) {
-    const id = decodeXml(attr(m[1], 'id'))
-    names.set(id, [...m[2].matchAll(/<display-name[^>]*>([\s\S]*?)<\/display-name>/g)].map((x) => decodeXml(x[1])))
-  }
-  const programmes = new Map<string, Programme[]>()
-  for (const m of xml.matchAll(/<programme\b([^>]*)>([\s\S]*?)<\/programme>/g)) {
-    const start = parseXmltvTime(attr(m[1], 'start'))
-    const stop = parseXmltvTime(attr(m[1], 'stop'))
-    if (!(stop > from && start < to)) continue
-    const ch = decodeXml(attr(m[1], 'channel'))
-    const desc = start < descUntil ? tag(m[2], 'desc') : undefined
-    const p: Programme = { start, stop, title: tag(m[2], 'title') || 'Untitled', desc: desc && desc.slice(0, 280) }
-    const list = programmes.get(ch)
-    if (list) list.push(p)
-    else programmes.set(ch, [p])
-  }
-  for (const list of programmes.values()) list.sort((a, b) => a.start - b.start)
-  return { names, programmes }
+  const p = new XmltvParser(from, to, descUntil)
+  p.push(xml)
+  return p.finish()
 }
 
 /** Normalise a channel name for fuzzy matching: "UK: BBC One HD" -> "bbcone" */

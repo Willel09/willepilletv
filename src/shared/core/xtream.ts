@@ -1,5 +1,5 @@
 import type { Account, Channel, Episode, MediaInfo, Movie, Show, Source } from '../types'
-import { getJson, type GetText } from './net'
+import { getJson, JsonArrayStream, type GetStream, type GetText } from './net'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Json = any
@@ -31,7 +31,7 @@ export interface XtreamResult {
   account: Account
 }
 
-export async function loadXtream(src: Source, get: GetText, progress: (m: string) => void): Promise<XtreamResult> {
+export async function loadXtream(src: Source, get: GetText, progress: (m: string) => void, stream?: GetStream): Promise<XtreamResult> {
   if (!src.server || !src.username || !src.password) throw new Error('Server, username and password are required.')
   const base = api(src)
   progress(`${src.name}: signing in…`)
@@ -48,31 +48,40 @@ export async function loadXtream(src: Source, get: GetText, progress: (m: string
 
   progress(`${src.name}: loading channels, movies and series…`)
   const act = (action: string) => getJson<Json>(get, `${base}&action=${action}`).catch(() => [])
-  const [lc, ls, vc, vs, sc, ss] = await Promise.all([
-    act('get_live_categories'), act('get_live_streams'),
-    act('get_vod_categories'), act('get_vod_streams'),
-    act('get_series_categories'), act('get_series')
-  ])
+  const [lc, vc, sc] = await Promise.all([act('get_live_categories'), act('get_vod_categories'), act('get_series_categories')])
   const catMap = (c: Json) => new Map(arr(c).map((x) => [String(x.category_id), str(x.category_name) ?? 'Uncategorized']))
   const lcm = catMap(lc), vcm = catMap(vc), scm = catMap(sc)
 
-  const channels: Channel[] = arr(ls).map((s) => ({
+  // The big lists one after another, each turned into compact items as it arrives: providers' raw JSON can be
+  // 50-100 MB per list (400k movies), and holding that plus the parsed raw objects runs a TV out of memory
+  const list = async <T,>(action: string, map: (s: Json) => T): Promise<T[]> => {
+    if (!stream) return arr(await act(action)).map(map)
+    const out: T[] = []
+    const parser = new JsonArrayStream((s) => out.push(map(s as Json)))
+    try {
+      await stream(`${base}&action=${action}`, (chunk) => parser.push(chunk), 300_000)
+      return out
+    } catch {
+      return []
+    }
+  }
+  const channels: Channel[] = await list('get_live_streams', (s) => ({
     kind: 'live', id: `${src.id}:l${s.stream_id}`, sourceId: src.id,
     name: str(s.name) ?? 'Channel', group: lcm.get(String(s.category_id)) ?? 'Uncategorized',
     url: path(src, 'live', s.stream_id, 'ts'), logo: str(s.stream_icon), epgId: str(s.epg_channel_id),
     num: num(s.num), xt: true
   }))
-  const movies: Movie[] = arr(vs).map((s) => ({
+  const movies: Movie[] = await list('get_vod_streams', (s) => ({
     kind: 'movie', id: `${src.id}:m${s.stream_id}`, sourceId: src.id,
     name: str(s.name) ?? 'Movie', group: vcm.get(String(s.category_id)) ?? 'Uncategorized',
     url: path(src, 'movie', s.stream_id, str(s.container_extension) ?? 'mp4'), poster: str(s.stream_icon),
     rating: num(s.rating) || undefined, added: num(s.added), vodId: +s.stream_id, year: year(s.year ?? s.releasedate)
   }))
-  const series: Show[] = arr(ss).map((s) => ({
+  const series: Show[] = await list('get_series', (s) => ({
     kind: 'series', id: `${src.id}:s${s.series_id}`, sourceId: src.id,
     name: str(s.name) ?? 'Series', group: scm.get(String(s.category_id)) ?? 'Uncategorized',
     poster: str(s.cover), backdrop: str(arr(s.backdrop_path)[0]), rating: num(s.rating) || undefined,
-    year: year(s.releaseDate ?? s.release_date), plot: str(s.plot), added: num(s.last_modified), seriesId: +s.series_id
+    year: year(s.releaseDate ?? s.release_date), plot: str(s.plot)?.slice(0, 240), added: num(s.last_modified), seriesId: +s.series_id
   }))
   return { channels, movies, series, account }
 }

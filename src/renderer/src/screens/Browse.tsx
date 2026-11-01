@@ -44,7 +44,7 @@ export default function Browse({ kind }: { kind: 'movies' | 'series' }) {
     else if (group === WATCH) list = watchlist.filter((f) => f.kind === itemKind)
     else list = groups.find((g) => g.name === group)?.items ?? []
     const needle = fold(q.trim())
-    if (needle) list = list.filter((it) => (idx.keys.get(it.id) ?? fold(it.name)).includes(needle))
+    if (needle) list = list.filter((it) => idx.key(it).includes(needle))
     if (group === RECENT || sort === 'added') return group === RECENT ? list : [...list].sort((a, b) => (b.added ?? 0) - (a.added ?? 0))
     if (sort === 'az') return [...list].sort((a, b) => a.name.localeCompare(b.name))
     return [...list].sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))

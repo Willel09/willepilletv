@@ -3,7 +3,7 @@ import { Heart, Play, Star, X } from 'lucide-react'
 import type { PointerEvent, ReactNode } from 'react'
 import { cleanName } from '../lib/format'
 import { spring } from '../lib/motion'
-import { setAmbient } from '../store'
+import { api, setAmbient } from '../store'
 import { Img } from './Img'
 
 /** tvOS-style parallax: the card tilts toward the pointer and a specular sheen follows it */
@@ -25,6 +25,9 @@ function useTilt() {
   const onPointerLeave = () => (x.set(0.5), y.set(0.5))
   return { rotateX, rotateY, sheen, onPointerMove, onPointerLeave }
 }
+
+// TVs: a remote has no pointer, and the 3D tilt transform would make every card its own GPU layer
+const TILT = api.device !== 'tv'
 
 const lift = {
   rest: { scale: 1, y: 0, boxShadow: '0 12px 30px -14px rgba(0,0,0,0.6)' },
@@ -60,13 +63,13 @@ function CardShell({ aspect, width, art, ambientArt, name, contain, onClick, foo
       onClick={onClick}
       onFocus={ambient}
       onMouseEnter={ambient}
-      onPointerMove={t.onPointerMove}
-      onPointerLeave={t.onPointerLeave}
+      onPointerMove={TILT ? t.onPointerMove : undefined}
+      onPointerLeave={TILT ? t.onPointerLeave : undefined}
     >
       <motion.div
         variants={lift}
         transition={spring}
-        style={{ rotateX: t.rotateX, rotateY: t.rotateY, transformPerspective: 900 }}
+        style={TILT ? { rotateX: t.rotateX, rotateY: t.rotateY, transformPerspective: 900 } : undefined}
         className={`relative overflow-hidden rounded-[22px] bg-[var(--card-bg)] ${aspect}`}
       >
         <Img src={art} name={name} contain={contain} className={`size-full ${contain ? 'p-[14%]' : ''}`} />

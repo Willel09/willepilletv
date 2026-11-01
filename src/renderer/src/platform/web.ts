@@ -2,12 +2,12 @@
 // Same core loaders as the desktop app; networking happens in-page (Tizen allows cross-origin
 // requests for packaged apps via <access origin="*"> in config.xml).
 
-import { gunzipSync } from 'fflate'
+import { Gunzip, gunzipSync } from 'fflate'
 import { buildEpg, buildLibrary, emptyLibrary } from '../../../shared/core/library'
-import { HTTP_HINT } from '../../../shared/core/net'
+import { HTTP_HINT, type GetStream } from '../../../shared/core/net'
 import { xtreamInfo } from '../../../shared/core/xtream'
 import { pullFile } from '../lib/sync'
-import { DEFAULT_SETTINGS, STORE_DEFAULTS, type Epg, type IptvApi, type Library, type StoreShape, type UpdateState } from '../../../shared/types'
+import { DEFAULT_SETTINGS, STORE_DEFAULTS, type Epg, type IptvApi, type Programme, type Library, type StoreShape, type UpdateState } from '../../../shared/types'
 
 declare const __APP_VERSION__: string
 /** Set by the TV/web OTA loader (public/boot.js) */
@@ -29,14 +29,72 @@ const db = () =>
     r.onsuccess = () => resolve(r.result)
     r.onerror = () => reject(r.error)
   }))
+/** get: the value or null. put: the key, or null if it could not be stored. Never hangs: a value that is
+    too large aborts the transaction without a request error, so the transaction's outcome is what counts. */
 async function idb<T>(mode: 'get' | 'put', key: string, value?: unknown): Promise<T | null> {
   try {
-    const store = (await db()).transaction('kv', mode === 'get' ? 'readonly' : 'readwrite').objectStore('kv')
-    const req = mode === 'get' ? store.get(key) : store.put(value, key)
-    return await new Promise((res, rej) => ((req.onsuccess = () => res((req.result as T) ?? null)), (req.onerror = () => rej(req.error))))
+    const tx = (await db()).transaction('kv', mode === 'get' ? 'readonly' : 'readwrite')
+    const req = mode === 'get' ? tx.objectStore('kv').get(key) : tx.objectStore('kv').put(value, key)
+    return await new Promise((res) => {
+      tx.oncomplete = () => res((req.result as T) ?? null)
+      tx.onabort = tx.onerror = () => res(null)
+    })
   } catch {
     return null
   }
+}
+
+/* Chromium refuses single IndexedDB values over ~128 MB (less on older TVs); a 400k-title library is bigger.
+   Big lists are stored in pieces under "<key>:<list>:<n>", the head (written last) says how many. */
+const PIECE = 20_000
+type Parts = { __parts?: Record<string, number> }
+
+async function putBig(key: string, value: object, lists: string[]): Promise<void> {
+  const head: Record<string, unknown> & Parts = { ...value, __parts: {} }
+  // drop the old head first: if writing stops halfway it must not point at a mix of old and new pieces
+  if ((await idb('put', key, null)) === null) return
+  for (const name of lists) {
+    const list = (value as Record<string, unknown[]>)[name]
+    delete head[name]
+    head.__parts![name] = Math.ceil(list.length / PIECE)
+    for (let i = 0; i * PIECE < list.length; i++)
+      if ((await idb('put', `${key}:${name}:${i}`, list.slice(i * PIECE, (i + 1) * PIECE))) === null) return // not cached; loads again next start
+  }
+  await idb('put', key, head)
+}
+
+async function getBig<T>(key: string): Promise<T | null> {
+  const head = await idb<Record<string, unknown> & Parts>('get', key)
+  if (!head?.__parts) return head as T | null // also values saved whole by older versions
+  const { __parts, ...out } = head
+  for (const [name, n] of Object.entries(__parts)) {
+    const pieces: unknown[][] = []
+    for (let i = 0; i < n; i++) {
+      const piece = await idb<unknown[]>('get', `${key}:${name}:${i}`)
+      if (!piece) return null
+      pieces.push(piece)
+    }
+    out[name] = pieces.flat()
+  }
+  return out as T
+}
+
+/** Read back from IndexedDB, every item has its own copy of "movie", its category and source id
+    (~30 MB across 600k items). Share them again. */
+function shareStrings(lib: Library | null) {
+  if (!lib) return lib
+  const pool = new Map<string, string>()
+  const one = (s: string) => pool.get(s) ?? (pool.set(s, s), s)
+  for (const list of [lib.channels, lib.movies, lib.series] as unknown as { kind: string; sourceId: string; group: string }[][])
+    for (const x of list) ((x.kind = one(x.kind)), (x.sourceId = one(x.sourceId)), (x.group = one(x.group)))
+  return lib
+}
+
+// the guide's per-channel record is stored as a list of [channel, programmes] pairs so it can be split too
+const putEpg = (epg: Epg) => putBig('epg', { ...epg, programmes: Object.entries(epg.programmes) }, ['programmes'])
+const getEpg = async () => {
+  const e = await getBig<Omit<Epg, 'programmes'> & { programmes: Epg['programmes'] | [string, Programme[]][] }>('epg')
+  return e && { ...e, programmes: Array.isArray(e.programmes) ? Object.fromEntries(e.programmes) : e.programmes }
 }
 
 /* ---------- networking ---------- */
@@ -53,8 +111,7 @@ async function syncedFile(path: string): Promise<string> {
   return text
 }
 
-async function getText(url: string, timeoutMs = 180_000): Promise<string> {
-  if (!/^https?:\/\//i.test(url)) return syncedFile(url)
+async function open(url: string, timeoutMs: number): Promise<Response> {
   const ctl = new AbortController()
   const timer = setTimeout(() => ctl.abort(), timeoutMs)
   let res: Response
@@ -69,9 +126,42 @@ async function getText(url: string, timeoutMs = 180_000): Promise<string> {
     clearTimeout(timer)
   }
   if (!res.ok) throw new Error(HTTP_HINT(res.status, res.statusText))
+  return res
+}
+
+async function getText(url: string, timeoutMs = 180_000): Promise<string> {
+  if (!/^https?:\/\//i.test(url)) return syncedFile(url)
+  const res = await open(url, timeoutMs)
+  // plain text straight from the browser: no second copy of a 50 MB playlist or JSON list
+  if (!/\.gz(\?|$)/i.test(url) && !/gzip|octet-stream/i.test(res.headers.get('content-type') ?? '')) return res.text()
   const buf = new Uint8Array(await res.arrayBuffer())
   // fflate instead of DecompressionStream, which older TVs (Chromium < 80) don't have
   return new TextDecoder().decode(buf[0] === 0x1f && buf[1] === 0x8b ? gunzipSync(buf) : buf)
+}
+
+/** The guide arrives in pieces (gunzipped on the fly), so a 100 MB XMLTV file never sits in memory whole */
+const getStream: GetStream = async (url, onText, timeoutMs = 300_000) => {
+  if (!/^https?:\/\//i.test(url)) return onText(await syncedFile(url))
+  const res = await open(url, timeoutMs)
+  if (!res.body) return onText(await res.text())
+  const reader = res.body.getReader()
+  const dec = new TextDecoder()
+  let gz: Gunzip | null | undefined // undefined until the first bytes tell us
+  // the request timeout only covers the headers: give up on a server that stalls mid-download
+  const read = () => {
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const stall = new Promise<never>((_, reject) => (timer = setTimeout(() => reject(new Error('The server stopped sending data.')), 60_000)))
+    return Promise.race([reader.read(), stall]).finally(() => clearTimeout(timer))
+  }
+  for (;;) {
+    const { done, value } = await read().catch((e) => (reader.cancel().catch(() => {}), Promise.reject(e)))
+    if (done) break
+    if (gz === undefined) gz = value[0] === 0x1f && value[1] === 0x8b ? new Gunzip((d) => onText(dec.decode(d, { stream: true }))) : null
+    if (gz) gz.push(value)
+    else onText(dec.decode(value, { stream: true }))
+  }
+  if (gz) gz.push(new Uint8Array(0), true)
+  onText(dec.decode())
 }
 
 /* ---------- OTA updates (TV + web): newer builds are published to GitHub Pages ---------- */
@@ -127,16 +217,16 @@ export function createWebApi(): IptvApi {
       return out
     },
     setStore: async (k, v) => localStorage.setItem(`lumen:${k}`, JSON.stringify(v)),
-    getLibrary: async () => (library ??= await idb<Library>('get', 'library')),
+    getLibrary: async () => (library ??= shareStrings(await getBig<Library>('library'))),
     refreshLibrary: async () => {
-      library = await buildLibrary(load('sources'), settings(), getText, progress)
-      await idb('put', 'library', library)
+      library = await buildLibrary(load('sources'), settings(), getText, progress, getStream)
+      await putBig('library', library, ['channels', 'movies', 'series'])
       return library
     },
-    getEpg: () => idb<Epg>('get', 'epg'),
+    getEpg,
     refreshEpg: async () => {
-      const epg = await buildEpg(library ?? (await idb<Library>('get', 'library')) ?? emptyLibrary(), settings(), getText, progress)
-      await idb('put', 'epg', epg)
+      const epg = await buildEpg(library ?? (await getBig<Library>('library')) ?? emptyLibrary(), settings(), getText, progress, { stream: getStream, hours: tv ? 12 : 26 })
+      await putEpg(epg)
       return epg
     },
     mediaInfo: async (sourceId, kind, id) => {

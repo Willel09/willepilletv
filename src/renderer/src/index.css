@@ -187,16 +187,22 @@ input[type='range'] {
 }
 
 /* ---------- Samsung TV ---------- */
-/* TV GPUs are modest: lighter blurs keep focus animations and scrolling smooth */
+/* TV GPUs and memory are modest: every backdrop blur needs extra full-size render surfaces, so TVs get
+   solid frosted panels instead, and no blurred artwork wash behind the app */
 [data-device='tv'] .glass,
-[data-device='tv'] .glass-strong {
-  backdrop-filter: blur(18px) saturate(150%);
-}
+[data-device='tv'] .glass-strong,
 [data-device='tv'] .glass-thin {
-  backdrop-filter: blur(12px) saturate(140%);
+  background-color: rgb(var(--base-rgb) / 0.86);
+}
+[data-device='tv'] * {
+  backdrop-filter: none !important;
+}
+/* without blur, the guide's sticky time row and channel column must be opaque or programmes show through */
+[data-device='tv'] .sticky {
+  background-color: rgb(var(--base-rgb)) !important;
 }
 [data-device='tv'] .ambient-art {
-  filter: blur(60px);
+  display: none;
 }
 /* Seen from the sofa: a thicker focus ring */
 [data-device='tv'] :focus-visible {

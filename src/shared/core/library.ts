@@ -1,7 +1,7 @@
 import type { Epg, Library, Settings, Source } from '../types'
-import { matchEpg, parseXmltv, type XmltvData } from './epg'
+import { matchEpg, parseXmltv, XmltvParser, type XmltvData } from './epg'
 import { parseM3u } from './m3u'
-import type { GetText } from './net'
+import type { GetStream, GetText } from './net'
 import { loadXtream, xtEpgUrl } from './xtream'
 
 export const emptyLibrary = (): Library => ({ channels: [], movies: [], series: [], epgUrls: [], providerEpgUrls: [], accounts: {}, errors: [], updatedAt: Date.now() })
@@ -17,13 +17,13 @@ const add = (lib: Library, r: Pick<Library, 'channels' | 'movies' | 'series'>) =
 }
 
 /** Load every source. A failing source is reported in `errors` instead of breaking the others. */
-export async function buildLibrary(sources: Source[], s: Settings, get: GetText, progress: (m: string) => void): Promise<Library> {
+export async function buildLibrary(sources: Source[], s: Settings, get: GetText, progress: (m: string) => void, stream?: GetStream): Promise<Library> {
   const lib = emptyLibrary()
   await Promise.all(
     sources.map(async (src) => {
       try {
         if (src.kind === 'xtream') {
-          const r = await loadXtream(src, get, progress)
+          const r = await loadXtream(src, get, progress, stream)
           add(lib, r)
           lib.accounts[src.id] = r.account
           if (src.epgUrl) lib.epgUrls.push(src.epgUrl)
@@ -46,7 +46,11 @@ export async function buildLibrary(sources: Source[], s: Settings, get: GetText,
   return lib
 }
 
-export async function buildEpg(lib: Library, s: Settings, get: GetText, progress: (m: string) => void): Promise<Epg> {
+/**
+ * `stream` parses the guide while it downloads; `hours` limits how far ahead programmes are kept
+ * (TVs keep 12 h and refresh the guide more often, instead of holding a full day of 10k channels).
+ */
+export async function buildEpg(lib: Library, s: Settings, get: GetText, progress: (m: string) => void, opts: { stream?: GetStream; hours?: number } = {}): Promise<Epg> {
   const urls = [...new Set([s.epgUrl, ...lib.epgUrls, ...(s.autoProviderEpg ? lib.providerEpgUrls ?? [] : [])].filter(Boolean))]
   const now = Date.now()
   const errors: string[] = []
@@ -54,8 +58,14 @@ export async function buildEpg(lib: Library, s: Settings, get: GetText, progress
   for (const url of urls) {
     try {
       progress('Loading TV guide…')
-      // Descriptions only for the next 12 h keeps 10k-channel guides small enough for the UI (and TVs)
-      data.push(parseXmltv(await get(url, 300_000), now - 2 * 3600_000, now + 26 * 3600_000, now + 12 * 3600_000))
+      // Descriptions only for the next 12 h (TV: 4 h) keeps 10k-channel guides small enough for the UI
+      const hours = opts.hours ?? 26
+      const window = [now - 2 * 3600_000, now + hours * 3600_000, now + Math.min(12, hours / 3) * 3600_000] as const
+      if (opts.stream) {
+        const p = new XmltvParser(...window)
+        await opts.stream(url, (chunk) => p.push(chunk), 300_000)
+        data.push(p.finish())
+      } else data.push(parseXmltv(await get(url, 300_000), ...window))
     } catch (e) {
       let host = url
       try { host = new URL(url).host } catch { /* file path */ }
