@@ -105,7 +105,7 @@ jobs:
       - run: npm install tar@6.2.1 --save --no-audit --no-fund
       - run: npx electron-builder --win portable --publish never
       # fail the release if tar still isn't packaged
-      - run: node -e "const l=require('@electron/asar').listPackage('dist/win-unpacked/resources/app.asar');if(!l.some(f=>/^[\\/]node_modules[\\/]tar[\\/]package\.json$/.test(f))){console.error('tar missing from app.asar');process.exit(1)}console.log('tar packaged')"
+      - run: node -e "const l=require('@electron/asar').listPackage('dist/win-unpacked/resources/app.asar').map(f=>f.split(String.fromCharCode(92)).join('/'));if(!l.includes('/node_modules/tar/package.json')){console.error('tar missing from app.asar');process.exit(1)}console.log('tar packaged')"
       - run: mkdir -p out && cp dist/*Portable*.exe out/SmartTV-Installer-for-Lumen.exe
       - uses: actions/upload-artifact@v4
         with:
