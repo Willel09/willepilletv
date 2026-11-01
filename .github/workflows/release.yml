@@ -81,8 +81,39 @@ jobs:
         with:
           path: dist/web
 
+  # SmartTV Installer (GPL-3, github.com/Krishnakant010/smarttv-installer) installs Lumen.wgt on Samsung TVs.
+  # Its v1.1.0 Windows build crashes on start ("Cannot find module 'tar'": tar is only a dev dependency there),
+  # so we rebuild that exact commit with tar added and ship it with our release. Source: upstream + this one change.
+  tv-installer:
+    needs: check
+    if: needs.check.outputs.exists == 'false'
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: sti
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: Krishnakant010/smarttv-installer
+          ref: 643da21e315d5d879d044abf996a60ab40feab79 # v1.1.0
+          path: sti
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --no-audit --no-fund
+      - run: npm install tar@6.2.1 --save --no-audit --no-fund
+      - run: npx electron-builder --win portable --publish never
+      # fail the release if tar still isn't packaged
+      - run: node -e "const l=require('@electron/asar').listPackage('dist/win-unpacked/resources/app.asar');if(!l.some(f=>/^[\\/]node_modules[\\/]tar[\\/]package\.json$/.test(f))){console.error('tar missing from app.asar');process.exit(1)}console.log('tar packaged')"
+      - run: mkdir -p out && cp dist/*Portable*.exe out/SmartTV-Installer-for-Lumen.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tv-installer
+          path: sti/out/SmartTV-Installer-for-Lumen.exe
+
   release:
-    needs: [check, windows, tv-and-web]
+    needs: [check, windows, tv-and-web, tv-installer]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -99,6 +130,8 @@ jobs:
           body: |
             **Windows:** download `Lumen-Setup-${{ needs.check.outputs.version }}.exe` below and open it. Installed apps update themselves.
             **Samsung TV:** use the "Install on Samsung TV" assistant in Lumen for Windows (Settings), or SmartTV Installer → Custom GitHub Repository → `Willel09/willepilletv`.
+
+            `SmartTV-Installer-for-Lumen.exe` is [SmartTV Installer](https://github.com/Krishnakant010/smarttv-installer) v1.1.0 (GPL-3.0) rebuilt unchanged except for adding its missing `tar` dependency, which makes the official Windows build crash on start. Source: upstream commit `643da21` plus `npm install tar@6.2.1`.
 
   pages:
     needs: release

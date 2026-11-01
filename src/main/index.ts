@@ -135,7 +135,7 @@ function registerIpc() {
     return { text: await get(path), sig: `${st.mtimeMs}:${st.size}` }
   })
   ipcMain.handle('cast:discover', () => discoverCast())
-  ipcMain.handle('cast:start', (_e, id: string, media: CastMedia) => startCast(id, media))
+  ipcMain.handle('cast:start', (_e, id: string, media: CastMedia) => startCast(id, media, settings().userAgent || DEFAULT_SETTINGS.userAgent))
   ipcMain.handle('cast:stop', () => stopCast())
   ipcMain.handle('vlc:open', (_e, url: string, title: string) => {
     // Only hand real stream URLs to VLC so a crafted playlist entry can't pass VLC command-line options

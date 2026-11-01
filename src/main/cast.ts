@@ -1,7 +1,12 @@
 // Cast to TVs on the local network, from the Windows app:
 //   - Chromecast / Google TV: found by mDNS, played with the Default Media Receiver over the Cast v2 protocol
 //   - Samsung (and other DLNA) TVs: found by SSDP as UPnP MediaRenderers, played with AVTransport SOAP calls
+import { randomBytes } from 'crypto'
 import dgram from 'dgram'
+import http from 'http'
+import type { AddressInfo } from 'net'
+import { networkInterfaces } from 'os'
+import { Readable } from 'stream'
 import tls from 'tls'
 import type { CastDevice, CastMedia } from '../shared/types'
 import { encodeCast, frameReader, GOOGLECAST, mdnsQuery, parseMdns, type CastMsg } from './castproto'
@@ -140,6 +145,57 @@ function castChromecast(host: string, port: number, m: CastMedia): Promise<{ sto
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 
+/* ---------- relay: the PC re-serves the stream so DLNA TVs accept it ----------
+   Samsung TVs check the stream when they get the URL and refuse IPTV servers' generic content types
+   (application/octet-stream) and missing DLNA headers; some providers also require a User-Agent.
+   The relay only serves the stream being cast, under an unguessable token. */
+
+let relay: { server: http.Server; port: number } | null = null
+const relayed = new Map<string, { url: string; mime: string; ua: string }>()
+
+function serveRelay(req: http.IncomingMessage, res: http.ServerResponse) {
+  const item = relayed.get(req.url?.split('/')[1] ?? '')
+  if (!item || (req.method !== 'GET' && req.method !== 'HEAD')) return void res.writeHead(404).end()
+  const ctl = new AbortController()
+  res.on('close', () => ctl.abort())
+  fetch(item.url, { headers: { 'User-Agent': item.ua, ...(req.headers.range ? { Range: req.headers.range } : {}) }, signal: ctl.signal })
+    .then((up) => {
+      if (!up.ok || !up.body) return void res.writeHead(502).end()
+      const seekable = up.headers.get('accept-ranges') === 'bytes' || up.status === 206
+      const headers: Record<string, string> = {
+        'Content-Type': item.mime,
+        'transferMode.dlna.org': 'Streaming',
+        'contentFeatures.dlna.org': `DLNA.ORG_OP=${seekable ? '01' : '00'};DLNA.ORG_CI=0;DLNA.ORG_FLAGS=01700000000000000000000000000000`
+      }
+      for (const h of ['content-length', 'content-range']) if (up.headers.get(h)) headers[h] = up.headers.get(h)!
+      if (seekable) headers['Accept-Ranges'] = 'bytes'
+      res.writeHead(up.status, headers)
+      if (req.method === 'HEAD') return void (up.body.cancel().catch(() => {}), res.end())
+      Readable.fromWeb(up.body as never).on('error', () => res.destroy()).pipe(res)
+    })
+    .catch(() => (res.headersSent ? res.destroy() : res.writeHead(502).end()))
+}
+
+/** The PC's address on the TV's network */
+function lanIpFor(host: string) {
+  const ips = Object.values(networkInterfaces()).flat().filter((i) => i && i.family === 'IPv4' && !i.internal).map((i) => i!.address)
+  const prefix = host.split('.').slice(0, 3).join('.')
+  return ips.find((ip) => ip.startsWith(prefix + '.')) ?? ips[0] ?? '127.0.0.1'
+}
+
+async function relayUrl(url: string, mime: string, ua: string, tvHost: string) {
+  if (!relay) {
+    const server = http.createServer(serveRelay)
+    await new Promise<void>((resolve, reject) => server.once('error', reject).listen(0, '0.0.0.0', () => resolve()))
+    relay = { server, port: (server.address() as AddressInfo).port }
+  }
+  const token = randomBytes(16).toString('hex')
+  relayed.clear() // only the current cast is served
+  relayed.set(token, { url, mime, ua })
+  const ext = url.split('?')[0].split('.').pop()?.toLowerCase() ?? 'mp4'
+  return `http://${lanIpFor(tvHost)}:${relay.port}/${token}/video.${ext}`
+}
+
 async function soap(control: string, action: string, args: string) {
   const body = `<?xml version="1.0" encoding="utf-8"?><s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/"><s:Body><u:${action} xmlns:u="urn:schemas-upnp-org:service:AVTransport:1"><InstanceID>0</InstanceID>${args}</u:${action}></s:Body></s:Envelope>`
   const res = await fetch(control, {
@@ -148,19 +204,49 @@ async function soap(control: string, action: string, args: string) {
     body,
     signal: AbortSignal.timeout(8000)
   })
-  if (!res.ok) throw new Error(`${action} failed (${res.status})`)
+  if (!res.ok) {
+    // UPnP faults carry the reason, e.g. 714 "Illegal MIME-type", 716 "Resource not found"
+    const xml = await res.text().catch(() => '')
+    const code = xml.match(/<errorCode>(\d+)</)?.[1]
+    const desc = xml.match(/<errorDescription>([^<]*)</)?.[1]
+    throw new Error(`${action} failed (${res.status}${code ? `, UPnP ${code}${desc ? ` ${desc}` : ''}` : ''})`)
+  }
 }
 
-async function castDlna(control: string, m: CastMedia) {
+async function castDlna(control: string, host: string, m: CastMedia, ua: string) {
   const mime = mimeOf(m.url)
-  // Samsung TVs want DIDL-Lite metadata with a protocolInfo, or they reject the URI
-  const didl = `<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/"><item id="0" parentID="-1" restricted="1"><dc:title>${esc(m.title)}</dc:title><upnp:class>object.item.videoItem</upnp:class><res protocolInfo="http-get:*:${mime}:*">${esc(m.url)}</res></item></DIDL-Lite>`
-  try {
-    await soap(control, 'SetAVTransportURI', `<CurrentURI>${esc(m.url)}</CurrentURI><CurrentURIMetaData>${esc(didl)}</CurrentURIMetaData>`)
+  const load = async (url: string, type: string) => {
+    // Samsung TVs want DIDL-Lite metadata with a protocolInfo, or they reject the URI
+    const didl = `<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/"><item id="0" parentID="-1" restricted="1"><dc:title>${esc(m.title)}</dc:title><upnp:class>object.item.videoItem</upnp:class><res protocolInfo="http-get:*:${type}:*">${esc(url)}</res></item></DIDL-Lite>`
+    await soap(control, 'SetAVTransportURI', `<CurrentURI>${esc(url)}</CurrentURI><CurrentURIMetaData>${esc(didl)}</CurrentURIMetaData>`)
     await soap(control, 'Play', '<Speed>1</Speed>')
-  } catch (e) {
-    throw new Error(`The TV didn't accept the stream (${(e as Error).message}). Some TVs can't play every format; try another title or Chromecast.`)
   }
+  await soap(control, 'Stop', '').catch(() => {}) // a TV still playing something may refuse a new URI
+  // 1) the provider's URL as is; 2) through the relay (right content type + DLNA headers + User-Agent);
+  // 3) Samsung's older Matroska type for .mkv
+  const attempts: [() => Promise<string>, string][] = [
+    [async () => m.url, mime],
+    [() => relayUrl(m.url, mime, ua, host), mime],
+    ...(mime === 'video/x-matroska' ? [[() => relayUrl(m.url, 'video/x-mkv', ua, host), 'video/x-mkv'] as [() => Promise<string>, string]] : [])
+  ]
+  let last: Error | null = null
+  for (const [url, type] of attempts) {
+    try {
+      await load(await url(), type)
+      last = null
+      break
+    } catch (e) {
+      last = e as Error
+    }
+  }
+  if (last)
+    throw new Error(
+      /UPnP 714|MIME/i.test(last.message)
+        ? `The TV can't play this format (${last.message}). Try another title, or Chromecast.`
+        : /EADDRINUSE|EACCES/.test(last.message)
+          ? "Couldn't start streaming from this PC. Check that Windows Firewall allows Lumen on private networks."
+          : `The TV didn't accept the stream (${last.message}). If Windows asked about network access for Lumen, choose Allow, then try again.`
+    )
   if (m.startAt && !m.live) {
     const t = Math.floor(m.startAt)
     const hms = [t / 3600, (t / 60) % 60, t % 60].map((x) => String(Math.floor(x)).padStart(2, '0')).join(':')
@@ -170,13 +256,13 @@ async function castDlna(control: string, m: CastMedia) {
   return { stop: () => soap(control, 'Stop', '').catch(() => {}) }
 }
 
-export async function startCast(id: string, media: CastMedia): Promise<{ ok: boolean; error?: string }> {
+export async function startCast(id: string, media: CastMedia, ua: string): Promise<{ ok: boolean; error?: string }> {
   const dev = devices.get(id)
   if (!dev) return { ok: false, error: 'That TV is no longer available. Search again.' }
   if (!/^https?:\/\//i.test(media.url)) return { ok: false, error: 'Only internet streams can be cast.' }
   await stopCast()
   try {
-    session = dev.kind === 'chromecast' ? await castChromecast(dev.host, dev.port ?? 8009, media) : await castDlna(dev.control!, media)
+    session = dev.kind === 'chromecast' ? await castChromecast(dev.host, dev.port ?? 8009, media) : await castDlna(dev.control!, dev.host, media, ua)
     return { ok: true }
   } catch (e) {
     return { ok: false, error: (e as Error).message }
@@ -186,5 +272,6 @@ export async function startCast(id: string, media: CastMedia): Promise<{ ok: boo
 export async function stopCast() {
   const s = session
   session = null
+  relayed.clear()
   await s?.stop()
 }

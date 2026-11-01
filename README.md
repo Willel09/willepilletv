@@ -182,6 +182,8 @@ apple-iptv/
 
 - **A channel won't play.** The error card explains why. Try **Try HLS / Try MPEG-TS** (Xtream), or **Open in VLC** on Windows. If there's no sound on Windows, the stream probably uses AC3/DTS audio. Samsung TVs can usually decode those.
 - **The provider blocks the app.** Change the user agent in Settings → Playback (Windows).
+- **SmartTV Installer crashes with "Cannot find module 'tar'".** The official v1.1.0 Windows build is broken. Lumen downloads `SmartTV-Installer-for-Lumen.exe` from our releases instead: the same app rebuilt with the missing module.
+- **Casting to a Samsung TV fails.** If the TV refuses the provider's link, Lumen streams it through the PC with the content type and DLNA headers Samsung expects. Windows asks once whether Lumen may use the network: choose **Allow** (private networks).
 - **The TV install fails.** In the assistant, Developer Mode must show ✓. Check that the TV has your PC's IP, that it was fully restarted, and that both are on the same network.
 - **No TV guide.** Check that the channels have `tvg-id` values matching the guide, or matching names.
 - **Huge providers** (hundreds of thousands of channels and titles) are supported; lists are virtualised and loading was tested with 300,000 channels + 75,000 movies + 10,000 series.

@@ -10,8 +10,10 @@ import { networkInterfaces } from 'os'
 import { join } from 'path'
 import type { SamsungTv } from '../shared/types'
 
-const RELEASES = 'https://github.com/Krishnakant010/smarttv-installer/releases/latest'
-const RELEASES_API = 'https://api.github.com/repos/Krishnakant010/smarttv-installer/releases/latest'
+// The official SmartTV Installer v1.1.0 Windows build crashes on start (missing 'tar' module), so our
+// release workflow ships a rebuilt copy (see .github/workflows/release.yml, job tv-installer).
+const RELEASES = 'https://github.com/Willel09/willepilletv/releases/latest'
+const INSTALLER_URL = `${RELEASES}/download/SmartTV-Installer-for-Lumen.exe`
 const IPV4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/
 
 /** The TV's Developer Mode screen asks for this PC's IP address */
@@ -84,20 +86,15 @@ export async function openTvInstaller(progress: (m: string) => void): Promise<{ 
     return { ok: true }
   }
   try {
-    progress('Finding SmartTV Installer…')
-    const rel = (await (await net.fetch(RELEASES_API, { headers: { Accept: 'application/vnd.github+json' } })).json()) as {
-      assets?: { name: string; size: number; browser_download_url: string }[]
-    }
-    const exes = (rel.assets ?? []).filter((a) => /\.exe$/i.test(a.name))
-    const asset = exes.find((a) => /portable/i.test(a.name)) ?? exes.find((a) => !/setup|install/i.test(a.name)) ?? exes[0]
-    if (!asset) throw new Error('No Windows download found')
-
     const dir = join(app.getPath('userData'), 'tools')
     mkdirSync(dir, { recursive: true })
-    const file = join(dir, asset.name.replace(/[^\w.-]/g, '_'))
-    if (!existsSync(file) || statSync(file).size !== asset.size) {
-      const res = await net.fetch(asset.browser_download_url)
+    // one copy per Lumen version, so an update also refreshes the installer
+    const file = join(dir, `SmartTV-Installer-for-Lumen-${app.getVersion()}.exe`)
+    if (!existsSync(file) || statSync(file).size < 1_000_000) {
+      progress('Downloading TV installer…')
+      const res = await net.fetch(INSTALLER_URL)
       if (!res.ok || !res.body) throw new Error(`Download failed (${res.status})`)
+      const total = Number(res.headers.get('content-length')) || 0
       const tmp = `${file}.part`
       const out = createWriteStream(tmp)
       const reader = res.body.getReader()
@@ -107,7 +104,7 @@ export async function openTvInstaller(progress: (m: string) => void): Promise<{ 
         if (done) break
         got += value.length
         if (!out.write(value)) await new Promise((r) => out.once('drain', r))
-        progress(`Downloading TV installer… ${Math.round((got / asset.size) * 100)}%`)
+        if (total) progress(`Downloading TV installer… ${Math.round((got / total) * 100)}%`)
       }
       await new Promise((r) => out.end(r))
       renameSync(tmp, file)
