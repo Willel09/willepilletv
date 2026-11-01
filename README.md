@@ -30,7 +30,7 @@ Everything happens in Lumen for Windows: **Settings → Samsung TV → Install o
 1. **Developer Mode.** On the TV: **Apps** → press **1 2 3 4 5** → *Developer mode: On* → type the PC's IP address that the assistant shows → restart the TV fully (hold the power button).
 2. **Find the TV.** The assistant searches your network and shows ✓ when Developer Mode is answering. You can also type the TV's IP.
 3. **Install.** Click **Open TV Installer**. Lumen downloads and opens [SmartTV Installer](https://github.com/Krishnakant010/smarttv-installer), a free open-source tool. Choose **Samsung**, enter the TV IP, pick **Custom GitHub Repository** → `Willel09/willepilletv` (both have copy buttons in the assistant), then press **Install**. The first time, a Samsung account sign-in opens in the browser to create the TV's developer certificate.
-4. **Link.** On the TV choose **Already use Lumen on another device? Link it**. On the PC: *Settings → Sync & Devices → Link a device*, then type the code the TV shows. Your sources and lists appear on the TV with no typing on the remote.
+4. **Link.** On the TV choose **Already use Lumen on another device? Link it**. On the PC: *Settings → Sync & Devices → Link a device* (or **Enter a code** if the PC isn't syncing yet), then type the 12-character code the TV shows. Your sources and lists appear on the TV with no typing on the remote.
 
 The TV loads new versions by itself every time Lumen starts (requires GitHub Pages to be on, see below). You only reinstall if the TV package itself changes (rare).
 

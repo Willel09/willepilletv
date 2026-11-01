@@ -181,6 +181,22 @@ function SyncCard() {
     }
   }
 
+  // Not syncing yet: the code typed here is either the 12-character code another device shows (we start
+  // syncing and send our new sync code to it) or a 20-character sync code from a device that already syncs
+  const typed = input.replace(/[^a-z0-9]/gi, '').length
+  const connect = async () => {
+    if (typed === 20) return setSyncCode(input)
+    const code = newSyncCode()
+    try {
+      await sendPairing(input, code)
+    } catch (e) {
+      return toast((e as Error).message)
+    }
+    setSyncCode(code)
+    setInput('')
+    toast('Linked! The other device connects in a few seconds.')
+  }
+
   if (!cfg.code)
     return (
       <div className="py-2">
@@ -189,20 +205,20 @@ function SyncCard() {
         </p>
         {mode === 'receive' ? (
           <div className="glass-thin rounded-[22px] p-6 text-center">
-            <p className="text-[13px] text-fg/60">On a device that already syncs, open Settings → Sync → <b>Link a device</b> and enter:</p>
+            <p className="text-[13px] text-fg/60">On your other device (e.g. Lumen on your PC), open Settings → Sync &amp; Devices → <b>Link a device</b> or <b>Enter a code</b>, and type:</p>
             <div className="mt-3 font-mono text-[34px] font-bold tracking-[0.12em]">{pairCode}</div>
             <p className="mt-2 text-[12px] text-fg/40">Waiting for the other device… (valid for 10 minutes)</p>
           </div>
         ) : mode === 'enter' ? (
           <div className="flex items-end gap-3">
-            <div className="flex-1"><Field label="Sync code" placeholder="XXXX-XXXX-XXXX-XXXX-XXXX" value={input} onChange={(e) => setInput(e.target.value)} /></div>
-            <Button variant="primary" disabled={input.replace(/[^a-z0-9]/gi, '').length < 20} onClick={() => setSyncCode(input)}>Connect</Button>
+            <div className="flex-1"><Field label="Code shown on your other device, or your sync code" placeholder="ABCD-EFGH-JKLM" value={input} autoFocus onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && (typed === 12 || typed === 20) && connect()} /></div>
+            <Button variant="primary" disabled={typed !== 12 && typed !== 20} onClick={connect}>Connect</Button>
           </div>
         ) : (
           <div className="flex flex-wrap gap-2">
             <Button variant="primary" icon={<MonitorSmartphone className="size-4" />} onClick={() => setMode('receive')}>Link with another device</Button>
             <Button icon={<Cloud className="size-4" />} onClick={() => setSyncCode(newSyncCode())}>Start syncing from here</Button>
-            <Button variant="ghost" onClick={() => setMode('enter')}>I have a sync code</Button>
+            <Button variant="primary" icon={<Link2 className="size-4" />} onClick={() => setMode('enter')}>Enter a code</Button>
           </div>
         )}
       </div>

@@ -1,7 +1,7 @@
 {
   "name": "lumen-iptv",
   "productName": "Lumen",
-  "version": "1.3.2",
+  "version": "1.3.3",
   "description": "A premium IPTV player for Windows. Bring your own M3U, Xtream Codes and XMLTV sources.",
   "author": "Lumen",
   "license": "MIT",
