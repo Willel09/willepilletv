@@ -6,7 +6,7 @@ import { gcm } from '@noble/ciphers/aes.js'
 import { pbkdf2Async } from '@noble/hashes/pbkdf2.js'
 import { sha256 } from '@noble/hashes/sha2.js'
 import { gunzipSync, gzipSync } from 'fflate'
-import type { HistoryEntry, Item, Movie, Settings, Show, Source, SyncMeta } from '../../../shared/types'
+import type { HistoryEntry, Item, Movie, Profile, ProfileLists, Settings, Show, Source, SyncMeta } from '../../../shared/types'
 
 const SB_URL = 'https://cbqjczxbcodebmgawknz.supabase.co/rest/v1/rpc'
 // Publishable key: safe to ship in the app (the database only exposes the three sync_* functions)
@@ -252,4 +252,53 @@ export function merge(local: SyncDoc, remote: SyncDoc | null): SyncDoc {
   meta.at.prefs = Math.max(lp, rp)
   out.meta = meta
   return out
+}
+
+/* ---------------- profiles ----------------
+   Extra profiles live in their own blob: older app versions rewrite the main doc with only the
+   fields they know, so putting profiles there would let an old TV wipe them. */
+
+export interface ProfilesDoc {
+  v: 1
+  profiles: Profile[]
+  /** lists of every profile except main (main's are in the main doc) */
+  data: Record<string, ProfileLists>
+  meta: SyncMeta
+}
+
+const EMPTY_LISTS: ProfileLists = { favorites: [], watchlist: [], history: [] }
+
+/** Meta keys starting with `from`, renamed to start with `to` */
+function remeta(meta: SyncMeta, from: string, to: string): SyncMeta {
+  const pick = (r: Record<string, number>) => Object.fromEntries(Object.entries(r).filter(([k]) => k.startsWith(from)).map(([k, v]) => [to + k.slice(from.length), v]))
+  return { at: pick(meta.at), tomb: pick(meta.tomb) }
+}
+const asDoc = (lists: Partial<ProfileLists> & { sources?: unknown[] }, meta: SyncMeta): SyncDoc =>
+  ({ v: 1, sources: [], favorites: [], watchlist: [], history: [], ...lists, prefs: {}, meta }) as SyncDoc
+
+/** Same per-item rules as merge(): profiles themselves, then each surviving profile's lists */
+export function mergeProfiles(local: ProfilesDoc, remote: ProfilesDoc | null): ProfilesDoc {
+  if (!remote) return local
+  const people = merge(asDoc({ sources: local.profiles }, remeta(local.meta, 'profiles:', 'sources:')), asDoc({ sources: remote.profiles }, remeta(remote.meta, 'profiles:', 'sources:')))
+  const out: ProfilesDoc = { v: 1, profiles: people.sources as unknown as Profile[], data: {}, meta: remeta(people.meta, 'sources:', 'profiles:') }
+  for (const p of out.profiles) {
+    if (p.id === 'main') continue
+    const m = merge(asDoc(local.data[p.id] ?? EMPTY_LISTS, remeta(local.meta, `${p.id}/`, '')), asDoc(remote.data[p.id] ?? EMPTY_LISTS, remeta(remote.meta, `${p.id}/`, '')))
+    out.data[p.id] = { favorites: m.favorites, watchlist: m.watchlist, history: m.history }
+    const mine = remeta({ at: Object.fromEntries(Object.entries(m.meta.at).filter(([k]) => k !== 'prefs')), tomb: m.meta.tomb }, '', `${p.id}/`)
+    Object.assign(out.meta.at, mine.at)
+    Object.assign(out.meta.tomb, mine.tomb)
+  }
+  return out
+}
+
+const profilesId = (code: string) => hex(sha256(enc.encode(`lumen-profiles:${normalize(code)}`)))
+
+export async function pullProfiles(code: string): Promise<ProfilesDoc | null> {
+  const rows = await rpc<{ data: string }[]>('sync_get', { p_id: profilesId(code) })
+  return rows.length ? (await derive(code, 'sync')).open<ProfilesDoc>(rows[0].data) : null
+}
+
+export async function pushProfiles(code: string, doc: ProfilesDoc) {
+  await rpc('sync_put', { p_id: profilesId(code), p_data: await (await derive(code, 'sync')).seal(doc) })
 }

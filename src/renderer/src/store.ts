@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { mergeMovies } from '../../shared/core/dedupe'
 import { isArabicOrIndian } from '../../shared/core/filter'
 import {
+  MAIN_PROFILE,
   STORE_DEFAULTS,
   type Channel,
   type Epg,
@@ -10,6 +11,8 @@ import {
   type Item,
   type Library,
   type Movie,
+  type Profile,
+  type ProfileLists,
   type Settings,
   type Show,
   type Source,
@@ -61,6 +64,10 @@ interface State extends StoreShape {
   /** selected category per browse screen */
   group: Partial<Record<'live' | 'movies' | 'series', string>>
   syncStatus: { state: 'off' | 'syncing' | 'ok' | 'error'; message?: string }
+  /** favorites/watchlist/history of every profile; the top-level ones are the active profile's */
+  lists: Record<string, ProfileLists>
+  /** "Who's watching?" screen open */
+  pickProfile: boolean
 }
 
 export const useApp = create<State>(() => ({
@@ -79,7 +86,9 @@ export const useApp = create<State>(() => ({
   toast: null,
   sourceSheet: null,
   group: {},
-  syncStatus: { state: 'off' }
+  syncStatus: { state: 'off' },
+  lists: {},
+  pickProfile: false
 }))
 
 const set = useApp.setState
@@ -92,16 +101,67 @@ export function persist<K extends keyof StoreShape>(key: K, value: StoreShape[K]
   api.setStore(key, value)
 }
 
-type Synced = 'sources' | 'favorites' | 'watchlist' | 'history'
+type ListKey = keyof ProfileLists
+type Synced = 'sources' | ListKey
+const EMPTY_LISTS: ProfileLists = { favorites: [], watchlist: [], history: [] }
 
-/** Persist a synced collection and record what changed (and what was deleted) for the merge */
-export function persistSynced<K extends Synced>(key: K, value: StoreShape[K], changed: string[] = [], removed: string[] = []) {
+/** Record changes/deletions for the merge, under "<prefix><key>:<id>" in meta or profileMeta */
+function touch(metaKey: 'meta' | 'profileMeta', prefix: string, changed: string[], removed: string[]) {
   const now = Date.now()
-  const meta = { at: { ...get().meta.at }, tomb: { ...get().meta.tomb } }
-  for (const id of changed) (meta.at[`${key}:${id}`] = now), delete meta.tomb[`${key}:${id}`]
-  for (const id of removed) (meta.tomb[`${key}:${id}`] = now), delete meta.at[`${key}:${id}`]
-  persist(key, value)
-  persist('meta', meta)
+  const meta = { at: { ...get()[metaKey].at }, tomb: { ...get()[metaKey].tomb } }
+  for (const k of changed) (meta.at[prefix + k] = now), delete meta.tomb[prefix + k]
+  for (const k of removed) (meta.tomb[prefix + k] = now), delete meta.at[prefix + k]
+  persist(metaKey, meta)
+}
+
+/** Save one list of a profile. Main keeps the original store keys (older app versions read those). */
+function saveList<K extends ListKey>(pid: string, key: K, value: ProfileLists[K]) {
+  const lists = { ...get().lists, [pid]: { ...(get().lists[pid] ?? EMPTY_LISTS), [key]: value } }
+  set({ lists, ...(pid === get().activeProfile ? { [key]: value } : {}) })
+  if (pid === 'main') return void api.setStore(key, value as never)
+  persist('profileData', Object.fromEntries(Object.entries(lists).filter(([id]) => id !== 'main')))
+}
+
+/** Persist a synced collection (lists: of the active profile) and record what changed for the merge */
+export function persistSynced<K extends Synced>(key: K, value: StoreShape[K], changed: string[] = [], removed: string[] = []) {
+  const pid = key === 'sources' ? 'main' : get().activeProfile
+  const ids = (xs: string[]) => xs.map((id) => `${key}:${id}`)
+  if (pid === 'main') touch('meta', '', ids(changed), ids(removed))
+  else touch('profileMeta', `${pid}/`, ids(changed), ids(removed))
+  if (key === 'sources') persist('sources', value as Source[])
+  else saveList(pid, key as ListKey, value as never)
+  scheduleSync()
+}
+
+/* ---------------- profiles ---------------- */
+
+export const profilesOf = (list: Profile[]) => (list.length ? list : [MAIN_PROFILE])
+export const currentProfile = () => profilesOf(get().profiles).find((p) => p.id === get().activeProfile) ?? MAIN_PROFILE
+
+export function switchProfile(id: string) {
+  persist('activeProfile', id)
+  closePlayer()
+  set({ ...(get().lists[id] ?? EMPTY_LISTS), pickProfile: false, detail: null, tab: 'home' })
+}
+
+export const openProfilePicker = () => set({ pickProfile: true })
+
+export function saveProfile(p: Profile) {
+  const list = profilesOf(get().profiles)
+  persist('profiles', list.some((x) => x.id === p.id) ? list.map((x) => (x.id === p.id ? p : x)) : [...list, p])
+  touch('profileMeta', 'profiles:', [p.id], [])
+  scheduleSync()
+}
+
+export function deleteProfile(id: string) {
+  if (id === 'main') return
+  if (get().activeProfile === id) switchProfile('main')
+  persist('profiles', profilesOf(get().profiles).filter((p) => p.id !== id))
+  touch('profileMeta', 'profiles:', [], [id])
+  const lists = { ...get().lists }
+  delete lists[id]
+  set({ lists })
+  persist('profileData', Object.fromEntries(Object.entries(lists).filter(([k]) => k !== 'main')))
   scheduleSync()
 }
 
@@ -137,7 +197,9 @@ export function applyAppearance(s: Settings) {
 
 export async function boot() {
   const s = await api.getStore()
-  set({ ...s, booted: true })
+  const lists: Record<string, ProfileLists> = { ...s.profileData, main: { favorites: s.favorites, watchlist: s.watchlist, history: s.history } }
+  const active = lists[s.activeProfile] && profilesOf(s.profiles).some((p) => p.id === s.activeProfile) ? s.activeProfile : 'main'
+  set({ ...s, ...lists[active], activeProfile: active, lists, booted: true, pickProfile: profilesOf(s.profiles).length > 1 })
   applyAppearance(s.settings)
   const [library, epg] = await Promise.all([api.getLibrary(), api.getEpg()])
   set({ library, epg })
@@ -243,7 +305,8 @@ export function scheduleSync(delay = 2500) {
 const localDoc = (): sync.SyncDoc => {
   const s = get()
   const prefs = Object.fromEntries(sync.SYNCED_PREFS.map((k) => [k, s.settings[k]])) as sync.Prefs
-  return { v: 1, sources: s.sources, favorites: s.favorites, watchlist: s.watchlist, history: s.history, prefs, meta: s.meta }
+  const main = s.lists.main ?? EMPTY_LISTS
+  return { v: 1, sources: s.sources, favorites: main.favorites, watchlist: main.watchlist, history: main.history, prefs, meta: s.meta }
 }
 
 /** Pull, merge, apply locally, push back. Safe to call often; concurrent calls share one run. */
@@ -256,7 +319,11 @@ export function syncNow(): Promise<void> {
       const local = localDoc()
       const merged = sync.merge(local, await sync.pull(code))
       const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
-      for (const k of sync.COLLECTIONS) if (!same(local[k], merged[k])) persist(k, merged[k] as never)
+      for (const k of sync.COLLECTIONS) {
+        if (same(local[k], merged[k])) continue
+        if (k === 'sources') persist('sources', merged.sources)
+        else saveList('main', k, merged[k] as never)
+      }
       persist('meta', merged.meta)
       if (!same(local.prefs, merged.prefs)) {
         const settings = { ...get().settings, ...merged.prefs }
@@ -266,6 +333,7 @@ export function syncNow(): Promise<void> {
       // local playlist files go up before the source list, so other devices can load them right away
       const fileError = await shareFiles(code, merged.sources)
       await sync.push(code, merged)
+      await syncProfiles(code)
       persist('sync', { ...get().sync, lastSync: Date.now() })
       set({ syncStatus: fileError ? { state: 'error', message: fileError } : { state: 'ok' } })
       if (!same(local.sources, merged.sources)) refreshLibrary()
@@ -275,6 +343,29 @@ export function syncNow(): Promise<void> {
       syncing = null
     }
   })())
+}
+
+/** Extra profiles sync in their own blob (see lib/sync.ts). Nothing is uploaded until a profile exists. */
+async function syncProfiles(code: string) {
+  const s = get()
+  const remote = await sync.pullProfiles(code)
+  if (!remote && !s.profiles.length) return
+  const local: sync.ProfilesDoc = { v: 1, profiles: s.profiles, data: s.profileData, meta: s.profileMeta }
+  const merged = sync.mergeProfiles(local, remote)
+  const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
+  if (!same(local.profiles, merged.profiles)) persist('profiles', merged.profiles)
+  persist('profileMeta', merged.meta)
+  for (const [pid, l] of Object.entries(merged.data))
+    for (const k of ['favorites', 'watchlist', 'history'] as const) if (!same(get().lists[pid]?.[k] ?? [], l[k])) saveList(pid, k, l[k] as never)
+  const alive = new Set(merged.profiles.map((p) => p.id))
+  const gone = Object.keys(get().lists).filter((id) => id !== 'main' && !alive.has(id))
+  if (gone.length) {
+    if (gone.includes(get().activeProfile)) switchProfile('main')
+    const lists = Object.fromEntries(Object.entries(get().lists).filter(([id]) => !gone.includes(id)))
+    set({ lists })
+    persist('profileData', Object.fromEntries(Object.entries(lists).filter(([id]) => id !== 'main')))
+  }
+  if (!same(merged, remote)) await sync.pushProfiles(code, merged)
 }
 
 /** PC only: share M3U files added from disk with the TV/web (unchanged files are skipped) */

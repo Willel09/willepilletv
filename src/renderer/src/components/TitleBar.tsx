@@ -1,8 +1,9 @@
 import { motion } from 'framer-motion'
+import { Avatar } from './Avatar'
 import { Clapperboard, Copy, Home, Minus, RefreshCw, Search, Settings, Square, Tv, Library, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { spring } from '../lib/motion'
-import { api, refreshLibrary, setTab, useApp, type Tab } from '../store'
+import { api, currentProfile, openProfilePicker, refreshLibrary, setTab, useApp, type Tab } from '../store'
 import { Spinner } from './ui'
 
 export const TABS: { id: Tab; label: string; icon: typeof Home }[] = [
@@ -63,6 +64,17 @@ function WindowButtons() {
   )
 }
 
+function ProfileButton() {
+  useApp((s) => s.activeProfile)
+  useApp((s) => s.profiles)
+  const p = currentProfile()
+  return (
+    <button onClick={openProfilePicker} aria-label={`Profile: ${p.name}. Switch profile`} title={`${p.name} · Switch profile`} className="no-drag rounded-[30%] transition hover:scale-110 focus-visible:ring-2 focus-visible:ring-fg">
+      <Avatar id={p.avatar} className="size-8" />
+    </button>
+  )
+}
+
 export function TitleBar() {
   const loading = useApp((s) => s.loading)
   const progress = useApp((s) => s.progress)
@@ -91,6 +103,7 @@ export function TitleBar() {
             </button>
           )
         )}
+        <ProfileButton />
         {api.device === 'desktop' && <WindowButtons />}
       </div>
     </header>

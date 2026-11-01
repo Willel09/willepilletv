@@ -81,3 +81,28 @@ test('playlist file: chunked upload, skip unchanged, readable from another devic
     globalThis.fetch = realFetch
   }
 })
+
+test('profiles: add/edit/delete and per-profile lists merge independently', async () => {
+  const { mergeProfiles } = await import('./sync.ts')
+  const now = Date.now()
+  const kid = { id: 'kid', name: 'Kid', avatar: 'robot' }
+  const a = { v: 1 as const, profiles: [kid], data: { kid: { favorites: [], watchlist: [movie('x')], history: [] } }, meta: { at: { 'profiles:kid': now - 10, 'kid/watchlist:x': now - 10 }, tomb: {} } }
+  // other device renamed the kid profile and added y to its watchlist; also created 'mum'
+  const b = {
+    v: 1 as const,
+    profiles: [{ ...kid, name: 'Kiddo' }, { id: 'mum', name: 'Mum', avatar: 'bear' }],
+    data: { kid: { favorites: [], watchlist: [movie('y')], history: [] }, mum: { favorites: [], watchlist: [movie('z')], history: [] } },
+    meta: { at: { 'profiles:kid': now, 'profiles:mum': now, 'kid/watchlist:y': now, 'mum/watchlist:z': now }, tomb: {} }
+  }
+  const m = mergeProfiles(a, b)
+  assert.deepEqual(m.profiles.map((p) => p.name), ['Kiddo', 'Mum'])
+  assert.deepEqual(m.data.kid.watchlist.map((x) => x.id), ['y', 'x'])
+  assert.deepEqual(m.data.mum.watchlist.map((x) => x.id), ['z'])
+  assert.equal(m.meta.at['kid/watchlist:x'], now - 10)
+  // deleting a profile removes it (and its lists) everywhere
+  const del = { ...m, profiles: m.profiles.filter((p) => p.id !== 'mum'), meta: { at: { ...m.meta.at }, tomb: { 'profiles:mum': now + 5 } } }
+  delete del.meta.at['profiles:mum']
+  const after = mergeProfiles(del, m)
+  assert.deepEqual(after.profiles.map((p) => p.id), ['kid'])
+  assert.equal(after.data.mum, undefined)
+})

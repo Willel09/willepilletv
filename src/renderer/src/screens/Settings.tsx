@@ -8,7 +8,8 @@ import { ago } from '../lib/format'
 import { newPairCode, newSyncCode, receivePairing, sendPairing, supported as syncSupported } from '../lib/sync'
 import { THEMES } from '../lib/themes'
 import { TvInstallSheet } from './TvInstall'
-import { api, clearCollection, openSourceSheet, refreshEpg, refreshLibrary, saveSources, setSyncCode, setTab, syncNow, toast, updateSettings, useApp } from '../store'
+import { Avatar } from '../components/Avatar'
+import { api, clearCollection, currentProfile, openProfilePicker, openSourceSheet, refreshEpg, refreshLibrary, saveSources, setSyncCode, setTab, syncNow, toast, updateSettings, useApp } from '../store'
 
 const ACCENTS = ['#0a84ff', '#5e5ce6', '#bf5af2', '#ff375f', '#ff9f0a', '#30d158', '#64d2ff']
 const desktop = api.device === 'desktop'
@@ -413,6 +414,15 @@ export default function Settings() {
               <LazyField label="User agent" value={s.userAgent} onCommit={(userAgent) => updateSettings({ userAgent: userAgent || DEFAULT_UA })} hint="Some providers only allow specific players. Leave empty to reset." />
             </div>
           )}
+        </Card>
+
+        <Card title="Profiles">
+          <Line label={`Watching as ${currentProfile().name}`} hint="Each profile has its own watchlist, favorites and Continue Watching. Sources and settings are shared.">
+            <div className="flex items-center gap-3">
+              <Avatar id={currentProfile().avatar} className="size-9" />
+              <Button onClick={openProfilePicker}>Switch or manage</Button>
+            </div>
+          </Line>
         </Card>
 
         <Card title="Library">

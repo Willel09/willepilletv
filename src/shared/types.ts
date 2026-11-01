@@ -190,7 +190,30 @@ export interface StoreShape {
   history: HistoryEntry[]
   meta: SyncMeta
   sync: SyncConfig
+  /** Every profile, the first ("main") included. Empty = just the default main profile. */
+  profiles: Profile[]
+  /** Lists of the profiles other than main (main keeps favorites/watchlist/history above, for older app versions) */
+  profileData: Record<string, ProfileLists>
+  /** Sync change-tracking for profiles: "profiles:<id>" and "<id>/<collection>:<item>" */
+  profileMeta: SyncMeta
+  /** Profile in use on this device (not synced) */
+  activeProfile: string
 }
+
+export interface Profile {
+  id: string
+  name: string
+  /** avatar preset id, see renderer/components/Avatar.tsx */
+  avatar: string
+}
+
+export interface ProfileLists {
+  favorites: Item[]
+  watchlist: (Movie | Show)[]
+  history: HistoryEntry[]
+}
+
+export const MAIN_PROFILE: Profile = { id: 'main', name: 'Me', avatar: 'kitty' }
 
 export const DEFAULT_UA = 'VLC/3.0.21 LibVLC/3.0.21'
 
@@ -232,7 +255,11 @@ export const STORE_DEFAULTS: StoreShape = {
   watchlist: [],
   history: [],
   meta: { at: {}, tomb: {} },
-  sync: { code: '', lastSync: 0 }
+  sync: { code: '', lastSync: 0 },
+  profiles: [],
+  profileData: {},
+  profileMeta: { at: {}, tomb: {} },
+  activeProfile: 'main'
 }
 
 /** The bridge exposed on window.api by the preload script */

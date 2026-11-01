@@ -1,4 +1,5 @@
 import { AnimatePresence, MotionConfig, motion } from 'framer-motion'
+import { ProfilePicker } from './screens/Profiles'
 import { useEffect } from 'react'
 import { Ambient } from './components/Ambient'
 import { TABS, TitleBar } from './components/TitleBar'
@@ -47,6 +48,7 @@ const isTyping = () => {
 export default function App() {
   const booted = useApp((s) => s.booted)
   const detail = useApp((s) => s.detail)
+  const pickProfile = useApp((s) => s.pickProfile)
   const player = useApp((s) => s.player)
   const sheet = useApp((s) => s.sourceSheet)
 
@@ -103,6 +105,7 @@ export default function App() {
       )}
       <AnimatePresence>{player && <Player key="player" req={player} />}</AnimatePresence>
       <AnimatePresence>{sheet && <SourceSheet key="sheet" sheet={sheet} />}</AnimatePresence>
+      <AnimatePresence>{booted && pickProfile && <ProfilePicker key="profiles" />}</AnimatePresence>
       <Toast />
     </MotionConfig>
   )
