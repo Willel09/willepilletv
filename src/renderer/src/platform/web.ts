@@ -197,6 +197,24 @@ async function checkOta() {
   }
 }
 
+/**
+ * Seen from the sofa, a 1920-wide layout has tiny text. TVs lay the app out 1280 wide and scale it
+ * up 1.5× (like a laptop screen): bigger text, cards and buttons. If the TV ignores the viewport
+ * setting, zoom does it instead; --vh keeps full-height layouts right under zoom.
+ */
+function tvScale() {
+  const meta = document.querySelector('meta[name=viewport]') ?? document.head.appendChild(Object.assign(document.createElement('meta'), { name: 'viewport' }))
+  meta.setAttribute('content', 'width=1280, user-scalable=no')
+  setTimeout(() => {
+    const w = window.innerWidth
+    if (w < 1500) return // viewport honoured
+    const zoom = w / 1280
+    const root = document.documentElement
+    root.style.setProperty('zoom', String(zoom))
+    root.style.setProperty('--vh', `${window.innerHeight / zoom / 100}px`)
+  }, 0)
+}
+
 export function createWebApi(): IptvApi {
   const progressCbs = new Set<(m: string) => void>()
   const progress = (m: string) => progressCbs.forEach((cb) => cb(m))
@@ -213,6 +231,7 @@ export function createWebApi(): IptvApi {
   const tv = isTizen()
 
   if (tv) {
+    tvScale()
     // Media/colour/number keys must be registered before Tizen delivers them to the app
     const keys = ['MediaPlayPause', 'MediaPlay', 'MediaPause', 'MediaStop', 'MediaFastForward', 'MediaRewind', 'ChannelUp', 'ChannelDown', 'ColorF0Red', 'ColorF1Green', 'ColorF2Yellow', 'ColorF3Blue', ...'0123456789']
     for (const k of keys) try { window.tizen?.tvinputdevice?.registerKey(k) } catch { /* not supported on this model */ }

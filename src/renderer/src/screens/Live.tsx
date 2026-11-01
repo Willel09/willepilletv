@@ -99,7 +99,7 @@ function ChannelInfo({ channel, channels }: { channel?: Channel; channels: Chann
   const { now, progress, upcoming } = nowNext(epg?.programmes[channel.id], t)
   const fav = isFavorite(channel.id)
   return (
-    <aside className="glass hidden w-[360px] shrink-0 flex-col overflow-hidden rounded-[28px] lg:flex">
+    <aside data-nav-group className="glass hidden w-[360px] shrink-0 flex-col overflow-hidden rounded-[28px] lg:flex">
       <AnimatePresence mode="popLayout" initial={false}>
         <motion.div
           key={channel.id}
@@ -142,7 +142,7 @@ function ChannelInfo({ channel, channels }: { channel?: Channel; channels: Chann
             </div>
           )}
           <div className="mt-auto flex gap-2 pt-4">
-            <Button variant="primary" className="flex-1" icon={<Play className="size-4 fill-current" />} onClick={() => playChannel(channel, channels)}>
+            <Button variant="primary" data-nav-entry className="flex-1" icon={<Play className="size-4 fill-current" />} onClick={() => playChannel(channel, channels)}>
               Watch
             </Button>
             <IconButton label={fav ? 'Remove from Favorites' : 'Add to Favorites'} onClick={() => toggleFavorite(channel)}>

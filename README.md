@@ -46,6 +46,8 @@ These TVs run an older browser engine (Chromium 76), so the TV build is made spe
 
 **Tip for the QN90A remote (Solar Cell remote):** Play/Pause, CH ▲▼ and Back work directly. The coloured and number keys are under the **123** button.
 
+**Made for the sofa:** on TV the app is laid out at 1280 px and shown 1.5× larger (bigger text, cards and buttons), with a thick white focus frame. The remote moves predictably: Up/Down go to what is straight above/below, Left/Right stay in the row (nothing happens at the end of a row), the focused row scrolls to the middle of the screen, and Back returns focus to where you were. Lists like the categories remember where you were in them; the channel info panel is entered on **Watch**.
+
 **TV remote:**
 
 | Button | Action |
@@ -53,6 +55,9 @@ These TVs run an older browser engine (Chromium 76), so the TV build is made spe
 | Arrows / OK | Move / select |
 | Back | Go back; exits the app on Home |
 | Play/Pause, ◀◀ ▶▶ | Playback, seek 10 s |
+| In the player: ◀ ▶ | Seek 10 s (films) |
+| In the player: ▲ ▼ | Next / previous channel (live) |
+| In the player: OK | Show the controls (then the arrows move between buttons; Back hides them again) |
 | CH + / CH − | Next / previous channel |
 | 0–9 | Jump to a channel number |
 | Red / Green (in the player) | Favorite the channel / toggle subtitles |

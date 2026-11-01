@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { Check, ChevronLeft, ExternalLink, Heart, Play, Plus, RotateCcw, Star } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Episode, MediaInfo, Movie, Show } from '../../../shared/types'
 import { PosterCard } from '../components/Cards'
 import { Img } from '../components/Img'
@@ -97,6 +97,13 @@ export default function Detail({ item }: { item: Movie | Show }) {
   const versions = item.kind === 'movie' ? item.versions : undefined
   // keep the merged id so resume/history work whichever copy you pick
   const movie = item.kind === 'movie' && versions?.[ver] ? { ...item, url: versions[ver].url, sourceId: versions[ver].sourceId, vodId: versions[ver].vodId, ext: versions[ver].ext } : item
+  // the remote starts on Play; for a series that is once its episodes have loaded (it's disabled until then)
+  const root = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const el = root.current
+    if (el && !el.contains(document.activeElement)) el.querySelector<HTMLElement>('[data-nav-default]:not([disabled])')?.focus({ preventScroll: true })
+  }, [episodes.length])
+
   const playMain = () => {
     if (movie.kind === 'movie') return playMovie(movie)
     const ep = nextEp ?? episodes[0]
@@ -111,6 +118,7 @@ export default function Detail({ item }: { item: Movie | Show }) {
 
   return (
     <motion.div
+      ref={root}
       data-nav-scope
       className="fixed inset-0 z-20 overflow-y-auto overflow-x-hidden bg-[var(--app-bg)]"
       initial={{ opacity: 0, y: 60 }}
@@ -118,7 +126,7 @@ export default function Detail({ item }: { item: Movie | Show }) {
       exit={{ opacity: 0, y: 40 }}
       transition={sheetSpring}
     >
-      <div className="relative min-h-[88vh]">
+      <div className="relative min-h-[calc(var(--vh,1vh)*88)]">
         <motion.div className="absolute inset-0 overflow-hidden [mask-image:linear-gradient(to_bottom,black_50%,transparent)]" initial={{ scale: 1.08 }} animate={{ scale: 1 }} transition={{ duration: 1.6, ease: [0.2, 0.7, 0.2, 1] }}>
           {art && <img src={artUrl(art, 1280)} alt="" referrerPolicy="no-referrer" className={`size-full object-cover object-[center_20%] ${info.backdrop || (item.kind === 'series' && item.backdrop) ? '' : 'scale-110 blur-2xl saturate-150'}`} onError={(e) => (e.currentTarget.style.display = 'none')} />}
         </motion.div>
@@ -168,7 +176,7 @@ export default function Detail({ item }: { item: Movie | Show }) {
               </div>
             )}
             <div className="mt-8 flex flex-wrap items-center gap-3">
-              <Button variant="primary" size="lg" autoFocus icon={<Play className="size-5 fill-current" />} onClick={playMain} disabled={item.kind === 'series' && !episodes.length}>
+              <Button variant="primary" size="lg" autoFocus data-nav-default icon={<Play className="size-5 fill-current" />} onClick={playMain} disabled={item.kind === 'series' && !episodes.length}>
                 {item.kind === 'movie'
                   ? resumable(movieH) ? `Resume · ${duration(movieH!.duration - movieH!.position)} left` : 'Play'
                   : nextEp ? `Continue S${nextEp.season} E${nextEp.episode}` : 'Play S1 E1'}

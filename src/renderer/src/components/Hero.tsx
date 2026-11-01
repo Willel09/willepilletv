@@ -34,7 +34,7 @@ export function Hero({ items }: { items: (Movie | Show)[] }) {
   const listed = inWatchlist(item.id)
 
   return (
-    <section className="relative h-[78vh] max-h-[760px] min-h-[540px] overflow-hidden" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
+    <section className="relative h-[calc(var(--vh,1vh)*78)] max-h-[760px] min-h-[540px] overflow-hidden" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
       {/* Masked so the artwork dissolves into the ambient background instead of ending in a hard edge */}
       <div className="absolute inset-0 [mask-image:linear-gradient(to_bottom,black_45%,transparent_96%)]">
         <AnimatePresence initial={false}>

@@ -33,7 +33,7 @@ export function Sheet({ title, onClose, children, width = 560 }: { title: string
         exit={{ y: 60, opacity: 0, scale: 0.97 }}
         transition={sheetSpring}
         style={{ width }}
-        className="glass-strong max-h-[88vh] max-w-full overflow-y-auto rounded-[32px] p-7"
+        className="glass-strong max-h-[calc(var(--vh,1vh)*88)] max-w-full overflow-y-auto rounded-[32px] p-7"
       >
         <div className="mb-5 flex items-center justify-between">
           <h2 className="text-[22px] font-bold tracking-[-0.03em]">{title}</h2>

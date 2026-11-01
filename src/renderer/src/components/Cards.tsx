@@ -114,7 +114,8 @@ export function PosterCard({ name, poster, rating, onClick, width = 176, badge, 
       footer={<Title>{cleanName(name)}</Title>}
     />
   )
-  if (!onRemove) return card
+  // TVs: an extra button on each card is a trap for the remote; remove from the title's page instead
+  if (!onRemove || !TILT) return card
   // sibling of the card button (a button can't contain a button), always visible so it's easy to find
   return (
     <div className="relative shrink-0" style={{ width }}>

@@ -213,8 +213,30 @@ input[type='range'] {
 [data-device='tv'] .ambient-art {
   display: none;
 }
-/* Seen from the sofa: a thicker focus ring */
+/* the focused card keeps a little of its neighbours in view instead of sitting flush against the edge */
+[data-device='tv'] button,
+[data-device='tv'] input,
+[data-device='tv'] select {
+  scroll-margin-left: 72px;
+  scroll-margin-right: 72px;
+}
+/* Seen from the sofa: a thick, bright focus ring that can't be missed */
+[data-device='tv'] :focus,
 [data-device='tv'] :focus-visible {
-  outline-width: 3px;
+  outline: 4px solid #fff;
+  outline-offset: 4px;
+}
+[data-device='tv'] input:focus,
+[data-device='tv'] input:focus-visible {
+  outline-offset: 2px;
+}
+/* cards: the ring goes around the poster itself, not around poster + title */
+[data-device='tv'] .card:focus,
+[data-device='tv'] .card:focus-visible {
+  outline: none;
+}
+[data-device='tv'] .card:focus > div:first-child,
+[data-device='tv'] .card:focus-visible > div:first-child {
+  outline: 4px solid #fff;
   outline-offset: 4px;
 }

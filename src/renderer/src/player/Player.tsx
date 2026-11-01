@@ -28,6 +28,7 @@ function CtrlBtn({ label, onClick, children, active, big }: { label: string; onC
       aria-label={label}
       title={label}
       onClick={onClick}
+      data-nav-default={big ? '' : undefined}
       className={`grid shrink-0 place-items-center rounded-full transition-colors ${big ? 'size-13 bg-white text-black hover:bg-white/90' : 'size-10 text-white/85 hover:bg-white/14 hover:text-white'} ${active ? 'bg-white/18 text-white' : ''}`}
     >
       {children}
@@ -268,7 +269,12 @@ function Session({ req, mini, fullscreen, sleepAt, setSleepAt }: SessionProps) {
   const show = useCallback(() => {
     setVisible(true)
     clearTimeout(hideTimer.current)
-    hideTimer.current = setTimeout(() => setVisible(false), 3200)
+    hideTimer.current = setTimeout(() => {
+      // TVs: controls hide only when no button is in use; a menu or the error card keeps them up
+      const a = document.activeElement as HTMLElement | null
+      if (tv && a?.tagName === 'BUTTON' && a.closest('[data-player]')) return show()
+      setVisible(false)
+    }, 3200)
   }, [])
   useEffect(() => (show(), () => clearTimeout(hideTimer.current)), [show])
 
@@ -321,6 +327,24 @@ function Session({ req, mini, fullscreen, sleepAt, setSleepAt }: SessionProps) {
       if (mini || useApp.getState().sourceSheet) return
       show()
       const k = e.key.length === 1 ? e.key.toLowerCase() : e.key
+      if (tv) {
+        // The remote: with a player button in focus (controls, a menu, the error card) the arrows move between
+        // buttons and Back steps out of them; with none, the arrows seek / zap and OK brings up the controls
+        const a = document.activeElement as HTMLElement | null
+        const onButton = a?.tagName === 'BUTTON' && !!a.closest('[data-player]')
+        if (onButton && k.startsWith('Arrow')) return // spatial navigation takes it
+        if (onButton && (k === 'Escape' || k === 'Backspace') && !menu && !error) {
+          a!.blur()
+          setVisible(false)
+          e.preventDefault()
+          return void e.stopImmediatePropagation()
+        }
+        if (!onButton && (k === 'Enter' || (!live && (k === 'ArrowDown' || k === 'ArrowUp')))) {
+          document.querySelector<HTMLElement>('[data-player] [data-nav-default]')?.focus()
+          e.preventDefault()
+          return void e.stopImmediatePropagation()
+        }
+      }
       switch (k) {
         case ' ':
         case 'k':
@@ -511,7 +535,8 @@ function Session({ req, mini, fullscreen, sleepAt, setSleepAt }: SessionProps) {
               </>
             )}
 
-            <div className="group/vol ml-3 hidden items-center gap-1 sm:flex">
+            {/* TVs have their own volume: the slider would only trap the remote's arrows */}
+            <div className={`group/vol ml-3 hidden items-center gap-1 ${tv ? '' : 'sm:flex'}`}>
               <CtrlBtn label="Mute (M)" onClick={() => (v().muted = !v().muted)}><VolIcon className="size-5" /></CtrlBtn>
               <input data-nav-ignore type="range" min={0} max={1} step={0.01} value={muted ? 0 : volume} onChange={(e) => setVol(+e.target.value)} aria-label="Volume" className="w-24 cursor-pointer" />
             </div>
@@ -729,6 +754,7 @@ export default function Player({ req }: { req: PlayRequest }) {
     <motion.div
       data-theme="dark"
       data-nav-scope={mini ? undefined : ''}
+      data-player
       onPointerDown={startDrag}
       // a drag that ends over the player must not count as "click to expand"
       onClickCapture={(e) => dragged.current && e.stopPropagation()}

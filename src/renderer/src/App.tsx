@@ -1,4 +1,4 @@
-import { AnimatePresence, MotionConfig, motion } from 'framer-motion'
+import { AnimatePresence, MotionConfig, MotionGlobalConfig, motion } from 'framer-motion'
 import { ProfilePicker } from './screens/Profiles'
 import { useEffect } from 'react'
 import { Ambient } from './components/Ambient'
@@ -44,6 +44,9 @@ const isTyping = () => {
   const el = document.activeElement
   return el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement
 }
+
+// TVs: every framer animation (including exits, which otherwise keep a closed screen around) finishes at once
+if (api.device === 'tv') MotionGlobalConfig.skipAnimations = true
 
 export default function App() {
   const booted = useApp((s) => s.booted)

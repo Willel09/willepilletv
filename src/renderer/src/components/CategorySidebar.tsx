@@ -29,7 +29,8 @@ export function CategorySidebar({ items, value, onChange, layoutId }: { items: C
     >
       {items.map((c) => <option key={c.key} value={c.key} className="text-black">{c.label} ({c.count})</option>)}
     </select>
-    <aside className="glass hidden w-[264px] shrink-0 flex-col overflow-hidden rounded-[28px] md:flex">
+    {/* one remote target: entered at the selected category (or wherever you last were in the list) */}
+    <aside data-nav-group className="glass hidden w-[264px] shrink-0 flex-col overflow-hidden rounded-[28px] md:flex">
       <div className="p-3 pb-2">
         <label className="flex h-10 items-center gap-2 rounded-2xl bg-fg/7 px-3 text-fg/45 focus-within:shadow-[inset_0_0_0_2px_var(--accent)]">
           <Search className="size-4 shrink-0" />
@@ -44,6 +45,8 @@ export function CategorySidebar({ items, value, onChange, layoutId }: { items: C
             return (
               <button
                 key={c.key}
+                data-nav-entry={active ? '' : undefined}
+                aria-current={active ? 'true' : undefined}
                 onClick={() => onChange(c.key)}
                 className={`absolute inset-x-0 flex h-[42px] items-center gap-2.5 rounded-[14px] px-3 text-left text-[13.5px] font-medium transition-colors ${active ? 'text-fg' : 'text-fg/60 hover:bg-fg/6 hover:text-fg'}`}
                 style={{ transform: `translateY(${row.start}px)` }}
