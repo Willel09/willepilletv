@@ -10,7 +10,7 @@ import { cleanName } from '../lib/format'
 import { forYou, newest, topRated } from '../lib/recommend'
 import { softSpring } from '../lib/motion'
 import { openDetail, openSourceSheet, playChannel, playMovie, resume, resumable, setGroup, setTab, toggleWatchlist, useApp, useIndex } from '../store'
-import type { Item, Movie, Show } from '../../../shared/types'
+import type { Channel, Item, Movie, Show } from '../../../shared/types'
 import { RECENT } from './Browse'
 import { startPairing } from './Settings'
 
@@ -87,6 +87,19 @@ export default function Home() {
     }
   }, [idx, history, watchlist, favorites])
 
+  // channels on air right now (favorites first), so live TV has a place on Home
+  const liveNow = useMemo(() => {
+    const out: Channel[] = []
+    const seen = new Set<string>()
+    for (const c of [...favorites.filter((f): f is Channel => f.kind === 'live'), ...idx.channels]) {
+      if (out.length >= 30) break
+      if (seen.has(c.id) || !nowNext(epg?.programmes[c.id]).now) continue
+      seen.add(c.id)
+      out.push(c)
+    }
+    return out
+  }, [idx, favorites, epg])
+
   if (!sources.length) return <Welcome />
   if (!idx.channels.length && !idx.movies.length && !idx.series.length && !watchlist.length && !favorites.length && !history.length)
     return (
@@ -131,6 +144,7 @@ export default function Home() {
         {picks.newMovies.length > 0 && <Row title="Newest Movies" onSeeAll={seeAll('movies', RECENT)}>{picks.newMovies.map(titleCard)}</Row>}
         {picks.newSeries.length > 0 && <Row title="Newest Series" onSeeAll={seeAll('series', RECENT)}>{picks.newSeries.map(titleCard)}</Row>}
         {picks.last && picks.similar.length > 0 && <Row title={`Because you watched ${cleanName(picks.last.name)}`}>{picks.similar.map(titleCard)}</Row>}
+        {liveNow.length > 0 && <Row title="Live Now" onSeeAll={() => setTab('live')}>{liveNow.map(poster)}</Row>}
         {picks.topRated.length > 0 && <Row title="Top Rated">{picks.topRated.map(titleCard)}</Row>}
         {favorites.length > 0 && <Row title="Favorites">{favorites.slice(0, 40).map(poster)}</Row>}
         {recentLive.length > 0 && (
