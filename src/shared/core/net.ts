@@ -40,14 +40,31 @@ export class JsonArrayStream {
     if (this.state === 'done') return
     const b = this.buf + chunk
     let i = this.pos
+    let bs = -1 // next backslash at or after i (found lazily)
     for (; i < b.length; i++) {
-      const c = b.charCodeAt(i)
       if (this.inStr) {
-        if (this.esc) this.esc = false
-        else if (c === 92) this.esc = true // backslash
-        else if (c === 34) this.inStr = false // "
+        // Most of the text is inside strings: jump with native indexOf instead of visiting every character
+        if (this.esc) {
+          this.esc = false // this character is escaped
+          continue
+        }
+        const q = b.indexOf('"', i)
+        if (bs < i && bs !== -2) bs = b.indexOf('\\', i)
+        if (bs === -1) bs = -2 // none left in this text
+        if (bs >= 0 && (q < 0 || bs < q)) {
+          i = bs // the loop's i++ lands on the escaped character, which the branch above skips
+          this.esc = true
+          continue
+        }
+        if (q < 0) {
+          i = b.length // the string continues in the next chunk
+          break
+        }
+        i = q
+        this.inStr = false
         continue
       }
+      const c = b.charCodeAt(i)
       if (this.state === 'before') {
         if (c === 91 || c === 123) this.state = 'array' // [ or {
         else if (c > 32) return void (this.state = 'done') // not JSON we can list

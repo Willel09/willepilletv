@@ -11,18 +11,45 @@ export function decodeXml(s: string): string {
     .trim()
 }
 
-/** XMLTV time: "20240101120000 +0100" (offset optional, defaults to UTC). */
-export function parseXmltvTime(s: string): number {
-  const m = s.trim().match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})?\s*(?:([+-])(\d{2}):?(\d{2}))?/)
-  if (!m) return NaN
-  const utc = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +(m[6] ?? 0))
-  const off = m[7] ? (m[7] === '-' ? -1 : 1) * (+m[8] * 60 + +m[9]) : 0
-  return utc - off * 60_000
+/** XMLTV time: "20240101120000 +0100" (seconds and offset optional, UTC by default).
+    Read digit by digit: guides have hundreds of thousands of times and a regex each was a TV hotspot. */
+export function parseXmltvTime(raw: string): number {
+  const s = raw.trim()
+  const num = (i: number, n: number) => {
+    let v = 0
+    for (let k = i; k < i + n; k++) {
+      const c = s.charCodeAt(k) - 48
+      if (!(c >= 0 && c <= 9)) return NaN
+      v = v * 10 + c
+    }
+    return v
+  }
+  const Y = num(0, 4), Mo = num(4, 2), D = num(6, 2), h = num(8, 2), mi = num(10, 2)
+  if (Number.isNaN(Y + Mo + D + h + mi)) return NaN
+  const sec = num(12, 2)
+  let i = Number.isNaN(sec) ? 12 : 14
+  while (s[i] === ' ') i++
+  let off = 0
+  if (s[i] === '+' || s[i] === '-') {
+    const oh = num(i + 1, 2)
+    const om = num(s[i + 3] === ':' ? i + 4 : i + 3, 2)
+    if (!Number.isNaN(oh + om)) off = (s[i] === '-' ? -1 : 1) * (oh * 60 + om)
+  }
+  return Date.UTC(Y, Mo - 1, D, h, mi, Number.isNaN(sec) ? 0 : sec) - off * 60_000
 }
 
-const attr = (s: string, name: string) => s.match(new RegExp(`\\b${name}=["']([^"']*)["']`))?.[1] ?? ''
+// one compiled regex per attribute / tag name (compiling a new one per programme was a TV hotspot)
+const attrRe = new Map<string, RegExp>()
+const tagRe = new Map<string, RegExp>()
+const attr = (s: string, name: string) => {
+  let re = attrRe.get(name)
+  if (!re) attrRe.set(name, (re = new RegExp(`\\b${name}=["']([^"']*)["']`)))
+  return s.match(re)?.[1] ?? ''
+}
 const tag = (s: string, name: string) => {
-  const m = s.match(new RegExp(`<${name}\\b[^>]*>([\\s\\S]*?)</${name}>`))
+  let re = tagRe.get(name)
+  if (!re) tagRe.set(name, (re = new RegExp(`<${name}\\b[^>]*>([\\s\\S]*?)</${name}>`)))
+  const m = s.match(re)
   return m ? decodeXml(m[1]) : undefined
 }
 

@@ -31,4 +31,6 @@ export const hue = (s: string) => {
  * that fits instead; other hosts are left alone.
  */
 export const artUrl = (src: string | undefined, width: 342 | 780 | 1280) =>
-  src?.replace(/^(https?:\/\/image\.tmdb\.org\/t\/p\/)[^/]+\//, `$1w${width}/`)
+  src?.[0] === '~' // stored short by the Xtream loader
+    ? `https://image.tmdb.org/t/p/w${width}/${src.slice(1)}`
+    : src?.replace(/^(https?:\/\/image\.tmdb\.org\/t\/p\/)[^/]+\//, `$1w${width}/`)

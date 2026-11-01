@@ -197,6 +197,15 @@ input[type='range'] {
 [data-device='tv'] * {
   backdrop-filter: none !important;
 }
+/* no transitions or keyframe animations on TV, except the loading spinner */
+[data-device='tv'] *,
+[data-device='tv'] *::before,
+[data-device='tv'] *::after {
+  transition: none !important;
+}
+[data-device='tv'] *:not(.animate-spin) {
+  animation: none !important;
+}
 /* without blur, the guide's sticky time row and channel column must be opaque or programmes show through */
 [data-device='tv'] .sticky {
   background-color: rgb(var(--base-rgb)) !important;

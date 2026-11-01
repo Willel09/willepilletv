@@ -45,7 +45,8 @@ export function initSpatialNav() {
     }
     if (best) {
       best.focus({ preventScroll: true })
-      best.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' })
+      // TVs jump: smooth scrolling repaints the whole screen for every frame on a slow GPU
+      best.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: document.documentElement.dataset.device === 'tv' ? 'auto' : 'smooth' })
     }
   }
   window.addEventListener('keydown', onKey)

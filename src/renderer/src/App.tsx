@@ -92,7 +92,8 @@ export default function App() {
   }, [])
 
   return (
-    <MotionConfig reducedMotion="user" transition={spring}>
+    // TVs: no movement animations (framer then jumps straight to the end state), which keeps the remote snappy
+    <MotionConfig reducedMotion={api.device === 'tv' ? 'always' : 'user'} transition={api.device === 'tv' ? { duration: 0 } : spring}>
       <Ambient />
       {booted && (
         <div className="relative h-full">

@@ -8,7 +8,7 @@ import { Row } from '../components/Row'
 import { Button, IconButton, Spinner } from '../components/ui'
 import { artUrl, cleanName, duration } from '../lib/format'
 import { sheetSpring, softSpring, spring } from '../lib/motion'
-import { api, closeDetail, historyFor, inWatchlist, index, isFavorite, openDetail, playEpisode, playMovie, resumable, setAmbient, toast, toggleFavorite, toggleWatchlist, useApp } from '../store'
+import { api, closeDetail, historyFor, inWatchlist, index, isFavorite, openDetail, playEpisode, playMovie, resumable, urlOf, setAmbient, toast, toggleFavorite, toggleWatchlist, useApp } from '../store'
 
 function EpisodeCard({ show, ep, episodes, art }: { show: Show; ep: Episode; episodes: Episode[]; art?: string }) {
   const h = useApp((s) => s.history.find((x) => x.id === `${show.id}:${ep.id}`))
@@ -96,14 +96,14 @@ export default function Detail({ item }: { item: Movie | Show }) {
 
   const versions = item.kind === 'movie' ? item.versions : undefined
   // keep the merged id so resume/history work whichever copy you pick
-  const movie = item.kind === 'movie' && versions?.[ver] ? { ...item, url: versions[ver].url, sourceId: versions[ver].sourceId, vodId: versions[ver].vodId } : item
+  const movie = item.kind === 'movie' && versions?.[ver] ? { ...item, url: versions[ver].url, sourceId: versions[ver].sourceId, vodId: versions[ver].vodId, ext: versions[ver].ext } : item
   const playMain = () => {
     if (movie.kind === 'movie') return playMovie(movie)
     const ep = nextEp ?? episodes[0]
     if (ep && item.kind === 'series') playEpisode(item, ep, episodes)
   }
   const vlc = async () => {
-    const url = movie.kind === 'movie' ? movie.url : (nextEp ?? episodes[0])?.url
+    const url = movie.kind === 'movie' ? urlOf(movie) : (nextEp ?? episodes[0])?.url
     if (!url) return
     const r = await api.openInVlc(url, item.name)
     if (!r.ok) toast(r.error!)

@@ -22,12 +22,15 @@ export interface Channel {
   sourceId: string
   name: string
   group: string
-  url: string
+  /** M3U only. Xtream channels build it from `sid` when played (renderer: urlOf), which saves ~70 bytes × every item */
+  url?: string
   logo?: string
   epgId?: string
   num?: number
   /** Xtream live stream: the extension can be switched between .ts and .m3u8 */
   xt?: boolean
+  /** Xtream stream id */
+  sid?: number
 }
 
 export interface Movie {
@@ -36,7 +39,11 @@ export interface Movie {
   sourceId: string
   name: string
   group: string
-  url: string
+  /** M3U only; Xtream movies are built from vodId + ext when played */
+  url?: string
+  /** Xtream container extension (mkv, mp4…) */
+  ext?: string
+  /** artwork URL; "~file.jpg" is short for TMDB artwork (see artUrl) */
   poster?: string
   rating?: number
   year?: string
@@ -53,8 +60,9 @@ export interface Movie {
 export interface MovieVersion {
   id: string
   sourceId: string
-  url: string
+  url?: string
   vodId?: number
+  ext?: string
   /** e.g. "SE-4K", "EN · 1080P" or the category */
   label: string
 }
@@ -108,6 +116,9 @@ export interface Library {
   accounts: Record<string, Account>
   errors: string[]
   updatedAt: number
+  /** Set when hidden titles were already dropped and duplicates merged while loading (TVs, phones):
+      the filter settings it was built with, so the UI can skip redoing that work */
+  prepared?: string
 }
 
 export interface Programme {

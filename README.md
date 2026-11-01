@@ -191,5 +191,9 @@ apple-iptv/
   - the library is cached in **pieces** (a single IndexedDB value over ~128 MB is refused, which used to leave the TV stuck on *Loading your library…*);
   - TMDB artwork is requested at the size it's shown instead of the original (a 2000×3000 poster costs ~24 MB once decoded);
   - home rows only exist near the screen, cards have no 3D tilt layers, and there are no backdrop blurs on TV;
-  - the TV keeps a 12-hour guide (refreshed automatically) and shorter video buffers.
+  - the TV keeps a 12-hour guide (refreshed automatically) and shorter video buffers;
+  - titles are stored lean: Xtream stream addresses are built when you press Play, TMDB artwork is stored as its file name, and TVs leave series plots/backdrops to the detail page (~100 MB less for 600k titles);
+  - on TVs and phones, **Remove BS** and hidden categories apply while loading, so hidden titles never take memory (changing them reloads the library);
+  - duplicate merging, home rows and the guide are computed in small steps with breaks for the screen, so the remote never freezes for long (longest pause ~0.5 s at a TV-like CPU speed, down from 4–10 s);
+  - no animations on TV: no movement, fades, tilt or rotating hero, and scrolling jumps instead of gliding.
 - **Fresh start:** on Windows delete `%APPDATA%\Lumen`. On TV, uninstall and reinstall Lumen.

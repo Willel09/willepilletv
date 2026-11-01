@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import { mergeMovies } from '../../shared/core/dedupe'
-import { isArabicOrIndian } from '../../shared/core/filter'
+import { xtStreamUrl } from '../../shared/core/xtream'
+import { hiddenFilter } from '../../shared/core/filter'
+import { preparedFor } from '../../shared/core/library'
 import {
   MAIN_PROFILE,
   STORE_DEFAULTS,
@@ -170,11 +172,15 @@ export function updateSettings(patch: Partial<Settings>) {
   persist('settings', settings)
   applyAppearance(settings)
   if (patch.material) api.win.setMaterial(patch.material)
+  if ('removeBs' in patch || 'hiddenGroups' in patch) reloadIfFiltered()
   if (Object.keys(patch).some((k) => (sync.SYNCED_PREFS as readonly string[]).includes(k))) {
     persist('meta', { ...get().meta, at: { ...get().meta.at, prefs: Date.now() } })
     scheduleSync()
   }
 }
+
+/** TVs and phones drop hidden titles while loading (see buildLibrary), so a filter change needs a reload there */
+const reloadIfFiltered = () => api.device !== 'desktop' && get().sources.length > 0 && void refreshLibrary()
 
 export function applyAppearance(s: Settings) {
   const t = themeById(s.theme)
@@ -334,6 +340,7 @@ export function syncNow(): Promise<void> {
         const settings = { ...get().settings, ...merged.prefs }
         persist('settings', settings)
         applyAppearance(settings)
+        if (local.prefs.removeBs !== merged.prefs.removeBs || local.prefs.hiddenGroups !== merged.prefs.hiddenGroups) reloadIfFiltered()
       }
       // local playlist files go up before the source list, so other devices can load them right away
       const fileError = await shareFiles(code, merged.sources)
@@ -421,12 +428,20 @@ export const minimizePlayer = () => canMiniPlayer && set({ playerMini: true })
 export const expandPlayer = () => set({ playerMini: false })
 
 export function playChannel(channel: Channel, channels?: Channel[]) {
-  play({ kind: 'live', id: channel.id, url: channel.url, title: channel.name, poster: channel.logo, channel, channels })
+  play({ kind: 'live', id: channel.id, url: urlOf(channel), title: channel.name, poster: channel.logo, channel, channels })
+}
+
+/** Stream address. Xtream items don't store it (that's ~70 bytes × 600k titles): it's built from the source here. */
+export function urlOf(x: Channel | Movie): string {
+  if (x.url) return x.url
+  const src = get().sources.find((s) => s.id === x.sourceId)
+  if (!src || src.kind !== 'xtream') return ''
+  return x.kind === 'live' ? xtStreamUrl(src, 'live', x.sid ?? x.id.split(':l').pop()!, 'ts') : xtStreamUrl(src, 'movie', x.vodId ?? 0, x.ext ?? 'mp4')
 }
 
 export function playMovie(movie: Movie, fromStart = false) {
   const h = historyFor(movie.id)
-  play({ kind: 'movie', id: movie.id, url: movie.url, title: movie.name, poster: movie.poster, startAt: !fromStart && resumable(h) ? h!.position : undefined })
+  play({ kind: 'movie', id: movie.id, url: urlOf(movie), title: movie.name, poster: movie.poster, startAt: !fromStart && resumable(h) ? h!.position : undefined })
 }
 
 export function playEpisode(show: Show, episode: Episode, episodes: Episode[], fromStart = false) {
@@ -487,11 +502,13 @@ export function index(): LibraryIndex {
   const { library: lib, settings } = get()
   const hidden = `${settings.hiddenGroups}|${settings.removeBs}`
   if (cache && cache.lib === lib && cache.hidden === hidden) return cache.idx
-  const words = settings.hiddenGroups.split(',').map((w) => fold(w.trim())).filter(Boolean)
-  const keep = <T extends { group: string; name: string }>(xs: T[]) =>
-    words.length || settings.removeBs ? xs.filter((x) => !words.some((w) => fold(x.group).includes(w)) && !(settings.removeBs && isArabicOrIndian(x))) : xs
+  // a library prepared while loading (TVs, phones) is already filtered and merged for these settings
+  const ready = !!lib?.prepared && lib.prepared === preparedFor(settings)
+  const isHidden = ready ? null : hiddenFilter(settings)
+  const keep = <T extends { group: string; name: string }>(xs: T[]) => (isHidden ? xs.filter((x) => !isHidden(x)) : xs)
   const channels = keep(lib?.channels ?? [])
-  const movies = mergeMovies(keep(lib?.movies ?? []))
+  // prepared libraries are already merged; after a filter change they're only re-filtered until the reload lands
+  const movies = lib?.prepared ? keep(lib.movies) : mergeMovies(keep(lib?.movies ?? []))
   const series = keep(lib?.series ?? [])
   let keys: Map<string, string> | null = null
   const key = (x: { id: string; name: string }) => {
@@ -501,11 +518,14 @@ export function index(): LibraryIndex {
     }
     return keys.get(x.id) ?? fold(x.name)
   }
+  // built when a screen first needs them: Home doesn't, and each is a pass over up to 400k titles
+  let lg: Group<Channel>[] | undefined, mg: Group<Movie>[] | undefined, sg: Group<Show>[] | undefined, byId: Map<string, Channel> | undefined
   const idx: LibraryIndex = {
-    channels, movies, series,
-    liveGroups: groupBy(channels), movieGroups: groupBy(movies), seriesGroups: groupBy(series),
-    channelById: new Map(channels.map((c) => [c.id, c])),
-    key
+    channels, movies, series, key,
+    get liveGroups() { return (lg ??= groupBy(channels)) },
+    get movieGroups() { return (mg ??= groupBy(movies)) },
+    get seriesGroups() { return (sg ??= groupBy(series)) },
+    get channelById() { return (byId ??= new Map(channels.map((c) => [c.id, c]))) }
   }
   cache = { lib, hidden, idx }
   return idx

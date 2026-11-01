@@ -33,9 +33,29 @@ function label(m: Movie): string {
 const richness = (m: Movie) => (m.vodId ? 4 : 0) + (m.poster ? 2 : 0) + (m.rating ? 1 : 0) + (m.plot ? 1 : 0) + (m.year ? 1 : 0)
 
 export function mergeMovies(movies: Movie[]): Movie[] {
+  const steps = mergeSteps(movies)
+  let r = steps.next()
+  while (!r.done) r = steps.next()
+  return r.value
+}
+
+/** Same, with a break for the UI every 5,000 titles: merging 400k in one go freezes a TV for seconds */
+export async function mergeMoviesInSteps(movies: Movie[], pause = () => new Promise<void>((r) => setTimeout(r, 0))): Promise<Movie[]> {
+  const steps = mergeSteps(movies)
+  let r = steps.next()
+  while (!r.done) {
+    await pause()
+    r = steps.next()
+  }
+  return r.value
+}
+
+function* mergeSteps(movies: Movie[]): Generator<void, Movie[]> {
   const byKey = new Map<string, Movie[]>()
   const out: Movie[][] = []
-  for (const m of movies) {
+  for (let i = 0; i < movies.length; i++) {
+    if (i % 5000 === 4999) yield
+    const m = movies[i]
     const k = titleKey(m.name)
     const list = k ? byKey.get(k) : undefined
     if (list) list.push(m)
@@ -46,7 +66,9 @@ export function mergeMovies(movies: Movie[]): Movie[] {
     }
   }
   const result: Movie[] = []
-  for (const list of out) {
+  for (let i = 0; i < out.length; i++) {
+    if (i % 5000 === 4999) yield
+    const list = out[i]
     if (list.length === 1) {
       result.push(list[0])
       continue
@@ -74,9 +96,10 @@ function combine(copies: Movie[]): Movie {
   const seenUrl = new Set<string>()
   const versions: MovieVersion[] = []
   for (const c of ordered) {
-    if (seenUrl.has(c.url)) continue
-    seenUrl.add(c.url)
-    versions.push({ id: c.id, sourceId: c.sourceId, url: c.url, vodId: c.vodId, label: label(c) })
+    const stream = c.url ?? `${c.sourceId}:${c.vodId}` // Xtream movies have no stored URL
+    if (seenUrl.has(stream)) continue
+    seenUrl.add(stream)
+    versions.push({ id: c.id, sourceId: c.sourceId, url: c.url, vodId: c.vodId, ext: c.ext, label: label(c) })
   }
   return {
     ...primary,

@@ -26,3 +26,10 @@ test('object-form lists ({"1": {...}}) give their values; non-lists give nothing
   assert.deepEqual(run('"error"', 3), [])
   assert.deepEqual(run('[]', 1), [])
 })
+
+test('PHP-style escaped slashes and escapes split across chunks', () => {
+  const raw = '[{"stream_icon":"http:\\/\\/img.example\\/a.jpg","name":"Say \\"hi\\" \\\\ bye","n":1},{"name":"\\u00e9t\\u00e9","n":2}]'
+  const want = JSON.parse(raw)
+  for (const size of [1, 2, 3, 5, 8, 1000]) assert.deepEqual(run(raw, size), want, `chunk ${size}`)
+  assert.equal((want[0] as { stream_icon: string }).stream_icon, 'http://img.example/a.jpg')
+})

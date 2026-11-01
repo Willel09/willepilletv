@@ -6,7 +6,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Spinner } from '../components/ui'
 import { nowNext, useNow } from '../lib/epg'
-import { cleanName, clock, duration } from '../lib/format'
+import { artUrl, cleanName, clock, duration } from '../lib/format'
 import { sheetSpring, spring } from '../lib/motion'
 import type { CastDevice } from '../../../shared/types'
 import { api, canMiniPlayer, closePlayer, setCastTo, expandPlayer, index, isFavorite, minimizePlayer, playChannel, playEpisode, saveProgress, toast, toggleFavorite, useApp, type PlayRequest } from '../store'
@@ -154,7 +154,7 @@ function Session({ req, mini, fullscreen, sleepAt, setSleepAt }: SessionProps) {
     video.current?.pause()
     const at = video.current?.currentTime || req.startAt
     api.cast
-      .start(castTo.id, { url: req.channel?.xt ? req.url.replace(/\.(ts|m3u8)$/, '.ts') : url, hlsUrl: req.channel?.xt ? req.url.replace(/\.(ts|m3u8)$/, '.m3u8') : undefined, title: cleanName(req.title), poster: req.poster ?? req.channel?.logo, live, startAt: at })
+      .start(castTo.id, { url: req.channel?.xt ? req.url.replace(/\.(ts|m3u8)$/, '.ts') : url, hlsUrl: req.channel?.xt ? req.url.replace(/\.(ts|m3u8)$/, '.m3u8') : undefined, title: cleanName(req.title), poster: artUrl(req.poster ?? req.channel?.logo, 780), live, startAt: at })
       .then((r) => {
         if (r.ok) return toast(`Playing on ${castTo.name}`)
         toast(r.error!)

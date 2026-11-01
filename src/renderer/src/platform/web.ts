@@ -85,8 +85,14 @@ function shareStrings(lib: Library | null) {
   if (!lib) return lib
   const pool = new Map<string, string>()
   const one = (s: string) => pool.get(s) ?? (pool.set(s, s), s)
-  for (const list of [lib.channels, lib.movies, lib.series] as unknown as { kind: string; sourceId: string; group: string }[][])
-    for (const x of list) ((x.kind = one(x.kind)), (x.sourceId = one(x.sourceId)), (x.group = one(x.group)))
+  for (const list of [lib.channels, lib.movies, lib.series] as unknown as { kind: string; sourceId: string; group: string; ext?: string; year?: string }[][])
+    for (const x of list) {
+      x.kind = one(x.kind)
+      x.sourceId = one(x.sourceId)
+      x.group = one(x.group)
+      if (x.ext) x.ext = one(x.ext)
+      if (x.year) x.year = one(x.year)
+    }
   return lib
 }
 
@@ -153,7 +159,14 @@ const getStream: GetStream = async (url, onText, timeoutMs = 300_000) => {
     const stall = new Promise<never>((_, reject) => (timer = setTimeout(() => reject(new Error('The server stopped sending data.')), 60_000)))
     return Promise.race([reader.read(), stall]).finally(() => clearTimeout(timer))
   }
+  let busy = performance.now()
   for (;;) {
+    // when data is already buffered, read() resolves without giving the browser a chance to draw:
+    // hand back control every 40 ms so the remote stays responsive while a 100 MB list is parsed
+    if (performance.now() - busy > 40) {
+      await new Promise((r) => setTimeout(r, 0))
+      busy = performance.now()
+    }
     const { done, value } = await read().catch((e) => (reader.cancel().catch(() => {}), Promise.reject(e)))
     if (done) break
     if (gz === undefined) gz = value[0] === 0x1f && value[1] === 0x8b ? new Gunzip((d) => onText(dec.decode(d, { stream: true }))) : null
@@ -219,7 +232,8 @@ export function createWebApi(): IptvApi {
     setStore: async (k, v) => localStorage.setItem(`lumen:${k}`, JSON.stringify(v)),
     getLibrary: async () => (library ??= shareStrings(await getBig<Library>('library'))),
     refreshLibrary: async () => {
-      library = await buildLibrary(load('sources'), settings(), getText, progress, getStream)
+      // lean: TVs and phones keep only what lists need, and drop hidden titles while loading
+      library = await buildLibrary(load('sources'), settings(), getText, progress, { stream: getStream, lean: true })
       await putBig('library', library, ['channels', 'movies', 'series'])
       return library
     },

@@ -13,7 +13,7 @@ export function xtBase(server: string): string {
 const api = (src: Source) =>
   `${xtBase(src.server!)}/player_api.php?username=${encodeURIComponent(src.username!)}&password=${encodeURIComponent(src.password!)}`
 
-const path = (src: Source, kind: 'live' | 'movie' | 'series', id: string | number, ext: string) =>
+export const xtStreamUrl = (src: Source, kind: 'live' | 'movie' | 'series', id: string | number, ext: string) =>
   `${xtBase(src.server!)}/${kind}/${encodeURIComponent(src.username!)}/${encodeURIComponent(src.password!)}/${id}.${ext}`
 
 export const xtEpgUrl = (src: Source) =>
@@ -24,6 +24,20 @@ const num = (x: Json) => (x === null || x === undefined || x === '' || isNaN(+x)
 const str = (x: Json) => (typeof x === 'string' && x.trim() ? x.trim() : undefined)
 const year = (x: Json) => str(x)?.match(/\d{4}/)?.[0]
 
+/** TMDB artwork is stored as "~<file>" (the renderer's artUrl expands it at the size it needs): the
+    shared "https://image.tmdb.org/t/p/w600_and_h900_bestv2/" prefix is ~45 bytes × 500k titles */
+const TMDB = /^https?:\/\/image\.tmdb\.org\/t\/p\/[^/]+\/([^/?#]+)$/
+const art = (x: Json) => {
+  const s = str(x)
+  const m = s?.match(TMDB)
+  return m ? `~${m[1]}` : s
+}
+const exts = new Map<string, string>()
+const extOf = (x: Json) => {
+  const e = str(x) ?? 'mp4'
+  return exts.get(e) ?? (exts.set(e, e), e)
+}
+
 export interface XtreamResult {
   channels: Channel[]
   movies: Movie[]
@@ -31,7 +45,17 @@ export interface XtreamResult {
   account: Account
 }
 
-export async function loadXtream(src: Source, get: GetText, progress: (m: string) => void, stream?: GetStream): Promise<XtreamResult> {
+/**
+ * `stream`: parse the big lists while they download. `lean` (TVs): leave out what only the detail page
+ * shows (series plot and backdrop, which it fetches anyway). `skip`: titles hidden by the library filters
+ * are dropped as they arrive instead of being kept in memory.
+ */
+export async function loadXtream(
+  src: Source,
+  get: GetText,
+  progress: (m: string) => void,
+  { stream, lean, skip }: { stream?: GetStream; lean?: boolean; skip?: ((x: { name: string; group: string }) => boolean) | null } = {}
+): Promise<XtreamResult> {
   if (!src.server || !src.username || !src.password) throw new Error('Server, username and password are required.')
   const base = api(src)
   progress(`${src.name}: signing in…`)
@@ -55,9 +79,12 @@ export async function loadXtream(src: Source, get: GetText, progress: (m: string
   // The big lists one after another, each turned into compact items as it arrives: providers' raw JSON can be
   // 50-100 MB per list (400k movies), and holding that plus the parsed raw objects runs a TV out of memory
   const list = async <T,>(action: string, map: (s: Json) => T): Promise<T[]> => {
-    if (!stream) return arr(await act(action)).map(map)
+    if (!stream) return arr(await act(action)).map(map).filter((x) => !skip?.(x as never))
     const out: T[] = []
-    const parser = new JsonArrayStream((s) => out.push(map(s as Json)))
+    const parser = new JsonArrayStream((s) => {
+      const x = map(s as Json)
+      if (!skip?.(x as never)) out.push(x)
+    })
     try {
       await stream(`${base}&action=${action}`, (chunk) => parser.push(chunk), 300_000)
       return out
@@ -68,20 +95,19 @@ export async function loadXtream(src: Source, get: GetText, progress: (m: string
   const channels: Channel[] = await list('get_live_streams', (s) => ({
     kind: 'live', id: `${src.id}:l${s.stream_id}`, sourceId: src.id,
     name: str(s.name) ?? 'Channel', group: lcm.get(String(s.category_id)) ?? 'Uncategorized',
-    url: path(src, 'live', s.stream_id, 'ts'), logo: str(s.stream_icon), epgId: str(s.epg_channel_id),
-    num: num(s.num), xt: true
+    logo: str(s.stream_icon), epgId: str(s.epg_channel_id), num: num(s.num), xt: true, sid: +s.stream_id
   }))
   const movies: Movie[] = await list('get_vod_streams', (s) => ({
     kind: 'movie', id: `${src.id}:m${s.stream_id}`, sourceId: src.id,
     name: str(s.name) ?? 'Movie', group: vcm.get(String(s.category_id)) ?? 'Uncategorized',
-    url: path(src, 'movie', s.stream_id, str(s.container_extension) ?? 'mp4'), poster: str(s.stream_icon),
+    ext: extOf(s.container_extension), poster: art(s.stream_icon),
     rating: num(s.rating) || undefined, added: num(s.added), vodId: +s.stream_id, year: year(s.year ?? s.releasedate)
   }))
   const series: Show[] = await list('get_series', (s) => ({
     kind: 'series', id: `${src.id}:s${s.series_id}`, sourceId: src.id,
     name: str(s.name) ?? 'Series', group: scm.get(String(s.category_id)) ?? 'Uncategorized',
-    poster: str(s.cover), backdrop: str(arr(s.backdrop_path)[0]), rating: num(s.rating) || undefined,
-    year: year(s.releaseDate ?? s.release_date), plot: str(s.plot)?.slice(0, 240), added: num(s.last_modified), seriesId: +s.series_id
+    poster: art(s.cover), backdrop: lean ? undefined : art(arr(s.backdrop_path)[0]), rating: num(s.rating) || undefined,
+    year: year(s.releaseDate ?? s.release_date), plot: lean ? undefined : str(s.plot)?.slice(0, 240), added: num(s.last_modified), seriesId: +s.series_id
   }))
   return { channels, movies, series, account }
 }
@@ -105,7 +131,7 @@ export async function xtreamInfo(src: Source, kind: 'movie' | 'series', id: numb
       episodes.push({
         id: String(e.id), title: str(e.title) ?? `Episode ${e.episode_num}`,
         season: num(e.season) ?? +season, episode: num(e.episode_num) ?? 0,
-        url: path(src, 'series', e.id, str(e.container_extension) ?? 'mp4'),
+        url: xtStreamUrl(src, 'series', e.id, str(e.container_extension) ?? 'mp4'),
         plot: str(e.info?.plot), still: str(e.info?.movie_image), duration: str(e.info?.duration)
       })
     }

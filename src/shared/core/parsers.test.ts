@@ -85,3 +85,12 @@ test('XMLTV parsed in chunks (split mid-tag) equals parsing the whole file', () 
   assert.equal(whole.programmes.get('a')?.length, 3)
   assert.deepEqual(whole.names.get('a'), ['A & B'])
 })
+
+test('parseXmltvTime: offsets with and without colon, optional seconds, junk', () => {
+  assert.equal(parseXmltvTime('20240101120000 -0530'), 1704130200000)
+  assert.equal(parseXmltvTime('20240101120000+01:00'), 1704106800000)
+  assert.equal(parseXmltvTime('202401011200 +0200'), 1704103200000)
+  assert.equal(parseXmltvTime(' 20240615235959   +0000 '), 1718495999000)
+  assert.equal(parseXmltvTime('20240101120000 +01'), 1704110400000) // incomplete offset is ignored
+  assert.ok(Number.isNaN(parseXmltvTime('2024010112')))
+})

@@ -1,13 +1,13 @@
 import { motion } from 'framer-motion'
 import { FileText, Link2, MonitorSmartphone, Tv } from 'lucide-react'
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ChannelTile, PosterCard, WideCard } from '../components/Cards'
 import { Hero } from '../components/Hero'
 import { Row } from '../components/Row'
 import { Button, Spinner } from '../components/ui'
 import { nowNext } from '../lib/epg'
 import { cleanName } from '../lib/format'
-import { forYou, newest, topRated } from '../lib/recommend'
+import { forYouScore, newestScore, topMany, topRatedScore } from '../lib/recommend'
 import { softSpring } from '../lib/motion'
 import { openDetail, openSourceSheet, playChannel, playMovie, resume, resumable, setGroup, setTab, toggleWatchlist, useApp, useIndex } from '../store'
 import type { Channel, Item, Movie, Show } from '../../../shared/types'
@@ -50,53 +50,66 @@ export default function Home() {
   const history = useApp((s) => s.history)
   const epg = useApp((s) => s.epg)
 
-  const featured = useMemo(() => {
-    const pool = [...idx.movies, ...idx.series].filter((x) => x.poster)
-    const rated = pool.filter((x) => (x.rating ?? 0) >= 6.5)
-    const src = rated.length >= 6 ? rated : pool
-    // newest first gives a "what's new" feel; fall back to a random sample
-    const sorted = [...src].sort((a, b) => (b.added ?? 0) - (a.added ?? 0)).slice(0, 40)
-    return sorted.sort(() => Math.random() - 0.5).slice(0, 6)
-  }, [idx])
-
-  // curated rows instead of one row per category
-  const picks = useMemo(() => {
-    const byId = new Map<string, Movie | Show>()
-    for (const m of idx.movies) {
-      byId.set(m.id, m)
-      for (const v of m.versions ?? []) byId.set(v.id, m)
-    }
-    for (const s of idx.series) byId.set(s.id, s)
-    const watched = history
-      .filter((h) => h.kind !== 'live')
-      .map((h) => byId.get(h.kind === 'episode' && h.parentId ? h.parentId : h.id))
-      .filter((x): x is Movie | Show => !!x)
-    const saved = [...watchlist, ...favorites].filter((x): x is Movie | Show => x.kind === 'movie' || x.kind === 'series')
-    const gs = (x: Movie | Show) => (x.kind === 'movie' && x.groups) || [x.group]
-    const last = watched[0]
-    const similar = last
-      ? newest([...(last.kind === 'movie' ? idx.movies : idx.series)].filter((x) => x.id !== last.id && gs(x).some((g) => gs(last).includes(g))), 30)
-      : []
-    return {
-      forYou: forYou([...watched, ...saved], [...idx.movies, ...idx.series]),
-      newMovies: newest(idx.movies),
-      newSeries: newest(idx.series),
-      topRated: topRated([...idx.movies, ...idx.series]),
-      last,
-      similar
-    }
+  // Curated rows (not one row per category), all computed in one pass over the library with breaks for the
+  // screen in between: on a TV with 500k titles, separate passes froze the remote for seconds
+  type Title = Movie | Show
+  const [rows, setRows] = useState<{ featured: Title[]; forYou: Title[]; newMovies: Title[]; newSeries: Title[]; topRated: Title[]; last?: Title; similar: Title[] } | null>(null)
+  const hero = useRef<{ idx: unknown; items: Title[] } | null>(null)
+  useEffect(() => {
+    let live = true
+    void (async () => {
+      // look up only the (at most 300) titles in the history, not a table of the whole library
+      const wanted = history.filter((h) => h.kind !== 'live').map((h) => (h.kind === 'episode' && h.parentId ? h.parentId : h.id))
+      const want = new Set(wanted)
+      const found = new Map<string, Title>()
+      let seen = 0
+      if (want.size)
+        for (const list of [idx.movies, idx.series] as Title[][])
+          for (const x of list) {
+            if (want.has(x.id)) found.set(x.id, x)
+            if (x.kind === 'movie' && x.versions) for (const v of x.versions) if (want.has(v.id)) found.set(v.id, x)
+            if (++seen % 20_000 === 0) await new Promise((r) => setTimeout(r, 0)) // a break for the screen
+          }
+      const watched = wanted.map((id) => found.get(id)).filter((x): x is Title => !!x)
+      const saved = [...watchlist, ...favorites].filter((x): x is Title => x.kind === 'movie' || x.kind === 'series')
+      const gs = (x: Title) => (x.kind === 'movie' && x.groups) || [x.group]
+      const last = watched[0]
+      const lastGroups = last ? gs(last) : []
+      const none = () => null
+      const [featRated, featAny, forYou, newMovies, newSeries, topRated, similar] = await topMany<Title>(
+        [idx.movies, idx.series],
+        [
+          { n: 40, score: (x) => (x.poster && (x.rating ?? 0) >= 6.5 ? x.added ?? 0 : null) },
+          { n: 40, score: (x) => (x.poster ? x.added ?? 0 : null) },
+          { n: 30, score: forYouScore([...watched, ...saved], [idx.movies, idx.series]) ?? none },
+          { n: 30, score: newestScore((x) => x.kind === 'movie') },
+          { n: 30, score: newestScore((x) => x.kind === 'series') },
+          { n: 30, score: topRatedScore },
+          { n: 30, score: last ? newestScore((x) => x.kind === last.kind && x.id !== last.id && gs(x).some((g) => lastGroups.includes(g))) : none }
+        ]
+      )
+      if (!live) return
+      // the hero only reshuffles when the library changes, not every time the history does
+      if (hero.current?.idx !== idx) hero.current = { idx, items: (featRated.length >= 6 ? featRated : featAny).sort(() => Math.random() - 0.5).slice(0, 6) }
+      setRows({ featured: hero.current.items, forYou, newMovies, newSeries, topRated, last, similar })
+    })()
+    return () => void (live = false)
   }, [idx, history, watchlist, favorites])
+  const featured = rows?.featured ?? []
 
   // channels on air right now (favorites first), so live TV has a place on Home
   const liveNow = useMemo(() => {
     const out: Channel[] = []
     const seen = new Set<string>()
-    for (const c of [...favorites.filter((f): f is Channel => f.kind === 'live'), ...idx.channels]) {
-      if (out.length >= 30) break
-      if (seen.has(c.id) || !nowNext(epg?.programmes[c.id]).now) continue
-      seen.add(c.id)
-      out.push(c)
-    }
+    if (!epg) return out
+    // favorites, then the first channels: scanning 110k channels for "on now" is wasted work on a TV
+    for (const list of [favorites.filter((f): f is Channel => f.kind === 'live'), idx.channels.slice(0, 3000)])
+      for (const c of list) {
+        if (out.length >= 30) break
+        if (seen.has(c.id) || !nowNext(epg?.programmes[c.id]).now) continue
+        seen.add(c.id)
+        out.push(c)
+      }
     return out
   }, [idx, favorites, epg])
 
@@ -139,13 +152,13 @@ export default function Home() {
             ))}
           </Row>
         )}
-        {picks.forYou.length > 0 && <Row title="For You">{picks.forYou.map(titleCard)}</Row>}
+        {rows && rows.forYou.length > 0 && <Row title="For You">{rows.forYou.map(titleCard)}</Row>}
         {watchlist.length > 0 && <Row title="My Watchlist" count={watchlist.length}>{watchlist.slice(0, 40).map((it) => <PosterCard key={it.id} name={it.name} poster={it.poster} rating={it.rating} onClick={() => openDetail(it)} onRemove={() => toggleWatchlist(it)} />)}</Row>}
-        {picks.newMovies.length > 0 && <Row title="Newest Movies" onSeeAll={seeAll('movies', RECENT)}>{picks.newMovies.map(titleCard)}</Row>}
-        {picks.newSeries.length > 0 && <Row title="Newest Series" onSeeAll={seeAll('series', RECENT)}>{picks.newSeries.map(titleCard)}</Row>}
-        {picks.last && picks.similar.length > 0 && <Row title={`Because you watched ${cleanName(picks.last.name)}`}>{picks.similar.map(titleCard)}</Row>}
+        {rows && rows.newMovies.length > 0 && <Row title="Newest Movies" onSeeAll={seeAll('movies', RECENT)}>{rows.newMovies.map(titleCard)}</Row>}
+        {rows && rows.newSeries.length > 0 && <Row title="Newest Series" onSeeAll={seeAll('series', RECENT)}>{rows.newSeries.map(titleCard)}</Row>}
+        {rows?.last && rows.similar.length > 0 && <Row title={`Because you watched ${cleanName(rows.last.name)}`}>{rows.similar.map(titleCard)}</Row>}
         {liveNow.length > 0 && <Row title="Live Now" onSeeAll={() => setTab('live')}>{liveNow.map(poster)}</Row>}
-        {picks.topRated.length > 0 && <Row title="Top Rated">{picks.topRated.map(titleCard)}</Row>}
+        {rows && rows.topRated.length > 0 && <Row title="Top Rated">{rows.topRated.map(titleCard)}</Row>}
         {favorites.length > 0 && <Row title="Favorites">{favorites.slice(0, 40).map(poster)}</Row>}
         {recentLive.length > 0 && (
           <Row title="Recently Watched Channels">

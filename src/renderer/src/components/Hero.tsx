@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import type { Movie, Show } from '../../../shared/types'
 import { artUrl, cleanName } from '../lib/format'
 import { softSpring } from '../lib/motion'
-import { inWatchlist, openDetail, playMovie, setAmbient, toggleWatchlist, useApp } from '../store'
+import { api, inWatchlist, openDetail, playMovie, setAmbient, toggleWatchlist, useApp } from '../store'
 import { Button, IconButton } from './ui'
 
 /** Full-bleed featured banner that auto-rotates, with a cinematic gradient fade into the rows below */
@@ -19,7 +19,8 @@ export function Hero({ items }: { items: (Movie | Show)[] }) {
   const item = items[i % items.length]
 
   useEffect(() => {
-    if (paused || items.length < 2) return
+    // TVs keep one featured title: rotating loads and decodes a new full-screen image every 9 s
+    if (paused || items.length < 2 || api.device === 'tv') return
     const id = setTimeout(() => setI((n) => (n + 1) % items.length), 9000)
     return () => clearTimeout(id)
   }, [i, paused, items.length])
