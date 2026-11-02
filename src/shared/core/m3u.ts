@@ -52,6 +52,7 @@ export function parseM3u(text: string, sourceId: string): M3uResult {
   const groupOf = (g: string) => groups.get(g) ?? (groups.set(g, own(g)), groups.get(g)!)
   const lines = text.replace(/^﻿/, '').split(/\r?\n/)
   const res: M3uResult = { channels: [], movies: [], series: [] }
+  const seen = new Set<string>()
   const shows = new Map<string, Show>()
   let info: Record<string, string> | null = null
   let name = ''
@@ -83,7 +84,11 @@ export function parseM3u(text: string, sourceId: string): M3uResult {
     const title = own(name || a['tvg-name'] || url.split('/').pop() || 'Untitled')
     const group = groupOf(a['group-title'] || extGroup || 'Uncategorized')
     const logo = a['tvg-logo'] ? own(a['tvg-logo']) : undefined
-    const id = `${sourceId}:${hash(`${group}|${title}|${url}`)}`
+    // ids leave the URL out: providers put the login or a token in it, and a new one must not lose favorites
+    // and history. Only two entries with the same group and title fall back to including it.
+    const base = `${group}|${title}`
+    const id = `${sourceId}:${hash(seen.has(base) ? `${base}|${url}` : base)}`
+    seen.add(base)
     const ep = /\/series\//i.test(url) ? title.match(EPISODE) : null
 
     if (ep) {
@@ -95,7 +100,8 @@ export function parseM3u(text: string, sourceId: string): M3uResult {
         shows.set(key, show)
         res.series.push(show)
       }
-      const e: Episode = { id: hash(url), title, season: +ep[2], episode: +ep[3], url, still: logo }
+      const se = `${+ep[2]}x${+ep[3]}`
+      const e: Episode = { id: show.episodes!.some((x) => x.id === se) ? hash(url) : se, title, season: +ep[2], episode: +ep[3], url, still: logo }
       show.episodes!.push(e)
     } else if (/\/(movie|movies|vod)\//i.test(url) || VOD_EXT.test(url)) {
       res.movies.push({ kind: 'movie', id, sourceId, name: title, group, url, poster: logo })

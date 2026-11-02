@@ -4,7 +4,8 @@
 import { app, net, shell } from 'electron'
 import { spawn } from 'child_process'
 import dgram from 'dgram'
-import { createWriteStream, existsSync, mkdirSync, renameSync, statSync } from 'fs'
+import { createHash } from 'crypto'
+import { createWriteStream, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync } from 'fs'
 import { Socket } from 'net'
 import { networkInterfaces } from 'os'
 import { join } from 'path'
@@ -13,7 +14,10 @@ import type { SamsungTv } from '../shared/types'
 // The official SmartTV Installer v1.1.0 Windows build crashes on start (missing 'tar' module), so our
 // release workflow ships a rebuilt copy (see .github/workflows/release.yml, job tv-installer).
 const RELEASES = 'https://github.com/Willel09/willepilletv/releases/latest'
-const INSTALLER_URL = `${RELEASES}/download/SmartTV-Installer-for-Lumen.exe`
+// the copy released together with this version of Lumen, whose SHA-256 the release build wrote into the app
+const INSTALLER_URL = () => `https://github.com/Willel09/willepilletv/releases/download/v${app.getVersion()}/SmartTV-Installer-for-Lumen.exe`
+declare const __TV_INSTALLER_SHA256__: string
+const sha256 = (file: string) => createHash('sha256').update(readFileSync(file)).digest('hex')
 const IPV4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/
 
 /** The TV's Developer Mode screen asks for this PC's IP address */
@@ -90,24 +94,39 @@ export async function openTvInstaller(progress: (m: string) => void): Promise<{ 
     mkdirSync(dir, { recursive: true })
     // one copy per Lumen version, so an update also refreshes the installer
     const file = join(dir, `SmartTV-Installer-for-Lumen-${app.getVersion()}.exe`)
+    // never run a program we can't vouch for: builds without the release's hash (local builds) don't download it
+    if (!__TV_INSTALLER_SHA256__) throw new Error('This build of Lumen has no checksum for the TV installer')
     if (!existsSync(file) || statSync(file).size < 1_000_000) {
       progress('Downloading TV installer…')
-      const res = await net.fetch(INSTALLER_URL)
+      const res = await net.fetch(INSTALLER_URL())
       if (!res.ok || !res.body) throw new Error(`Download failed (${res.status})`)
       const total = Number(res.headers.get('content-length')) || 0
       const tmp = `${file}.part`
       const out = createWriteStream(tmp)
-      const reader = res.body.getReader()
-      let got = 0
-      for (;;) {
-        const { done, value } = await reader.read()
-        if (done) break
-        got += value.length
-        if (!out.write(value)) await new Promise((r) => out.once('drain', r))
-        if (total) progress(`Downloading TV installer… ${Math.round((got / total) * 100)}%`)
+      let failed: Error | undefined
+      out.on('error', (e) => (failed = e))
+      try {
+        const reader = res.body.getReader()
+        let got = 0
+        for (;;) {
+          const { done, value } = await reader.read()
+          if (done) break
+          got += value.length
+          if (!out.write(value)) await new Promise((r, j) => (out.once('drain', r), out.once('error', j)))
+          if (failed) throw failed
+          if (total) progress(`Downloading TV installer… ${Math.round((got / total) * 100)}%`)
+        }
+        await new Promise((r, j) => (out.once('error', j), out.end(r)))
+      } catch (e) {
+        out.destroy()
+        rmSync(tmp, { force: true })
+        throw new Error(`Couldn't save the TV installer: ${(e as Error).message}`)
       }
-      await new Promise((r) => out.end(r))
       renameSync(tmp, file)
+    }
+    if (sha256(file) !== __TV_INSTALLER_SHA256__) {
+      rmSync(file, { force: true })
+      throw new Error("The downloaded TV installer doesn't match this release's checksum, so it wasn't opened")
     }
     progress('')
     spawn(file, [], { detached: true, stdio: 'ignore' }).unref()

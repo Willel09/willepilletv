@@ -33,3 +33,11 @@ test('PHP-style escaped slashes and escapes split across chunks', () => {
   for (const size of [1, 2, 3, 5, 8, 1000]) assert.deepEqual(run(raw, size), want, `chunk ${size}`)
   assert.equal((want[0] as { stream_icon: string }).stream_icon, 'http://img.example/a.jpg')
 })
+
+test('maskUrl hides login details', async () => {
+  const { maskUrl } = await import('./net.ts')
+  assert.equal(maskUrl('http://x.tv:8080/get.php?username=bob&password=s3cret&type=m3u_plus'), 'http://x.tv:8080/get.php?username=•••&password=•••&type=m3u_plus')
+  assert.equal(maskUrl('http://x.tv/live/bob/s3cret/12.ts'), 'http://x.tv/live/•••/•••/12.ts')
+  assert.equal(maskUrl('http://bob:s3cret@x.tv/list.m3u'), 'http://•••@x.tv/list.m3u')
+  assert.equal(maskUrl('C:\\\\lists\\\\mine.m3u'), 'C:\\\\lists\\\\mine.m3u')
+})

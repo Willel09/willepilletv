@@ -118,19 +118,27 @@ async function syncedFile(path: string): Promise<string> {
   return text
 }
 
+/** Aborted by Cancel during a library refresh */
+let stop = new AbortController()
+const CANCELLED = 'Refresh cancelled'
+
 async function open(url: string, timeoutMs: number): Promise<Response> {
   const ctl = new AbortController()
   const timer = setTimeout(() => ctl.abort(), timeoutMs)
+  const cancel = () => ctl.abort()
+  stop.signal.addEventListener('abort', cancel)
   let res: Response
   try {
     res = await fetch(url, { signal: ctl.signal })
   } catch {
+    if (stop.signal.aborted) throw new Error(CANCELLED)
     if (ctl.signal.aborted) throw new Error('The server took too long to respond.')
     if (location.protocol === 'https:' && url.startsWith('http:'))
       throw new Error('Browsers block http:// providers on secure pages. Use the Windows or TV app to play this source.')
     throw new Error(isTizen() ? "Couldn't reach the server. Check the address and your TV's internet connection." : "Couldn't reach the server. It may be offline, or it blocks browser apps (CORS).")
   } finally {
     clearTimeout(timer)
+    stop.signal.removeEventListener('abort', cancel)
   }
   if (!res.ok) throw new Error(HTTP_HINT(res.status, res.statusText))
   return res
@@ -168,6 +176,7 @@ const getStream: GetStream = async (url, onText, timeoutMs = 300_000) => {
       await new Promise((r) => setTimeout(r, 0))
       busy = performance.now()
     }
+    if (stop.signal.aborted) throw (reader.cancel().catch(() => {}), new Error(CANCELLED))
     const { done, value } = await read().catch((e) => (reader.cancel().catch(() => {}), Promise.reject(e)))
     if (done) break
     if (gz === undefined) gz = value[0] === 0x1f && value[1] === 0x8b ? new Gunzip((d) => onText(dec.decode(d, { stream: true }))) : null
@@ -251,9 +260,11 @@ export function createWebApi(): IptvApi {
     },
     setStore: async (k, v) => localStorage.setItem(`lumen:${k}`, JSON.stringify(v)),
     getLibrary: async () => (library ??= shareStrings(await getBig<Library>('library'))),
+    cancelRefresh: () => stop.abort(),
     refreshLibrary: async () => {
+      stop = new AbortController()
       // lean: TVs and phones keep only what lists need, and drop hidden titles while loading
-      library = await buildLibrary(load('sources'), settings(), getText, progress, { stream: getStream, lean: true })
+      library = await buildLibrary(load('sources'), settings(), getText, progress, { stream: getStream, lean: true, previous: library })
       await putBig('library', library, ['channels', 'movies', 'series'])
       return library
     },

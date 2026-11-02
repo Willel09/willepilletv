@@ -1,4 +1,5 @@
 import type { Epg, Library, Settings, Source } from '../types'
+import { keepOld } from './keep'
 import { matchEpg, parseXmltv, XmltvParser, type XmltvData } from './epg'
 import { parseM3u } from './m3u'
 import { mergeMoviesInSteps } from './dedupe'
@@ -23,7 +24,7 @@ const add = (lib: Library, r: Pick<Library, 'channels' | 'movies' | 'series'>) =
  * Sources load one after another (several 100 MB providers at once would not fit on a TV).
  * `lean` (TVs): titles hidden by the library filters are dropped while loading, see loadXtream.
  */
-export async function buildLibrary(sources: Source[], s: Settings, get: GetText, progress: (m: string) => void, opts: { stream?: GetStream; lean?: boolean } = {}): Promise<Library> {
+export async function buildLibrary(sources: Source[], s: Settings, get: GetText, progress: (m: string) => void, opts: { stream?: GetStream; lean?: boolean; previous?: Library | null } = {}): Promise<Library> {
   const lib = emptyLibrary()
   const skip = opts.lean ? hiddenFilter(s) : null
   for (const src of sources) {
@@ -46,20 +47,31 @@ export async function buildLibrary(sources: Source[], s: Settings, get: GetText,
       }
     } catch (e) {
       lib.errors.push(`${src.name}: ${(e as Error).message}`)
+      // a provider that's down for a moment must not empty the library: keep what this source had last time
+      if (opts.previous) {
+        keepOld(opts.previous, src.id, lib)
+        if (src.kind === 'xtream') {
+          if (src.epgUrl) lib.epgUrls.push(src.epgUrl)
+          else lib.providerEpgUrls.push(xtEpgUrl(src))
+        }
+      }
     }
   }
   // done here, in steps, so the UI never has to do it in one blocking go (and restarts load it ready-made)
-  progress('Preparing your library…')
-  await mergeLibrary(lib)
+  await mergeLibrary(lib, progress)
   if (opts.lean) lib.prepared = preparedFor(s)
   progress('')
   return lib
 }
 
 /** Merges duplicate movies and series in place; Windows also uses it to upgrade a library cached unmerged */
-export async function mergeLibrary(lib: Library) {
-  lib.movies = await mergeMoviesInSteps(lib.movies)
-  lib.series = await mergeMoviesInSteps(lib.series)
+export async function mergeLibrary(lib: Library, progress?: (m: string) => void) {
+  // shown while it runs: 400k titles take a while, and a bare "Loading…" looks stuck
+  const movies = lib.movies.length, all = movies + lib.series.length || 1
+  const say = (done: number) => progress?.(`Merging duplicates… ${Math.round((done / all) * 100)}%`)
+  lib.movies = await mergeMoviesInSteps(lib.movies, undefined, (f) => say(f * movies))
+  lib.series = await mergeMoviesInSteps(lib.series, undefined, (f) => say(movies + f * (all - movies)))
+  progress?.('')
   lib.merged = PREPARED
 }
 export const isMerged = (lib: Library) => lib.merged === PREPARED || !!lib.prepared?.startsWith(PREPARED)

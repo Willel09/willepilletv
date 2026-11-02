@@ -2,7 +2,7 @@
 // it from a provider's lists or a guide blocks for seconds; on the main thread Windows then shows
 // "Lumen is not responding". The library stays here; the main process only passes messages through.
 import { parentPort, workerData } from 'node:worker_threads'
-import { readFile, writeFile } from 'node:fs/promises'
+import { readFile, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { Library, Settings, Source } from '../shared/types'
 import { buildEpg, buildLibrary, emptyLibrary, isMerged, mergeLibrary } from '../shared/core/library'
@@ -11,12 +11,18 @@ import { gunzipSync } from 'node:zlib'
 const dir: string = workerData.dir
 const file = (name: string) => join(dir, `${name}.json`)
 const read = (name: string) => readFile(file(name), 'utf8').catch(() => null)
-const write = (name: string, text: string) => writeFile(file(name), text).catch(() => {})
+// via a temporary file: a crash halfway through a 150 MB write must not leave a corrupt cache behind
+const write = (name: string, text: string) =>
+  writeFile(`${file(name)}.tmp`, text)
+    .then(() => rename(`${file(name)}.tmp`, file(name)))
+    .catch(() => {})
 
 /** Parts of the library go out in pieces of this many items (see library:part) */
 const PART = 20_000
 let library: Library | null = null
-let outgoing: Library | null = null
+/** the library being handed to the window, and which hand-over it is (pieces of an older one are refused) */
+let outgoing: { lib: Library; gen: number } | null = null
+let gens = 0
 let loading: Promise<Library | null> | null = null
 // one read at a time: boot asks for the library and the guide refresh needs it too
 const loaded = () => (library ? Promise.resolve(library) : (loading ??= load().finally(() => (loading = null))))
@@ -28,13 +34,15 @@ const load = async () => {
     library = null
   }
   // libraries cached unmerged (before 1.3.9) are merged once
-  if (library && !isMerged(library)) await mergeLibrary(library), await write('library', JSON.stringify(library))
+  if (library && !isMerged(library)) await mergeLibrary(library, progress), await write('library', JSON.stringify(library))
   return library
 }
-// shortcut: pieces come from the library last handed over; a refresh finishing mid-transfer would mix them (the window loads one at a time)
 const handOver = (lib: Library | null): Library | null => {
-  outgoing = lib
-  return lib && { ...lib, channels: [], movies: [], series: [], parts: { channels: lib.channels.length, movies: lib.movies.length, series: lib.series.length } }
+  if (!lib) return null
+  // the same library asked for again keeps its number, so two transfers of it don't invalidate each other
+  if (outgoing?.lib !== lib) outgoing = { lib, gen: ++gens }
+  const { gen } = outgoing
+  return { ...lib, channels: [], movies: [], series: [], parts: { channels: lib.channels.length, movies: lib.movies.length, series: lib.series.length, gen } }
 }
 const progress = (m: string) => parentPort!.postMessage({ progress: m })
 // downloads are done by the main process (Chromium's network stack); text is decoded here
@@ -50,12 +58,16 @@ const get = (url: string, timeoutMs?: number) =>
 const ops: Record<string, (...args: never[]) => Promise<unknown>> = {
   get: async () => handOver(await loaded()),
   refresh: async (sources: Source[], s: Settings) => {
-    library = await buildLibrary(sources, s, get, progress)
+    library = await buildLibrary(sources, s, get, progress, { previous: await loaded() })
     await write('library', JSON.stringify(library))
     return handOver(library)
   },
   // JSON text: copying a string to the main process and on to the window costs next to nothing there
-  part: async (list: 'channels' | 'movies' | 'series', from: number) => JSON.stringify(outgoing?.[list].slice(from, from + PART) ?? []),
+  part: async (list: 'channels' | 'movies' | 'series', from: number, want: number) => {
+    // a refresh finished while the window was still fetching the previous library: start over, don't mix them
+    if (outgoing?.gen !== want) throw new Error('STALE')
+    return JSON.stringify(outgoing.lib[list].slice(from, from + PART))
+  },
   epgGet: () => read('epg'),
   epgRefresh: async (s: Settings) => {
     const text = JSON.stringify(await buildEpg((await loaded()) ?? emptyLibrary(), s, get, progress))

@@ -130,7 +130,10 @@ function Session({ req, mini, fullscreen, sleepAt, setSleepAt }: SessionProps) {
   const [time, setTime] = useState(0)
   const [dur, setDur] = useState(0)
   const [buffered, setBuffered] = useState(0)
-  const [volume, setVolume] = useState(() => +(localStorage.getItem('volume') ?? 1))
+  const [volume, setVolume] = useState(() => {
+    const v = Number(localStorage.getItem('volume') ?? 1)
+    return Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 1
+  })
   const [muted, setMuted] = useState(false)
   const [res, setRes] = useState('')
   const [rate, setRate] = useState(1)
@@ -181,6 +184,17 @@ function Session({ req, mini, fullscreen, sleepAt, setSleepAt }: SessionProps) {
   }, [req])
 
   /* ---------- engine lifecycle ---------- */
+  // where the next engine should start: the resume point, or where playback was when an engine had to be replaced
+  const seekTo = useRef<number | null>(null)
+  const toastResume = useRef(false)
+  const reconnects = useRef(0)
+  useEffect(() => {
+    seekTo.current = req.startAt ?? null
+    toastResume.current = !!req.startAt
+    reconnects.current = 0
+    pos.current = { t: 0, d: 0 } // not the previous title's position
+  }, [req])
+
   useEffect(() => {
     const v = video.current!
     let done = false
@@ -190,8 +204,19 @@ function Session({ req, mini, fullscreen, sleepAt, setSleepAt }: SessionProps) {
     const fail = (msg: string) => {
       if (done) return
       done = true
+      const at = pos.current.t
+      // it was playing: a network hiccup, not a format this engine can't play. Reconnect the same engine where
+      // it was (a few times), instead of switching to another one and starting the film over
+      if (started && reconnects.current < 3) {
+        reconnects.current++
+        if (!live && at > 0) seekTo.current = at
+        return setNonce((n) => n + 1)
+      }
       firstError.current ??= msg
-      if (engineIdx < engines.length - 1) return setEngineIdx((i) => i + 1)
+      if (!started && engineIdx < engines.length - 1) {
+        if (!live && at > 0) seekTo.current = at
+        return setEngineIdx((i) => i + 1)
+      }
       setError(firstError.current)
       // every way to play it failed: find out why (provider refusal, connection limit, codec) and say so
       api.probe?.(url).then((r) => {
@@ -225,31 +250,31 @@ function Session({ req, mini, fullscreen, sleepAt, setSleepAt }: SessionProps) {
   /* ---------- progress / history ---------- */
   // Tracked in a ref: by the time unmount cleanups run, the engine has already unloaded the <video>
   const pos = useRef({ t: 0, d: 0 })
-  const save = useCallback(() => {
+  const save = useCallback((now = false) => {
     const { t, d } = pos.current
     if (live || !isFinite(d) || d < 60 || t < 1) return
-    saveProgress({ id: req.id, kind: req.kind, name: req.title, subtitle: req.subtitle, poster: req.poster, url: req.url, position: t, duration: d, updatedAt: Date.now(), parentId: req.show?.id })
+    saveProgress({ id: req.id, kind: req.kind, name: req.title, subtitle: req.subtitle, poster: req.poster, url: req.url, position: t, duration: d, updatedAt: Date.now(), parentId: req.show?.id }, now)
   }, [req, live])
 
   useEffect(() => {
     const id = setInterval(() => !video.current?.paused && save(), 15_000)
     return () => {
       clearInterval(id)
-      save()
+      save(true)
     }
   }, [save])
 
   /* ---------- video events ---------- */
-  const resumed = useRef(false)
   const onMeta = () => {
     const v = video.current!
     v.volume = volume
     v.playbackRate = rate
     setRes(v.videoHeight ? (v.videoHeight >= 2000 ? '4K' : `${v.videoHeight >= 1000 ? 1080 : v.videoHeight >= 700 ? 720 : v.videoHeight}p`) : '')
-    if (req.startAt && !resumed.current) {
-      resumed.current = true
-      v.currentTime = req.startAt
-      toast(`Resumed from ${duration(req.startAt)}`)
+    if (seekTo.current) {
+      v.currentTime = seekTo.current
+      if (toastResume.current) toast(`Resumed from ${duration(seekTo.current)}`)
+      seekTo.current = null
+      toastResume.current = false
     }
   }
   const onFirstPlay = () => {
@@ -259,7 +284,7 @@ function Session({ req, mini, fullscreen, sleepAt, setSleepAt }: SessionProps) {
   const onEnded = () => {
     const v = video.current!
     if (live) return setError('The stream ended.')
-    saveProgress({ id: req.id, kind: req.kind, name: req.title, subtitle: req.subtitle, poster: req.poster, url: req.url, position: v.duration, duration: v.duration, updatedAt: Date.now(), parentId: req.show?.id })
+    saveProgress({ id: req.id, kind: req.kind, name: req.title, subtitle: req.subtitle, poster: req.poster, url: req.url, position: v.duration, duration: v.duration, updatedAt: Date.now(), parentId: req.show?.id }, true)
     if (nextEp && settings.autoplayNext) setUpNext(8)
     else closePlayer()
   }
@@ -328,65 +353,69 @@ function Session({ req, mini, fullscreen, sleepAt, setSleepAt }: SessionProps) {
     return () => clearTimeout(id)
   }, [numBuf, req.channels])
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (mini || useApp.getState().sourceSheet) return
-      show()
-      const k = e.key.length === 1 ? e.key.toLowerCase() : e.key
-      if (tv) {
-        // The remote: with a player button in focus (controls, a menu, the error card) the arrows move between
-        // buttons and Back steps out of them; with none, the arrows seek / zap and OK brings up the controls
-        const a = document.activeElement as HTMLElement | null
-        const onButton = a?.tagName === 'BUTTON' && !!a.closest('[data-player]')
-        if (onButton && k.startsWith('Arrow')) return // spatial navigation takes it
-        if (onButton && (k === 'Escape' || k === 'Backspace') && !menu && !error) {
-          a!.blur()
-          setVisible(false)
-          e.preventDefault()
-          return void e.stopImmediatePropagation()
-        }
-        if (!onButton && (k === 'Enter' || (!live && (k === 'ArrowDown' || k === 'ArrowUp')))) {
-          document.querySelector<HTMLElement>('[data-player] [data-nav-default]')?.focus()
-          e.preventDefault()
-          return void e.stopImmediatePropagation()
-        }
+  // the handler sees this render's state through a ref; the listener itself is added once, not on every
+  // render (the player re-renders several times a second while playing)
+  const onKeyRef = useRef<(e: KeyboardEvent) => void>(() => {})
+  onKeyRef.current = (e: KeyboardEvent) => {
+    if (mini || useApp.getState().sourceSheet) return
+    show()
+    const k = e.key.length === 1 ? e.key.toLowerCase() : e.key
+    if (tv) {
+      // The remote: with a player button in focus (controls, a menu, the error card) the arrows move between
+      // buttons and Back steps out of them; with none, the arrows seek / zap and OK brings up the controls
+      const a = document.activeElement as HTMLElement | null
+      const onButton = a?.tagName === 'BUTTON' && !!a.closest('[data-player]')
+      if (onButton && k.startsWith('Arrow')) return // spatial navigation takes it
+      if (onButton && (k === 'Escape' || k === 'Backspace') && !menu && !error) {
+        a!.blur()
+        setVisible(false)
+        e.preventDefault()
+        return void e.stopImmediatePropagation()
       }
-      switch (k) {
-        case ' ':
-        case 'k':
-        case 'MediaPlayPause': toggle(); break
-        case 'MediaPlay': v().play().catch(() => {}); break
-        case 'MediaPause': v().pause(); break
-        case 'MediaStop': closePlayer(); break
-        case 'MediaRewind': seek(-10); break
-        case 'MediaFastForward': seek(10); break
-        case 'ChannelUp': zap(1); break
-        case 'ChannelDown': zap(-1); break
-        case 'ColorF0Red': if (req.channel) toggleFavorite(req.channel); break
-        case 'ColorF1Green': toggleSubs(); break
-        case 'Escape':
-        case 'Backspace': if (menu) setMenu(null); else close(); break
-        case 'ArrowLeft': seek(-10); break
-        case 'ArrowRight': seek(10); break
-        case 'ArrowUp': live ? zap(1) : setVol(volume + 0.05); break
-        case 'ArrowDown': live ? zap(-1) : setVol(volume - 0.05); break
-        case 'PageUp': zap(1); break
-        case 'PageDown': zap(-1); break
-        case 'f': api.win.setFullscreen(!fullscreen); break
-        case 'm': v().muted = !v().muted; break
-        case 'p': pip(); break
-        case 'c': toggleSubs(); break
-        case 'n': if (nextEp) playEpisode(req.show!, nextEp, req.episodes!, true); break
-        default:
-          if (live && /^[0-9]$/.test(k)) setNumBuf((b) => (b + k).slice(-4))
-          else return // let Enter/Tab etc. work normally
+      if (!onButton && (k === 'Enter' || (!live && (k === 'ArrowDown' || k === 'ArrowUp')))) {
+        document.querySelector<HTMLElement>('[data-player] [data-nav-default]')?.focus()
+        e.preventDefault()
+        return void e.stopImmediatePropagation()
       }
-      e.preventDefault()
-      e.stopImmediatePropagation()
     }
+    switch (k) {
+      case ' ':
+      case 'k':
+      case 'MediaPlayPause': toggle(); break
+      case 'MediaPlay': v().play().catch(() => {}); break
+      case 'MediaPause': v().pause(); break
+      case 'MediaStop': closePlayer(); break
+      case 'MediaRewind': seek(-10); break
+      case 'MediaFastForward': seek(10); break
+      case 'ChannelUp': zap(1); break
+      case 'ChannelDown': zap(-1); break
+      case 'ColorF0Red': if (req.channel) toggleFavorite(req.channel); break
+      case 'ColorF1Green': toggleSubs(); break
+      case 'Escape':
+      case 'Backspace': if (menu) setMenu(null); else close(); break
+      case 'ArrowLeft': seek(-10); break
+      case 'ArrowRight': seek(10); break
+      case 'ArrowUp': live ? zap(1) : setVol(volume + 0.05); break
+      case 'ArrowDown': live ? zap(-1) : setVol(volume - 0.05); break
+      case 'PageUp': zap(1); break
+      case 'PageDown': zap(-1); break
+      case 'f': api.win.setFullscreen(!fullscreen); break
+      case 'm': v().muted = !v().muted; break
+      case 'p': pip(); break
+      case 'c': toggleSubs(); break
+      case 'n': if (nextEp) playEpisode(req.show!, nextEp, req.episodes!, true); break
+      default:
+        if (live && /^[0-9]$/.test(k)) setNumBuf((b) => (b + k).slice(-4))
+        else return // let Enter/Tab etc. work normally
+    }
+    e.preventDefault()
+    e.stopImmediatePropagation()
+  }
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => onKeyRef.current(e)
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  })
+  }, [])
 
   // Sleep timer
   useEffect(() => {
@@ -416,7 +445,7 @@ function Session({ req, mini, fullscreen, sleepAt, setSleepAt }: SessionProps) {
         onClick={toggle}
         onDoubleClick={() => api.win.setFullscreen(!fullscreen)}
         onPlay={(e) => (casting.current ? e.currentTarget.pause() : setPlaying(true))}
-        onPause={() => setPlaying(false)}
+        onPause={() => (setPlaying(false), save(true))}
         onWaiting={() => setBuffering(true)}
         onPlaying={() => (setBuffering(false), setError(null))}
         onCanPlay={() => setBuffering(false)}

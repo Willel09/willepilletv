@@ -6,7 +6,9 @@ import type { Movie, MovieVersion, Show } from '../types'
 type Title = Movie | Show
 
 /** Leading provider tag: "SE-4K - ", "SC-[4K-Q] - ", "EN | ", "|NF| ", "[4K] ", "UK: ". A colon only after a 2-letter code ("TRON: Legacy" stays). */
-const TAG = /^\s*(\|[^|]{1,12}\||\[[^\]]{1,12}\]|[A-Z]{2}\s*:|[A-Z0-9]{2,5}(?:[-_ ]?(?:\[[^\]]{1,10}\]|[A-Z0-9+]{1,5}))*\s*[|-])\s+/
+// The separator before each extra alphanumeric part is required: with it optional, an all-caps title
+// ("MISSION IMPOSSIBLE DEAD RECKONING") could be split in exponentially many ways (seconds per name).
+const TAG = /^\s*(\|[^|]{1,12}\||\[[^\]]{1,12}\]|[A-Z]{2}\s*:|[A-Z0-9]{2,5}(?:[-_ ]?\[[^\]]{1,10}\]|[-_ ][A-Z0-9+]{1,5})*\s*[|-])\s+/
 const QUALITY = /\b(4k|uhd|fhd|hd|sd|hdr10?|hevc|x26[45]|h\.?26[45]|2160p|1080p|720p|multi[- ]?sub|multi|vost(?:fr)?|subbed|dubbed)\b/gi
 const YEAR = /[([]?\b((?:19|20)\d\d)\b[)\]]?\s*$/
 
@@ -44,22 +46,24 @@ export function mergeMovies<T extends Title>(items: T[]): T[] {
 }
 
 /** Same, with a break for the UI every 5,000 titles: merging 400k in one go freezes a TV for seconds */
-export async function mergeMoviesInSteps<T extends Title>(items: T[], pause = () => new Promise<void>((r) => setTimeout(r, 0))): Promise<T[]> {
+export async function mergeMoviesInSteps<T extends Title>(items: T[], pause = () => new Promise<void>((r) => setTimeout(r, 0)), onProgress?: (done: number) => void): Promise<T[]> {
   const steps = mergeSteps(items)
   let r = steps.next()
   while (!r.done) {
+    onProgress?.(r.value)
     await pause()
     r = steps.next()
   }
   return r.value
 }
 
-function* mergeSteps<T extends Title>(items: T[]): Generator<void, T[]> {
+/** Yields how far it is (0-1) every 5,000 titles */
+function* mergeSteps<T extends Title>(items: T[]): Generator<number, T[]> {
   // 1. title keys, and which TMDB id each title key belongs to (so copies without the id join those with it)
   const keys: string[] = new Array(items.length)
   const idOf = new Map<string, number | 0>() // 0 = two different films share the title: don't guess
   for (let i = 0; i < items.length; i++) {
-    if (i % 5000 === 4999) yield
+    if (i % 5000 === 4999) yield (i / items.length) * 0.6
     const k = (keys[i] = titleKey(items[i].name))
     const t = items[i].tmdb
     if (k && t) idOf.set(k, idOf.has(k) && idOf.get(k) !== t ? 0 : t)
@@ -68,7 +72,7 @@ function* mergeSteps<T extends Title>(items: T[]): Generator<void, T[]> {
   const byKey = new Map<string, T[]>()
   const out: T[][] = []
   for (let i = 0; i < items.length; i++) {
-    if (i % 5000 === 4999) yield
+    if (i % 5000 === 4999) yield 0.6 + (i / items.length) * 0.2
     const m = items[i]
     const t = m.tmdb || idOf.get(keys[i])
     // M3U series carry their episodes inside: merged, the other copies' episodes would be out of reach
@@ -83,7 +87,7 @@ function* mergeSteps<T extends Title>(items: T[]): Generator<void, T[]> {
   }
   const result: T[] = []
   for (let i = 0; i < out.length; i++) {
-    if (i % 5000 === 4999) yield
+    if (i % 5000 === 4999) yield 0.8 + (i / out.length) * 0.2
     const list = out[i]
     if (list.length === 1) {
       result.push(list[0])

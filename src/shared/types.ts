@@ -131,7 +131,7 @@ export interface Library {
   /** Set when duplicates were merged while loading but nothing was filtered (Windows): the PREPARED version */
   merged?: string
   /** Windows: the lists are left empty and fetched with IptvApi.libraryPart; these are their lengths */
-  parts?: Record<'channels' | 'movies' | 'series', number>
+  parts?: Record<'channels' | 'movies' | 'series' | 'gen', number>
 }
 
 export interface Programme {
@@ -303,7 +303,9 @@ export interface IptvApi {
   getLibrary(): Promise<Library | null>
   refreshLibrary(): Promise<Library>
   /** Windows: items [from, from + n) of a list of the library last returned by getLibrary/refreshLibrary */
-  libraryPart?(list: 'channels' | 'movies' | 'series', from: number): Promise<unknown[]>
+  /** Stops a library refresh that's running; the library stays as it was */
+  cancelRefresh?(): void
+  libraryPart?(list: 'channels' | 'movies' | 'series', from: number, gen: number): Promise<unknown[]>
   getEpg(): Promise<Epg | null>
   refreshEpg(): Promise<Epg>
   mediaInfo(sourceId: string, kind: 'movie' | 'series', id: number): Promise<MediaInfo>

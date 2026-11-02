@@ -196,6 +196,8 @@ async function relayUrl(url: string, mime: string, ua: string, tvHost: string) {
   return `http://${lanIpFor(tvHost)}:${relay.port}/${token}/video.${ext}`
 }
 
+let seek: ReturnType<typeof setTimeout> | undefined
+
 async function soap(control: string, action: string, args: string) {
   const body = `<?xml version="1.0" encoding="utf-8"?><s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/"><s:Body><u:${action} xmlns:u="urn:schemas-upnp-org:service:AVTransport:1"><InstanceID>0</InstanceID>${args}</u:${action}></s:Body></s:Envelope>`
   const res = await fetch(control, {
@@ -251,9 +253,9 @@ async function castDlna(control: string, host: string, m: CastMedia, ua: string)
     const t = Math.floor(m.startAt)
     const hms = [t / 3600, (t / 60) % 60, t % 60].map((x) => String(Math.floor(x)).padStart(2, '0')).join(':')
     // the TV must be playing before it accepts a seek
-    setTimeout(() => soap(control, 'Seek', `<Unit>REL_TIME</Unit><Target>${hms}</Target>`).catch(() => {}), 4000)
+    seek = setTimeout(() => soap(control, 'Seek', `<Unit>REL_TIME</Unit><Target>${hms}</Target>`).catch(() => {}), 4000)
   }
-  return { stop: () => soap(control, 'Stop', '').catch(() => {}) }
+  return { stop: () => (clearTimeout(seek), soap(control, 'Stop', '').catch(() => {})) }
 }
 
 export async function startCast(id: string, media: CastMedia, ua: string): Promise<{ ok: boolean; error?: string }> {
@@ -273,5 +275,10 @@ export async function stopCast() {
   const s = session
   session = null
   relayed.clear()
+  clearTimeout(seek)
+  // the relay listens on the network: only while something is being cast
+  relay?.server.close()
+  relay?.server.closeAllConnections()
+  relay = null
   await s?.stop()
 }

@@ -40,9 +40,12 @@ jobs:
           fi
 
   windows:
-    needs: check
+    # after tv-installer: the app pins that installer's SHA-256 and checks it before opening it
+    needs: [check, tv-installer]
     if: needs.check.outputs.exists == 'false'
     runs-on: windows-latest
+    env:
+      LUMEN_TV_INSTALLER_SHA256: ${{ needs.tv-installer.outputs.sha256 }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -51,6 +54,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      - run: test -n "$LUMEN_TV_INSTALLER_SHA256"
+        shell: bash
       - run: npm run build
       - run: npx electron-builder --win --publish never
       - uses: actions/upload-artifact@v4
@@ -88,6 +93,8 @@ jobs:
     needs: check
     if: needs.check.outputs.exists == 'false'
     runs-on: windows-latest
+    outputs:
+      sha256: ${{ steps.sum.outputs.sha256 }}
     defaults:
       run:
         shell: bash
@@ -107,6 +114,8 @@ jobs:
       # fail the release if tar still isn't packaged
       - run: node -e "const l=require('@electron/asar').listPackage('dist/win-unpacked/resources/app.asar').map(f=>f.split(String.fromCharCode(92)).join('/'));if(!l.includes('/node_modules/tar/package.json')){console.error('tar missing from app.asar');process.exit(1)}console.log('tar packaged')"
       - run: mkdir -p out && cp dist/*Portable*.exe out/SmartTV-Installer-for-Lumen.exe
+      - id: sum
+        run: echo "sha256=$(sha256sum out/SmartTV-Installer-for-Lumen.exe | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
         with:
           name: tv-installer
@@ -136,7 +145,7 @@ jobs:
             **Windows:** download `Lumen-Setup-${{ needs.check.outputs.version }}.exe` below and open it. Installed apps update themselves.
             **Samsung TV:** use the "Install on Samsung TV" assistant in Lumen for Windows (Settings), or SmartTV Installer → Custom GitHub Repository → `Willel09/willepilletv`.
 
-            `SmartTV-Installer-for-Lumen.exe` is [SmartTV Installer](https://github.com/Krishnakant010/smarttv-installer) v1.1.0 (GPL-3.0) rebuilt unchanged except for adding its missing `tar` dependency, which makes the official Windows build crash on start. Source: upstream commit `643da21` plus `npm install tar@6.2.1`.
+            `SmartTV-Installer-for-Lumen.exe` is [SmartTV Installer](https://github.com/Krishnakant010/smarttv-installer) v1.1.0 (GPL-3.0) rebuilt unchanged except for adding its missing `tar` dependency, which makes the official Windows build crash on start. Source: upstream commit `643da21` plus `npm install tar@6.2.1`. SHA-256: `${{ needs.tv-installer.outputs.sha256 }}` (Lumen checks it before opening the file).
 
   pages:
     needs: release

@@ -12,6 +12,8 @@ export default defineConfig({
       // the library worker (main/worker.ts) is its own entry
       rolldownOptions: { input: { index: 'src/main/index.ts', worker: 'src/main/worker.ts' } }
     },
+    // SHA-256 of SmartTV-Installer-for-Lumen.exe built in the same release run (see release.yml); checked before it's opened
+    define: { __TV_INSTALLER_SHA256__: JSON.stringify(process.env.LUMEN_TV_INSTALLER_SHA256 ?? '') },
     plugins: [
       {
         // rolldown adds a bare require("./index.js") to the worker (no binding from it is used). Loading index.js

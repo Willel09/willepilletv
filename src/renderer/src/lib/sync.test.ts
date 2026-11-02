@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { derive, merge, type SyncDoc } from './sync.ts'
+import { derive, merge, pullAndMerge, type SyncDoc } from './sync.ts'
 
 const movie = (id: string) => ({ kind: 'movie' as const, id, sourceId: 's', name: id, group: 'g', url: 'u' })
 const doc = (p: Partial<SyncDoc>): SyncDoc => ({ v: 1, sources: [], favorites: [], watchlist: [], history: [], prefs: {}, meta: { at: {}, tomb: {} }, ...p })
@@ -105,4 +105,23 @@ test('profiles: add/edit/delete and per-profile lists merge independently', asyn
   const after = mergeProfiles(del, m)
   assert.deepEqual(after.profiles.map((p) => p.id), ['kid'])
   assert.equal(after.data.mum, undefined)
+})
+
+test('a favorite added while the pull is downloading survives the sync', async () => {
+  let local = doc({ favorites: [] })
+  let release!: (d: SyncDoc | null) => void
+  const pulled = new Promise<SyncDoc | null>((r) => (release = r))
+  const round = pullAndMerge(() => local, pulled)
+  // the user adds a favorite while the download is still running
+  local = doc({ favorites: [movie('fav')], meta: { at: { 'favorites:fav': Date.now() }, tomb: {} } })
+  release(doc({ watchlist: [movie('w')], meta: { at: { 'watchlist:w': 1 }, tomb: {} } }))
+  const { merged } = await round
+  assert.deepEqual(merged.favorites.map((f) => f.id), ['fav'])
+  assert.deepEqual(merged.watchlist.map((f) => f.id), ['w'])
+})
+
+test("favorites keep this device's order; ones added elsewhere go first", () => {
+  const local = doc({ favorites: [movie('a'), movie('b'), movie('c')], meta: { at: { 'favorites:a': 1, 'favorites:b': 50, 'favorites:c': 99 }, tomb: {} } })
+  const remote = doc({ favorites: [movie('n'), movie('c')], meta: { at: { 'favorites:n': 5, 'favorites:c': 99 }, tomb: {} } })
+  assert.deepEqual(merge(local, remote).favorites.map((f) => f.id), ['n', 'a', 'b', 'c'])
 })

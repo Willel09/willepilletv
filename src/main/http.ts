@@ -2,7 +2,7 @@ import { net } from 'electron'
 import { readFile } from 'fs/promises'
 import { fileURLToPath } from 'url'
 import { gunzipSync } from 'zlib'
-import { HTTP_HINT } from '../shared/core/net'
+import { HTTP_HINT, maskUrl } from '../shared/core/net'
 
 const FRIENDLY: [RegExp, string][] = [
   [/ERR_NAME_NOT_RESOLVED|ENOTFOUND/, 'Server not found. Check the address for typos.'],
@@ -19,7 +19,7 @@ function friendly(e: unknown, url: string): Error {
   const hit = FRIENDLY.find(([re]) => re.test(msg))
   let host = url
   try { host = new URL(url).host } catch { /* local path */ }
-  return new Error(`${hit ? hit[1] : msg} (${host})`)
+  return new Error(`${hit ? hit[1] : maskUrl(msg)} (${host})`)
 }
 
 /** Text of a download; transparently gunzips .gz guides */

@@ -79,3 +79,13 @@ test('series merge too (Xtream ones), with their series ids as versions; M3U ser
   assert.deepEqual(merged?.versions?.map((v) => v.seriesId), [1, 2])
   assert.equal(out.length, 3)
 })
+
+test('all-caps titles are handled in linear time (no regex backtracking)', () => {
+  const t = Date.now()
+  for (const n of ['MISSION IMPOSSIBLE DEAD RECKONING PART ONE TWO THREE', 'SPIDERMAN ACROSS THE SPIDERVERSE BEYOND THE MULTIVERSE', 'EN - THE FIRST SLAM DUNK (2022) [1080p]']) {
+    stripTag(n)
+    titleKey(n)
+  }
+  assert.ok(Date.now() - t < 50, `took ${Date.now() - t} ms`)
+  assert.equal(stripTag('EN - THE FIRST SLAM DUNK (2022) [1080p]'), 'THE FIRST SLAM DUNK (2022) [1080p]')
+})

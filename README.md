@@ -108,7 +108,9 @@ You need **Node.js 22 LTS** from <https://nodejs.org>.
 
 **Privacy:** everything is encrypted on your device (AES-256-GCM, with a key derived from your sync code) before it is sent. The server stores only ciphertext under a SHA-256 hash of the code, so it never sees the code, your logins or your lists. Anyone who has your **sync code** can read your synced data, so keep it private. Turning sync off on a device keeps its local data.
 
-**Backend:** a free Supabase project, `lumen-sync` (Stockholm). The database only exposes three functions (`sync_get`, `sync_put`, `sync_delete`); the table itself can't be read or listed. Free Supabase projects pause after about a week without any traffic. If sync shows *Sync failed* after a long break, open the project in the [Supabase dashboard](https://supabase.com/dashboard) and click **Restore**.
+**Backend:** a free Supabase project, `lumen-sync` (Stockholm). The database only exposes four functions (`sync_get`, `sync_put`, `sync_put_if`, `sync_delete`); the table itself can't be read or listed. The synced document is written with `sync_put_if` (compare-and-swap): when two devices sync at the same moment, the second one merges again instead of overwriting the first. Something you change while a sync is running is kept and synced right after. Free Supabase projects pause after about a week without any traffic. If sync shows *Sync failed* after a long break, open the project in the [Supabase dashboard](https://supabase.com/dashboard) and click **Restore**.
+
+**Your order of favorites is kept**, and ones added on another device appear first.
 
 **Deletions sync too.** Removing something from the watchlist on the TV removes it on the PC, rather than it coming back on the next sync.
 
@@ -205,4 +207,6 @@ apple-iptv/
   - duplicate merging, home rows and the guide are computed in small steps with breaks for the screen, so the remote never freezes for long (longest pause ~0.5 s at a TV-like CPU speed, down from 4–10 s);
   - no animations on TV: no movement, fades, tilt or rotating hero, and scrolling jumps instead of gliding.
 - **Windows: "Lumen is not responding" / stuck on *Who's watching?***: fixed in 1.3.10. Reading, saving and building a huge library (and the TV guide) now happens in a background thread, so the app's window and its main process never wait on it; duplicates are merged there while loading, and the library reaches the window in pieces. Downloads still go through Chromium's network stack in the main process (1.3.10 briefly used Node's fetch, which some providers failed with), and if the background thread ever stops, you get an error instead of an endless *Loading…*. Measured with 110k channels + 398k movies + 96k series: the main process never stalls (it stalled up to 1.6 s here, longer on slower PCs), the window at most ~0.7 s at start and 0.2 s during a refresh.
+- **A provider is down during a refresh:** the library keeps that source's titles from last time and shows the error; nothing disappears. A refresh that takes too long can be stopped with the **×** in the loading pill (or **Cancel** in Settings); the library stays as it was.
+- **Changed M3U links (new token or password in the URLs):** favorites, watchlist and history stay linked; channels are identified by their category and name, not their URL.
 - **Fresh start:** on Windows delete `%APPDATA%\Lumen`. On TV, uninstall and reinstall Lumen.

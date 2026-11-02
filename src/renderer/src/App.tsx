@@ -14,7 +14,7 @@ import Home from './screens/Home'
 import Live from './screens/Live'
 import Search from './screens/Search'
 import Settings, { SourceSheet } from './screens/Settings'
-import { api, boot, closeDetail, play, setTab, useApp } from './store'
+import { api, boot, closeDetail, play, setTab, toast, useApp } from './store'
 
 
 function Screen() {
@@ -58,7 +58,7 @@ export default function App() {
   useEffect(() => {
     // must run before every other key handler (registers the first capture listener)
     const offTv = api.device === 'tv' ? initTvKeys() : () => {}
-    boot()
+    boot().catch((e: Error) => toast(`Lumen couldn't start properly: ${e.message}`))
     const offProgress = api.onProgress((progress) => useApp.setState({ progress }))
     const offNav = initSpatialNav()
     const onKey = (e: KeyboardEvent) => {

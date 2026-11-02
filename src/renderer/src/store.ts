@@ -24,6 +24,8 @@ import { cleanName, fold } from './lib/format'
 import * as sync from './lib/sync'
 import { hexToRgb, themeById } from './lib/themes'
 import { createWebApi } from './platform/web'
+import { serial } from './lib/serial'
+import { relink } from '../../shared/core/relink'
 
 /** Electron provides window.api from its preload; Samsung TV and browsers use the web implementation */
 export const api = window.api ?? createWebApi()
@@ -98,9 +100,17 @@ const get = useApp.getState
 
 /* ---------------- persistence ---------------- */
 
+/** Saved on the device; a full storage (TVs have little) is reported once instead of failing silently */
+let storageWarned = false
+// sent right away (not after a microtask): a refresh asked for next must find the new sources already saved
+const save = (key: keyof StoreShape, value: unknown) =>
+  api.setStore(key, value as never).catch(() => {
+    if (!storageWarned) (storageWarned = true), toast('Storage is full: some changes could not be saved on this device. Clearing History in Settings frees space.')
+  })
+
 export function persist<K extends keyof StoreShape>(key: K, value: StoreShape[K]) {
   set({ [key]: value } as Partial<State>)
-  api.setStore(key, value)
+  void save(key, value)
 }
 
 type ListKey = keyof ProfileLists
@@ -120,7 +130,7 @@ function touch(metaKey: 'meta' | 'profileMeta', prefix: string, changed: string[
 function saveList<K extends ListKey>(pid: string, key: K, value: ProfileLists[K]) {
   const lists = { ...get().lists, [pid]: { ...(get().lists[pid] ?? EMPTY_LISTS), [key]: value } }
   set({ lists, ...(pid === get().activeProfile ? { [key]: value } : {}) })
-  if (pid === 'main') return void api.setStore(key, value as never)
+  if (pid === 'main') return void save(key, value)
   persist('profileData', Object.fromEntries(Object.entries(lists).filter(([id]) => id !== 'main')))
 }
 
@@ -141,9 +151,11 @@ export const profilesOf = (list: Profile[]) => (list.length ? list : [MAIN_PROFI
 export const currentProfile = () => profilesOf(get().profiles).find((p) => p.id === get().activeProfile) ?? MAIN_PROFILE
 
 export function switchProfile(id: string) {
+  flushHistory() // pending positions belong to the profile being left
   persist('activeProfile', id)
   closePlayer()
   set({ ...(get().lists[id] ?? EMPTY_LISTS), pickProfile: false, detail: null, tab: 'home' })
+  relinkSaved()
 }
 
 export const openProfilePicker = () => set({ pickProfile: true })
@@ -215,8 +227,17 @@ export async function boot() {
   const active = lists[s.activeProfile] && profilesOf(s.profiles).some((p) => p.id === s.activeProfile) ? s.activeProfile : 'main'
   set({ ...s, ...lists[active], activeProfile: active, lists, booted: true, pickProfile: profilesOf(s.profiles).length > 1 })
   applyAppearance(s.settings)
-  const [library, epg] = await Promise.all([api.getLibrary().then(whole), api.getEpg()])
+  window.addEventListener('pagehide', flushHistory)
+  // a cache that can't be read must not stop the app: say so, then sync and reload from the sources as usual
+  const [library, epg] = await Promise.all([
+    api
+      .getLibrary()
+      .then(whole)
+      .catch((e: Error) => (toast(`Couldn't open the saved library: ${e.message}`), null)),
+    api.getEpg().catch(() => null)
+  ])
   set({ library, epg })
+  relinkSaved()
   startSync()
   // the guide only covers the next hours (12 on TVs): keep it fresh while the app stays open
   setInterval(() => {
@@ -232,12 +253,22 @@ export async function boot() {
 }
 
 /** Windows hands the library over in pieces (see library:part), so the window keeps answering clicks meanwhile */
-async function whole(lib: Library | null) {
+async function whole(lib: Library | null): Promise<Library | null> {
   if (!lib?.parts || !api.libraryPart) return lib
+  try {
+    return await pieces(lib)
+  } catch (e) {
+    // a newer library replaced this one mid-transfer (a refresh finished): fetch that one instead
+    if (/STALE/.test((e as Error).message)) return whole(await api.getLibrary())
+    throw e
+  }
+}
+async function pieces(lib: Library) {
+  const parts = lib.parts!
   for (const k of ['channels', 'movies', 'series'] as const) {
     const all: unknown[] = []
-    while (all.length < lib.parts[k]) {
-      const part = await api.libraryPart(k, all.length)
+    while (all.length < parts[k]) {
+      const part = await api.libraryPart!(k, all.length, parts.gen)
       if (!part.length) break
       for (const x of part) all.push(x)
     }
@@ -247,23 +278,26 @@ async function whole(lib: Library | null) {
   return lib
 }
 
-export async function refreshLibrary() {
-  if (get().loading) return
+/** Sources changed while a refresh was running load again when it's done (see serial), or the new source would be missing */
+export const refreshLibrary = serial(async () => {
   set({ loading: true })
   try {
     const library = (await whole(await api.refreshLibrary()))!
     set({ library })
+    relinkSaved()
     if (library.errors.length) toast(library.errors[0])
     else toast(`Loaded ${library.channels.length.toLocaleString()} channels, ${library.movies.length.toLocaleString()} movies, ${library.series.length.toLocaleString()} series`)
     refreshEpg()
   } catch (e) {
-    toast(`Couldn't load sources: ${(e as Error).message}`)
+    const m = (e as Error).message
+    toast(/cancelled/i.test(m) ? 'Refresh cancelled. Your library is as it was.' : `Couldn't load sources: ${m}`)
   } finally {
-    set({ loading: false })
+    set({ loading: false, progress: '' })
   }
-}
+})
 
-export async function refreshEpg() {
+/** one guide download at a time: the periodic refresh and a library refresh can ask at once */
+export const refreshEpg = serial(async () => {
   try {
     const epg = await api.refreshEpg()
     set({ epg })
@@ -271,7 +305,7 @@ export async function refreshEpg() {
   } catch (e) {
     toast(`TV guide failed: ${(e as Error).message}`)
   }
-}
+})
 
 /* ---------------- ui ---------------- */
 
@@ -314,9 +348,42 @@ export function toggleWatchlist(item: Movie | Show) {
   toast(on ? `Removed “${cleanName(item.name)}” from your Watchlist` : `Added “${cleanName(item.name)}” to your Watchlist`)
 }
 
-export function saveProgress(e: HistoryEntry) {
+// Watching updates the position every 15 s and every zap adds a channel: Continue Watching changes in memory
+// right away, but the list is written and synced at most once a minute, or at once on pause/close/end
+let historyChanges: { changed: Set<string>; removed: Set<string> } | null = null
+let historyTimer: ReturnType<typeof setTimeout> | undefined
+
+export function saveProgress(e: HistoryEntry, now = false) {
   const all = [e, ...get().history.filter((h) => h.id !== e.id)]
-  persistSynced('history', all.slice(0, 300), [e.id], all.slice(300).map((h) => h.id))
+  historyChanges ??= { changed: new Set(), removed: new Set() }
+  historyChanges.changed.add(e.id)
+  for (const h of all.slice(300)) historyChanges.removed.add(h.id)
+  const pid = get().activeProfile
+  const history = all.slice(0, 300)
+  set({ history, lists: { ...get().lists, [pid]: { ...(get().lists[pid] ?? EMPTY_LISTS), history } } })
+  if (now) flushHistory()
+  else historyTimer ??= setTimeout(flushHistory, 60_000)
+}
+
+/** Gives saved M3U items their current ids again (see relink): after 1.3.12's new ids, or a provider's new URLs */
+function relinkSaved() {
+  const s = get()
+  const m3u = new Set(s.sources.filter((x) => x.kind === 'm3u').map((x) => x.id))
+  if (!s.library || !m3u.size) return
+  const r = relink(s.library, { favorites: s.favorites, watchlist: s.watchlist, history: s.history }, m3u)
+  for (const k of ['favorites', 'watchlist', 'history'] as const) {
+    const x = r[k]
+    if (x) persistSynced(k, x.list as never, x.changed, x.removed)
+  }
+}
+
+export function flushHistory() {
+  clearTimeout(historyTimer)
+  historyTimer = undefined
+  const c = historyChanges
+  if (!c) return
+  historyChanges = null
+  persistSynced('history', get().history, [...c.changed], [...c.removed])
 }
 
 export function saveSources(list: Source[], changed: string[], removed: string[] = []) {
@@ -332,6 +399,8 @@ export function clearCollection(key: 'favorites' | 'history' | 'watchlist') {
 
 let syncTimer: ReturnType<typeof setTimeout> | undefined
 let syncing: Promise<void> | null = null
+/** a change made while a sync was running: run another one when it's done, so the change gets pushed */
+let syncAgain = false
 
 export function scheduleSync(delay = 2500) {
   if (!get().sync.code) return
@@ -350,35 +419,44 @@ const localDoc = (): sync.SyncDoc => {
 export function syncNow(): Promise<void> {
   const code = get().sync.code
   if (!code || !sync.supported()) return Promise.resolve()
-  return (syncing ??= (async () => {
+  if (syncing) return (syncAgain = true), syncing
+  return (syncing = (async () => {
     set({ syncStatus: { state: 'syncing' } })
     try {
-      const local = localDoc()
-      const merged = sync.merge(local, await sync.pull(code))
-      const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
-      for (const k of sync.COLLECTIONS) {
-        if (same(local[k], merged[k])) continue
-        if (k === 'sources') persist('sources', merged.sources)
-        else saveList('main', k, merged[k] as never)
+      let sourcesChanged = false
+      let fileError: string | undefined
+      // compare-and-swap: if another device pushed between our pull and push, pull and merge again
+      for (let attempt = 0; ; attempt++) {
+        const pulled = sync.pull(code)
+        const { local, merged } = await sync.pullAndMerge(localDoc, pulled.then((p) => p.doc))
+        const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
+        for (const k of sync.COLLECTIONS) {
+          if (same(local[k], merged[k])) continue
+          if (k === 'sources') persist('sources', merged.sources)
+          else saveList('main', k, merged[k] as never)
+        }
+        persist('meta', merged.meta)
+        if (!same(local.prefs, merged.prefs)) {
+          const settings = { ...get().settings, ...merged.prefs }
+          persist('settings', settings)
+          applyAppearance(settings)
+          if (local.prefs.removeBs !== merged.prefs.removeBs || local.prefs.hiddenGroups !== merged.prefs.hiddenGroups) reloadIfFiltered()
+        }
+        sourcesChanged ||= !same(local.sources, merged.sources)
+        // local playlist files go up before the source list, so other devices can load them right away
+        if (attempt === 0) fileError = await shareFiles(code, merged.sources)
+        if (await sync.pushIf(code, merged, (await pulled).at)) break
+        if (attempt === 4) throw new Error('Another device kept changing the synced data at the same time. Try again.')
       }
-      persist('meta', merged.meta)
-      if (!same(local.prefs, merged.prefs)) {
-        const settings = { ...get().settings, ...merged.prefs }
-        persist('settings', settings)
-        applyAppearance(settings)
-        if (local.prefs.removeBs !== merged.prefs.removeBs || local.prefs.hiddenGroups !== merged.prefs.hiddenGroups) reloadIfFiltered()
-      }
-      // local playlist files go up before the source list, so other devices can load them right away
-      const fileError = await shareFiles(code, merged.sources)
-      await sync.push(code, merged)
       await syncProfiles(code)
       persist('sync', { ...get().sync, lastSync: Date.now() })
       set({ syncStatus: fileError ? { state: 'error', message: fileError } : { state: 'ok' } })
-      if (!same(local.sources, merged.sources)) refreshLibrary()
+      if (sourcesChanged) refreshLibrary()
     } catch (e) {
       set({ syncStatus: { state: 'error', message: (e as Error).message } })
     } finally {
       syncing = null
+      if (syncAgain) (syncAgain = false), scheduleSync(0)
     }
   })())
 }
@@ -486,7 +564,25 @@ export function resume(h: HistoryEntry) {
     const ch = index().channelById.get(h.id)
     return ch ? playChannel(ch) : play({ kind: 'live', id: h.id, url: h.url, title: h.name, poster: h.poster })
   }
-  play({ kind: h.kind, id: h.id, url: h.url, title: h.name, subtitle: h.subtitle, poster: h.poster, startAt: resumable(h) ? h.position : undefined })
+  const plain = () => play({ kind: h.kind, id: h.id, url: h.url, title: h.name, subtitle: h.subtitle, poster: h.poster, startAt: resumable(h) ? h.position : undefined })
+  if (h.kind !== 'episode' || !h.parentId) return plain()
+  // an episode: play it as part of its series, so Next Episode and autoplay work from here too
+  return void resumeEpisode(h).then((ok) => ok || plain(), plain)
+}
+
+async function resumeEpisode(h: HistoryEntry): Promise<boolean> {
+  const show = index().series.find((s) => s.id === h.parentId || s.versions?.some((v) => v.id === h.parentId))
+  if (!show) return false
+  let episodes = show.episodes
+  if (!episodes?.length && show.seriesId) {
+    // Xtream: episodes come with the details; the copy whose id the history entry carries
+    const v = show.versions?.find((x) => x.id === h.parentId)
+    episodes = (await api.mediaInfo(v?.sourceId ?? show.sourceId, 'series', v?.seriesId ?? show.seriesId)).episodes
+  }
+  const ep = episodes?.find((e) => `${h.parentId}:${e.id}` === h.id || e.url === h.url)
+  if (!ep || !episodes) return false
+  playEpisode({ ...show, id: h.parentId! }, ep, episodes)
+  return true
 }
 
 /* ---------------- derived library index ---------------- */

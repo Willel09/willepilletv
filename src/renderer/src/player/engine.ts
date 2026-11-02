@@ -66,6 +66,7 @@ function describeNative(e: MediaError | null) {
 
 interface NativeTrackList<T> extends ArrayLike<T> {
   addEventListener(t: string, fn: () => void): void
+  removeEventListener(t: string, fn: () => void): void
 }
 type NativeAudio = { label: string; language: string; enabled: boolean }
 
@@ -165,6 +166,9 @@ export function createEngine(kind: EngineKind, video: HTMLVideoElement, url: str
     destroy: () => {
       video.removeEventListener('error', onError)
       video.removeEventListener('loadedmetadata', onTracks)
+      at?.removeEventListener('change', onTracks)
+      at?.removeEventListener('addtrack', onTracks)
+      video.textTracks.removeEventListener('addtrack', onTracks)
       video.removeAttribute('src')
       video.load()
     },

@@ -92,9 +92,17 @@ export function TitleBar() {
       <TabBar />
       <div className="hidden w-64 items-center justify-end gap-3 lg:flex">
         {loading || progress ? (
-          <div className="glass-thin no-drag flex h-8 max-w-44 items-center gap-2 rounded-full px-3 text-[12px] font-medium text-fg/75" title={progress}>
+          // what's happening right now (source, list, count or %), and a way out of a refresh that takes too long
+          <div className="glass-thin no-drag flex h-8 max-w-64 items-center gap-2 rounded-full pl-3 pr-1 text-[12px] font-medium text-fg/75" title={progress} role="status">
             <Spinner className="size-3.5 shrink-0" />
-            <span className="truncate">{progress || 'Loading…'}</span>
+            <span className="truncate">{progress || 'Loading your library…'}</span>
+            {loading && api.cancelRefresh ? (
+              <button onClick={() => api.cancelRefresh!()} aria-label="Cancel refresh" title="Cancel refresh" className="grid size-6 shrink-0 place-items-center rounded-full text-fg/60 hover:bg-fg/10 hover:text-fg">
+                <X className="size-3.5" />
+              </button>
+            ) : (
+              <span className="w-2" />
+            )}
           </div>
         ) : (
           hasSources && (

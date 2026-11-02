@@ -3,7 +3,7 @@ import { app, BrowserWindow, dialog, ipcMain, nativeTheme, net, session, shell }
 import { spawn } from 'child_process'
 import { existsSync } from 'fs'
 import { stat } from 'fs/promises'
-import { fileURLToPath } from 'url'
+import { fileURLToPath, pathToFileURL } from 'url'
 import { join } from 'path'
 import Store from 'electron-store'
 import { autoUpdater } from 'electron-updater'
@@ -56,11 +56,12 @@ function createWindow() {
     if (/^https?:/.test(url)) shell.openExternal(url)
     return { action: 'deny' }
   })
+  // only the app's own page (a reload), never another local file or site
+  const page = process.env.ELECTRON_RENDERER_URL ?? pathToFileURL(join(__dirname, '../renderer/index.html')).href
   win.webContents.on('will-navigate', (e, url) => {
-    if (!url.startsWith(process.env.ELECTRON_RENDERER_URL ?? 'file:')) e.preventDefault()
+    if (url.split(/[?#]/)[0] !== page.split(/[?#]/)[0]) e.preventDefault()
   })
-  if (process.env.ELECTRON_RENDERER_URL) win.loadURL(process.env.ELECTRON_RENDERER_URL)
-  else win.loadFile(join(__dirname, '../renderer/index.html'))
+  win.loadURL(page)
 }
 
 /**
@@ -98,10 +99,12 @@ const STORE_KEYS = Object.keys(STORE_DEFAULTS) as (keyof StoreShape)[]
 
 /** Library and guide work runs in a worker thread, see worker.ts */
 let worker: Worker | null = null
+let cancelling = false
 let seq = 0
 const pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>()
 function work<T>(op: string, ...args: unknown[]): Promise<T> {
   if (!worker) {
+    cancelling = false
     worker = new Worker(join(__dirname, 'worker.js'), { workerData: { dir: app.getPath('userData') } })
     const w = worker
     w.on('message', (m: { id?: number; progress?: string; result?: unknown; error?: string; fetch?: { rid: number; url: string; timeoutMs?: number } }) => {
@@ -109,6 +112,8 @@ function work<T>(op: string, ...args: unknown[]): Promise<T> {
       // downloads for the worker go through Chromium's network stack here; the bytes are handed over, not copied
       if (m.fetch) {
         const { rid, url, timeoutMs } = m.fetch
+        // local files: picked playlists, or XMLTV guide files (Settings > Extra guide URL), nothing else
+        if (!/^https?:\/\//i.test(url) && !playlistFiles.has(url) && !/\.(xml|xmltv)(\.gz)?$/i.test(url)) return void w.postMessage({ rid, error: 'Not a playlist or guide file' })
         getBytes(url, settings().userAgent || DEFAULT_SETTINGS.userAgent, timeoutMs).then(
           (bytes) => w.postMessage({ rid, bytes }, [bytes.buffer as ArrayBuffer]),
           (e: Error) => w.postMessage({ rid, error: e.message })
@@ -127,7 +132,7 @@ function work<T>(op: string, ...args: unknown[]): Promise<T> {
       if (worker === w) worker = null
     }
     w.on('error', died)
-    w.on('exit', (code) => died(new Error(`The library worker stopped (code ${code}). Try Refresh.`)))
+    w.on('exit', (code) => died(new Error(cancelling ? 'Refresh cancelled' : `The library worker stopped (code ${code}). Try Refresh.`)))
   }
   const id = ++seq
   return new Promise<T>((resolve, reject) => {
@@ -136,7 +141,11 @@ function work<T>(op: string, ...args: unknown[]): Promise<T> {
   })
 }
 
+/** Local playlist files the window may read: chosen in the file dialog, or already sources at start */
+const playlistFiles = new Set<string>()
+
 function registerIpc() {
+  for (const s of store.get('sources')) if (s.kind === 'm3u' && s.url && !/^https?:\/\//i.test(s.url)) playlistFiles.add(s.url)
   ipcMain.on('app:version', (e) => (e.returnValue = app.getVersion()))
   ipcMain.handle('store:all', () => ({ ...STORE_DEFAULTS, ...store.store, settings: settings() }))
   ipcMain.handle('store:set', (_e, key: keyof StoreShape, value: unknown) => {
@@ -145,7 +154,14 @@ function registerIpc() {
   })
   ipcMain.handle('library:get', () => work('get'))
   ipcMain.handle('library:refresh', () => work('refresh', store.get('sources'), settings()))
-  ipcMain.handle('library:part', (_e, list: string, from: number) => work('part', list, from))
+  // Cancel: stop the worker. Nothing was written yet (the cache is saved at the end), so the library stays as it
+  // was; the next request starts a fresh worker that reads it again.
+  ipcMain.on('library:cancel', () => {
+    if (!worker) return
+    cancelling = true
+    void worker.terminate()
+  })
+  ipcMain.handle('library:part', (_e, list: string, from: number, gen: number) => work('part', list, from, gen))
   ipcMain.handle('epg:get', () => work('epgGet'))
   ipcMain.handle('epg:refresh', () => work('epgRefresh', settings()))
   ipcMain.handle('media:info', (_e, sourceId: string, kind: 'movie' | 'series', id: number) => {
@@ -159,11 +175,14 @@ function registerIpc() {
       properties: ['openFile'],
       filters: [{ name: 'Playlists', extensions: ['m3u', 'm3u8', 'txt'] }]
     })
-    return r.canceled ? null : r.filePaths[0]
+    if (r.canceled) return null
+    playlistFiles.add(r.filePaths[0])
+    return r.filePaths[0]
   })
   ipcMain.handle('file:read', async (_e, path: string) => {
-    // only files the user added as a source, so the renderer can't read arbitrary files
-    if (!store.get('sources').some((s) => s.kind === 'm3u' && s.url === path)) throw new Error('Not a playlist source')
+    // only files the user picked in the file dialog (or that were sources when the app started): the window
+    // can write any source list to the store, so the store alone can't vouch for a path
+    if (!playlistFiles.has(path) || !store.get('sources').some((s) => s.kind === 'm3u' && s.url === path)) throw new Error('Not a playlist source')
     const st = await stat(path.startsWith('file:') ? fileURLToPath(path) : path)
     return { text: await get(path), sig: `${st.mtimeMs}:${st.size}` }
   })
@@ -233,6 +252,14 @@ function setupUpdater() {
   setTimeout(checkForUpdates, 8000)
   setInterval(checkForUpdates, 4 * 3600_000)
 }
+
+// One Lumen at a time: two would write library.json and the settings at once. A second start focuses this one.
+if (!app.requestSingleInstanceLock()) app.quit()
+app.on('second-instance', () => {
+  if (!win || win.isDestroyed()) return
+  if (win.isMinimized()) win.restore()
+  win.focus()
+})
 
 app.whenReady().then(() => {
   app.setAppUserModelId('app.lumen.iptv')

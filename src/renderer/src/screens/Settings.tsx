@@ -5,6 +5,7 @@ import { DEFAULT_UA, type Source, type UpdateState } from '../../../shared/types
 import { Sheet } from '../components/Sheet'
 import { Button, Field, IconButton, Segmented, Toggle } from '../components/ui'
 import { ago } from '../lib/format'
+import { maskUrl } from '../../../shared/core/net'
 import { newPairCode, newSyncCode, receivePairing, sendPairing, supported as syncSupported } from '../lib/sync'
 import { THEMES } from '../lib/themes'
 import { TvInstallSheet } from './TvInstall'
@@ -298,6 +299,7 @@ export default function Settings() {
   const library = useApp((x) => x.library)
   const epg = useApp((x) => x.epg)
   const loading = useApp((x) => x.loading)
+  const progress = useApp((x) => x.progress)
   const matched = epg ? Object.keys(epg.programmes).length : 0
   const [tvSheet, setTvSheet] = useState(false)
 
@@ -315,7 +317,20 @@ export default function Settings() {
           title="Sources"
           action={
             <div className="flex gap-2">
-              <Button icon={<RefreshCw className={`size-4 ${loading ? 'animate-spin' : ''}`} />} onClick={refreshLibrary} disabled={loading || !sources.length}>Refresh</Button>
+              {loading ? (
+                // says what's going on instead of a greyed-out button
+                <>
+                  <span className="flex max-w-72 items-center gap-2 truncate text-[12.5px] text-fg/55" role="status">
+                    <RefreshCw className="size-4 shrink-0 animate-spin" />
+                    <span className="truncate">{progress || 'Loading your library…'}</span>
+                  </span>
+                  {api.cancelRefresh && <Button onClick={() => api.cancelRefresh!()}>Cancel</Button>}
+                </>
+              ) : (
+                <Button icon={<RefreshCw className="size-4" />} onClick={refreshLibrary} disabled={!sources.length} title={sources.length ? undefined : 'Add a source first'}>
+                  Refresh
+                </Button>
+              )}
               <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => openSourceSheet('xtream')}>Add</Button>
             </div>
           }
@@ -334,7 +349,7 @@ export default function Settings() {
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-[14.5px] font-semibold">{src.name}</div>
                   <div className="truncate text-[12.5px] text-fg/45">
-                    {src.kind === 'xtream' ? `Xtream Codes · ${src.username}` : `M3U · ${src.url}`}
+                    {src.kind === 'xtream' ? `Xtream Codes · ${src.username}` : `M3U · ${maskUrl(src.url ?? '')}`}
                     {acc?.expires && ` · Expires ${new Date(acc.expires).toLocaleDateString()}`}
                     {acc?.maxConnections && ` · ${acc.maxConnections} connection${acc.maxConnections > 1 ? 's' : ''}`}
                   </div>

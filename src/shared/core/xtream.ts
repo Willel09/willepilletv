@@ -70,7 +70,7 @@ export async function loadXtream(
     activeConnections: num(ui.active_cons)
   }
 
-  progress(`${src.name}: loading channels, movies and series…`)
+  progress(`${src.name}: loading categories…`)
   const act = (action: string) => getJson<Json>(get, `${base}&action=${action}`).catch(() => [])
   const [lc, vc, sc] = await Promise.all([act('get_live_categories'), act('get_vod_categories'), act('get_series_categories')])
   const catMap = (c: Json) => new Map(arr(c).map((x) => [String(x.category_id), str(x.category_name) ?? 'Uncategorized']))
@@ -78,19 +78,21 @@ export async function loadXtream(
 
   // The big lists one after another, each turned into compact items as it arrives: providers' raw JSON can be
   // 50-100 MB per list (400k movies), and holding that plus the parsed raw objects runs a TV out of memory
+  const LISTS: Record<string, string> = { get_live_streams: 'channels (1/3)', get_vod_streams: 'movies (2/3)', get_series: 'series (3/3)' }
   const list = async <T,>(action: string, map: (s: Json) => T): Promise<T[]> => {
-    if (!stream) return arr(await act(action)).map(map).filter((x) => !skip?.(x as never))
+    const what = LISTS[action]
+    progress(`${src.name}: loading ${what}…`)
+    // errors go up: a list that timed out must fail the source (which then keeps its old titles), not read as empty
+    if (!stream) return arr(await getJson<Json>(get, `${base}&action=${action}`)).map(map).filter((x) => !skip?.(x as never))
     const out: T[] = []
+    let n = 0
     const parser = new JsonArrayStream((s) => {
       const x = map(s as Json)
       if (!skip?.(x as never)) out.push(x)
+      if (++n % 20_000 === 0) progress(`${src.name}: loading ${what}… ${n.toLocaleString()}`)
     })
-    try {
-      await stream(`${base}&action=${action}`, (chunk) => parser.push(chunk), 300_000)
-      return out
-    } catch {
-      return []
-    }
+    await stream(`${base}&action=${action}`, (chunk) => parser.push(chunk), 300_000)
+    return out
   }
   const channels: Channel[] = await list('get_live_streams', (s) => ({
     kind: 'live', id: `${src.id}:l${s.stream_id}`, sourceId: src.id,
@@ -107,7 +109,7 @@ export async function loadXtream(
     kind: 'series', id: `${src.id}:s${s.series_id}`, sourceId: src.id,
     name: str(s.name) ?? 'Series', group: scm.get(String(s.category_id)) ?? 'Uncategorized',
     poster: art(s.cover), backdrop: lean ? undefined : art(arr(s.backdrop_path)[0]), rating: num(s.rating) || undefined,
-    year: year(s.releaseDate ?? s.release_date), plot: lean ? undefined : str(s.plot)?.slice(0, 240), added: num(s.last_modified), seriesId: +s.series_id, tmdb: num(s.tmdb ?? s.tmdb_id) || undefined
+    year: year(s.releaseDate ?? s.release_date), added: num(s.last_modified), seriesId: +s.series_id, tmdb: num(s.tmdb ?? s.tmdb_id) || undefined
   }))
   return { channels, movies, series, account }
 }

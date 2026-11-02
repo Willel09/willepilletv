@@ -88,3 +88,10 @@ export class JsonArrayStream {
     if (this.start >= 0) this.start = 0
   }
 }
+
+/** A provider URL fit to show: login details hidden (get.php?username=…&password=…, /live/user/pass/1.ts) */
+export const maskUrl = (u: string) =>
+  u
+    .replace(/([?&](?:username|password|user|pass|pwd|token|key)=)[^&#]*/gi, '$1•••')
+    .replace(/\/(live|movie|series|timeshift)\/[^/]+\/[^/]+\//i, '/$1/•••/•••/')
+    .replace(/\/\/[^/@\s]+@/, '//•••@')

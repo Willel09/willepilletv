@@ -126,34 +126,47 @@ const concat = (a: Uint8Array, b: Uint8Array) => {
 /* ---------------- server ---------------- */
 
 async function rpc<T>(fn: string, body: Record<string, unknown>): Promise<T> {
-  let res: Response
+  // a request that never answers would leave sync stuck until restart (AbortSignal.timeout is too new for 2021 TVs)
+  const ctl = new AbortController()
+  const timer = setTimeout(() => ctl.abort(), 20_000)
   try {
-    res = await fetch(`${SB_URL}/${fn}`, {
-      method: 'POST',
-      headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    })
-  } catch {
-    throw new Error('Sync server unreachable. Check your internet connection.')
+    let res: Response
+    try {
+      res = await fetch(`${SB_URL}/${fn}`, {
+        method: 'POST',
+        headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: ctl.signal
+      })
+    } catch {
+      throw new Error(ctl.signal.aborted ? 'The sync server took too long to answer.' : 'Sync server unreachable. Check your internet connection.')
+    }
+    if (!res.ok) throw new Error(`Sync failed (${res.status})`)
+    return res.status === 204 ? (undefined as T) : ((await res.json()) as T)
+  } finally {
+    clearTimeout(timer)
   }
-  if (!res.ok) throw new Error(`Sync failed (${res.status})`)
-  return res.status === 204 ? (undefined as T) : ((await res.json()) as T)
 }
 
-export async function pull(code: string): Promise<SyncDoc | null> {
+/** The synced document and its server version (`at`, null = none yet), for pushIf */
+export async function pull(code: string): Promise<{ doc: SyncDoc | null; at: string | null }> {
   const box = await derive(code, 'sync')
-  const rows = await rpc<{ data: string }[]>('sync_get', { p_id: box.id })
-  if (!rows.length) return null
+  const rows = await rpc<{ data: string; updated_at: string }[]>('sync_get', { p_id: box.id })
+  if (!rows.length) return { doc: null, at: null }
   try {
-    return await box.open<SyncDoc>(rows[0].data)
+    return { doc: await box.open<SyncDoc>(rows[0].data), at: rows[0].updated_at }
   } catch {
     throw new Error("Couldn't decrypt synced data. Is the sync code correct?")
   }
 }
 
-export async function push(code: string, doc: SyncDoc) {
+/**
+ * Writes `doc` only if the server still has version `at` (what was pulled). False = another device pushed in
+ * between: pull and merge again, or its changes would be lost.
+ */
+export async function pushIf(code: string, doc: SyncDoc, at: string | null): Promise<boolean> {
   const box = await derive(code, 'sync')
-  await rpc('sync_put', { p_id: box.id, p_data: await box.seal(doc) })
+  return (await rpc<string | null>('sync_put_if', { p_id: box.id, p_data: await box.seal(doc), p_expect: at })) != null
 }
 
 /** Device that already has the sync code sends it to a device showing `pairCode` */
@@ -178,7 +191,8 @@ export async function receivePairing(pairCode: string): Promise<string | null> {
 
 const CHUNK = 2_900_000 // bytes before base64 (+33%) stays under 4,000,000 chars
 const MAX_CHUNKS = 24
-const fileId = (code: string, sourceId: string, part: number | 'head') => hex(sha256(enc.encode(`lumen-file:${normalize(code)}:${sourceId}:${part}`)))
+// parts carry the file version (`sig`): a new upload never overwrites the parts another device is still reading
+const fileId = (code: string, sourceId: string, part: string | 'head') => hex(sha256(enc.encode(`lumen-file:${normalize(code)}:${sourceId}:${part}`)))
 interface FileHead { sig: string; n: number }
 
 async function fileHead(code: string, sourceId: string): Promise<FileHead | null> {
@@ -188,14 +202,19 @@ async function fileHead(code: string, sourceId: string): Promise<FileHead | null
 
 /** Upload a playlist file unless the server already has this version (`sig` = mtime + size) */
 export async function pushFile(code: string, sourceId: string, text: string, sig: string) {
-  if ((await fileHead(code, sourceId))?.sig === sig) return
+  const old = await fileHead(code, sourceId)
+  if (old?.sig === sig) return
   const box = await derive(code, 'sync')
   const gz = gzipSync(enc.encode(text), { level: 6 })
   const n = Math.ceil(gz.length / CHUNK)
   if (n > MAX_CHUNKS) throw new Error('This playlist file is too large to sync. Use its URL instead.')
-  for (let i = 0; i < n; i++) await rpc('sync_put', { p_id: fileId(code, sourceId, i), p_data: await box.sealBytes(gz.subarray(i * CHUNK, (i + 1) * CHUNK)) })
+  for (let i = 0; i < n; i++) await rpc('sync_put', { p_id: fileId(code, sourceId, `${sig}:${i}`), p_data: await box.sealBytes(gz.subarray(i * CHUNK, (i + 1) * CHUNK)) })
   // the head goes last, so another device never sees a half-uploaded file
   await rpc('sync_put', { p_id: fileId(code, sourceId, 'head'), p_data: await box.seal({ sig, n }) })
+  // then the previous version's parts go (a device that read the old head a moment ago may miss them and retry later)
+  if (old) for (let i = 0; i < old.n; i++) await rpc('sync_delete', { p_id: fileId(code, sourceId, `${old.sig}:${i}`) }).catch(() => {})
+  // parts of files uploaded before 1.3.12 had no version in their id
+  if (old) for (let i = 0; i < old.n; i++) await rpc('sync_delete', { p_id: fileId(code, sourceId, String(i)) }).catch(() => {})
 }
 
 /** Download a playlist file shared by the PC, or null if it was never uploaded */
@@ -205,7 +224,9 @@ export async function pullFile(code: string, sourceId: string): Promise<string |
   const box = await derive(code, 'sync')
   const parts: Uint8Array[] = []
   for (let i = 0; i < head.n; i++) {
-    const rows = await rpc<{ data: string }[]>('sync_get', { p_id: fileId(code, sourceId, i) })
+    let rows = await rpc<{ data: string }[]>('sync_get', { p_id: fileId(code, sourceId, `${head.sig}:${i}`) })
+    // uploaded by a version before 1.3.12 (parts without the file version in their id)
+    if (!rows.length) rows = await rpc<{ data: string }[]>('sync_get', { p_id: fileId(code, sourceId, String(i)) })
     if (!rows.length) throw new Error('The playlist file is still uploading from your PC. Try again in a minute.')
     parts.push(await box.openBytes(rows[0].data))
   }
@@ -216,6 +237,16 @@ export async function pullFile(code: string, sourceId: string): Promise<string |
 
 const TOMB_TTL = 90 * 86400_000
 const keyOf = (c: Coll, id: string) => `${c}:${id}`
+
+/**
+ * Pulls, then reads the local state: anything changed while the download was running is part of the merge
+ * instead of being overwritten by a result built from an older local copy.
+ */
+export async function pullAndMerge(local: () => SyncDoc, pulled: Promise<SyncDoc | null>): Promise<{ local: SyncDoc; merged: SyncDoc }> {
+  const remote = await pulled
+  const now = local()
+  return { local: now, merged: merge(now, remote) }
+}
 
 /**
  * Per-item last-writer-wins. A deletion (tombstone) beats the item if it is newer, so removing
@@ -239,9 +270,13 @@ export function merge(local: SyncDoc, remote: SyncDoc | null): SyncDoc {
         if (!cur || at > cur.at) byId.set(item.id, { item, at })
       }
     }
-    const kept = [...byId.values()].filter(({ item, at }) => at > (meta.tomb[keyOf(c, item.id)] ?? 0))
-    // newest first, except sources where the user's order matters
-    if (c !== 'sources') kept.sort((a, b) => b.at - a.at)
+    let kept = [...byId.values()].filter(({ item, at }) => at > (meta.tomb[keyOf(c, item.id)] ?? 0))
+    // newest first, except where the user's order matters: sources, and favorites (whose order this device
+    // keeps; ones added on another device go in front, where adding one puts it)
+    if (c === 'favorites') {
+      const mine = new Set((local[c] as { id: string }[]).map((x) => x.id))
+      kept = [...kept.filter((k) => !mine.has(k.item.id)), ...kept.filter((k) => mine.has(k.item.id))]
+    } else if (c !== 'sources') kept.sort((a, b) => b.at - a.at)
     if (c === 'history') kept.splice(300) // same cap as on-device history, so every device converges
     for (const { item, at } of kept) meta.at[keyOf(c, item.id)] = at
     ;(out[c] as { id: string }[]) = kept.map((k) => k.item)

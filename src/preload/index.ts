@@ -16,7 +16,8 @@ const api: IptvApi = {
   getLibrary: () => ipcRenderer.invoke('library:get'),
   refreshLibrary: () => ipcRenderer.invoke('library:refresh'),
   // JSON text from the worker (see worker.ts); parsed here, in the window's process
-  libraryPart: async (list, from) => JSON.parse(await ipcRenderer.invoke('library:part', list, from)),
+  cancelRefresh: () => ipcRenderer.send('library:cancel'),
+  libraryPart: async (list, from, gen) => JSON.parse(await ipcRenderer.invoke('library:part', list, from, gen)),
   getEpg: async () => {
     const text: string | null = await ipcRenderer.invoke('epg:get')
     try {
