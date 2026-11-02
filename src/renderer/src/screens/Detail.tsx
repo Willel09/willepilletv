@@ -14,7 +14,8 @@ function EpisodeCard({ show, ep, episodes, art }: { show: Show; ep: Episode; epi
   const h = useApp((s) => s.history.find((x) => x.id === `${show.id}:${ep.id}`))
   return (
     <motion.button
-      layout
+      // layout animations measure every card on each render: not on TVs
+      layout={api.device !== 'tv'}
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       whileHover={{ scale: 1.035 }}
@@ -74,6 +75,9 @@ export default function Detail({ item }: { item: Movie | Show }) {
   }, [item, ver]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const art = info.backdrop || (item.kind === 'series' ? item.backdrop : undefined) || info.poster || item.poster
+  const wideArt = !!(info.backdrop || (item.kind === 'series' && item.backdrop))
+  // TVs: a portrait poster isn't blown up and blurred into a backdrop (a huge filter); masks are skipped too
+  const tv = api.device === 'tv'
   useEffect(() => {
     setAmbient(art)
   }, [art])
@@ -131,11 +135,12 @@ export default function Detail({ item }: { item: Movie | Show }) {
       transition={sheetSpring}
     >
       <div className="relative min-h-[calc(var(--vh,1vh)*88)]">
-        <motion.div className="absolute inset-0 overflow-hidden [mask-image:linear-gradient(to_bottom,black_50%,transparent)]" initial={{ scale: 1.08 }} animate={{ scale: 1 }} transition={{ duration: 1.6, ease: [0.2, 0.7, 0.2, 1] }}>
-          {art && <img src={artUrl(art, 1280)} alt="" referrerPolicy="no-referrer" className={`size-full object-cover object-[center_20%] ${info.backdrop || (item.kind === 'series' && item.backdrop) ? '' : 'scale-110 blur-2xl saturate-150'}`} onError={(e) => (e.currentTarget.style.display = 'none')} />}
+        <motion.div className={`absolute inset-0 overflow-hidden ${tv ? '' : '[mask-image:linear-gradient(to_bottom,black_50%,transparent)]'}`} initial={{ scale: 1.08 }} animate={{ scale: 1 }} transition={{ duration: 1.6, ease: [0.2, 0.7, 0.2, 1] }}>
+          {art && (!tv || wideArt) && <img src={artUrl(art, 1280)} alt="" referrerPolicy="no-referrer" className={`size-full object-cover object-[center_20%] ${info.backdrop || (item.kind === 'series' && item.backdrop) ? '' : 'scale-110 blur-2xl saturate-150'}`} onError={(e) => (e.currentTarget.style.display = 'none')} />}
         </motion.div>
         <div className="absolute inset-0 bg-gradient-to-r from-[rgb(var(--base-rgb)/0.92)] via-[rgb(var(--base-rgb)/0.6)] to-transparent" />
         <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-[rgb(var(--base-rgb)/0.55)] to-transparent" />
+        {tv && <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-[rgb(var(--base-rgb))] to-transparent" />}
 
         <div className="relative flex items-end gap-12 px-14 pb-14 pt-32">
           <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ ...softSpring, delay: 0.08 }} className="min-w-0 max-w-3xl flex-1">

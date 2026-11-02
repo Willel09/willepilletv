@@ -187,22 +187,30 @@ input[type='range'] {
 }
 
 /* ---------- Samsung TV ---------- */
-/* TV GPUs and memory are modest: every backdrop blur needs extra full-size render surfaces, so TVs get
-   solid frosted panels instead, and no blurred artwork wash behind the app */
+/* No liquid glass on TVs: panels are flat and opaque. Translucent layers must be blended with everything
+   behind them on every scroll, backdrop blurs need extra full-size surfaces, and big soft shadows are slow
+   to paint on TV GPUs */
 [data-device='tv'] .glass,
 [data-device='tv'] .glass-strong,
 [data-device='tv'] .glass-thin {
-  background-color: rgb(var(--base-rgb) / 0.86);
+  background: rgb(var(--tv-panel));
+  box-shadow: inset 0 0 0 1px rgb(var(--fg-rgb) / 0.1);
 }
-[data-device='tv'] * {
-  backdrop-filter: none !important;
+[data-device='tv'] .glass-strong {
+  background: rgb(var(--tv-panel-strong));
 }
-/* no transitions or keyframe animations on TV, except the loading spinner */
+[data-device='tv'] .tv-flat {
+  box-shadow: none;
+}
+/* one universal rule (they're matched against every element): no blurs, filters or transitions on TV */
 [data-device='tv'] *,
 [data-device='tv'] *::before,
 [data-device='tv'] *::after {
+  backdrop-filter: none !important;
+  filter: none !important;
   transition: none !important;
 }
+/* no keyframe animations either, except the loading spinner */
 [data-device='tv'] *:not(.animate-spin) {
   animation: none !important;
 }
@@ -239,4 +247,10 @@ input[type='range'] {
 [data-device='tv'] .card:focus-visible > div:first-child {
   outline: 4px solid #fff;
   outline-offset: 4px;
+}
+/* the player stays dark over the video whatever the theme; a dim veil is cheap there (video is its own layer) */
+[data-device='tv'] .force-dark .glass,
+[data-device='tv'] .force-dark .glass-strong,
+[data-device='tv'] .force-dark .glass-thin {
+  background: rgb(0 0 0 / 0.72);
 }

@@ -1,5 +1,10 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { Children, useEffect, useRef, useState, type ReactNode } from 'react'
+import { api } from '../store'
+
+// TVs: a row starts with the cards that fit on screen plus a few, and grows as focus moves right. Each
+// poster is ~0.7 MB of decoded image, and a home screen of 30-card rows would otherwise hold hundreds.
+const STEP = api.device === 'tv' ? 10 : Infinity
 
 /**
  * Netflix-style horizontal shelf. Its cards only exist while the row is near the screen: older TV
@@ -9,6 +14,13 @@ export function Row({ title, onSeeAll, children, count }: { title: string; onSee
   const ref = useRef<HTMLDivElement>(null)
   const section = useRef<HTMLElement>(null)
   const [near, setNear] = useState(false)
+  const [limit, setLimit] = useState(STEP)
+  const all = Children.toArray(children)
+  const grow = (e: { target: EventTarget }) => {
+    if (limit >= all.length) return
+    const cards = ref.current!.children
+    for (let i = cards.length - 1; i >= Math.max(0, cards.length - 4); i--) if (cards[i].contains(e.target as Node)) return setLimit(limit + STEP)
+  }
   useEffect(() => {
     // measured against the scrolling page, so the margin really pre-loads the next rows
     const root = section.current!.closest('.overflow-y-auto')
@@ -28,8 +40,8 @@ export function Row({ title, onSeeAll, children, count }: { title: string; onSee
           </button>
         )}
       </header>
-      <div ref={ref} className={`no-scrollbar flex ${near ? "" : "min-h-[300px]"} scroll-px-14 gap-5 overflow-x-auto px-14 pb-10 pt-6`}>
-        {near && children}
+      <div ref={ref} onFocus={grow} className={`no-scrollbar flex ${near ? "" : "min-h-[300px]"} scroll-px-14 gap-5 overflow-x-auto px-14 pb-10 pt-6`}>
+        {near && (limit < all.length ? all.slice(0, limit) : all)}
       </div>
       {(['left', 'right'] as const).map((side) => (
         <button

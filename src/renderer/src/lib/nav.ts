@@ -89,6 +89,10 @@ export function initSpatialNav() {
     if (g) lastIn.set(g, t)
   }
 
+  // A held arrow key repeats faster than a slow TV can lay out and paint each step; those presses would
+  // queue up and focus would keep running after the key is released. Repeats get one move per frame (separate
+  // presses always count).
+  let busy = false
   const onKey = (e: KeyboardEvent) => {
     const dir = KEYS[e.key]
     if (!dir || e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return
@@ -97,6 +101,9 @@ export function initSpatialNav() {
     const scopes = document.querySelectorAll<HTMLElement>('[data-nav-scope]')
     const scope: ParentNode = scopes[scopes.length - 1] ?? document
     e.preventDefault()
+    if (busy && e.repeat) return
+    busy = true
+    requestAnimationFrame(() => (busy = false))
 
     if (!active || active === document.body || !(scope as Node).contains(active)) {
       // back from an overlay: where we were; otherwise the screen's main content, not the menu bar
@@ -106,7 +113,11 @@ export function initSpatialNav() {
       return void first?.focus()
     }
 
-    const items = [...scope.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((el) => el !== active && visible(el))
+    const items = [...scope.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((el) => el !== active && el.tabIndex >= 0)
+    const rect = new Map(items.map((el) => [el, el.getBoundingClientRect()]))
+    const shown = (el: HTMLElement) => { const r = rect.get(el)!; return r.width > 0 && r.height > 0 }
+    for (let i = items.length - 1; i >= 0; i--) if (!shown(items[i])) items.splice(i, 1)
+    const ok = new Set(items)
     // A group (category list, info panel) counts as one target and is entered at its entry point or where
     // you last were in it: Left from the channel list goes to the selected category, not the nearest one
     const here = active.closest('[data-nav-group]')
@@ -117,7 +128,8 @@ export function initSpatialNav() {
       if (!g || g === here) targets.push({ el })
       else if (!groups.has(g)) groups.add(g), targets.push({ el, group: g })
     }
-    const i = pick(active.getBoundingClientRect(), targets.map((t) => (t.group ?? t.el).getBoundingClientRect()), dir)
+    const from = active.getBoundingClientRect()
+    const i = pick(from, targets.map((t) => (t.group ? t.group.getBoundingClientRect() : rect.get(t.el)!)), dir)
     if (i < 0) return
     let best = targets[i].el
     const g = targets[i].group
@@ -125,9 +137,9 @@ export function initSpatialNav() {
       const inside = items.filter((el) => g.contains(el))
       const last = lastIn.get(g)
       const entry = g.querySelector<HTMLElement>('[data-nav-entry]')
-      if (last && last.isConnected && visible(last) && g.contains(last)) best = last
-      else if (entry && visible(entry)) best = entry
-      else best = inside[Math.max(0, pick(active.getBoundingClientRect(), inside.map((el) => el.getBoundingClientRect()), dir))] ?? best
+      if (last && last.isConnected && ok.has(last) && g.contains(last)) best = last
+      else if (entry && ok.has(entry)) best = entry
+      else best = inside[Math.max(0, pick(from, inside.map((el) => rect.get(el)!), dir))] ?? best
     }
     best.focus({ preventScroll: true })
     if (tv())

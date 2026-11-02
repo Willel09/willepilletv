@@ -182,6 +182,11 @@ export function updateSettings(patch: Partial<Settings>) {
 /** TVs and phones drop hidden titles while loading (see buildLibrary), so a filter change needs a reload there */
 const reloadIfFiltered = () => api.device !== 'desktop' && get().sources.length > 0 && void refreshLibrary()
 
+const mixRgb = (a: string, b: string, k: number) => {
+  const x = a.split(' ').map(Number), y = b.split(' ').map(Number)
+  return x.map((v, i) => Math.round(v + (y[i] - v) * k)).join(' ')
+}
+
 export function applyAppearance(s: Settings) {
   const t = themeById(s.theme)
   const root = document.documentElement
@@ -193,7 +198,10 @@ export function applyAppearance(s: Settings) {
     '--base-rgb': t.base,
     '--accent-rgb': s.accent ? hexToRgb(s.accent) : t.accent,
     '--glow-1': t.glow[0],
-    '--glow-2': t.glow[1]
+    '--glow-2': t.glow[1],
+    // TVs: flat opaque panels, the theme's background lifted a little toward its text colour
+    '--tv-panel': mixRgb(t.base, t.fg, t.mode === 'dark' ? 0.09 : 0.04),
+    '--tv-panel-strong': mixRgb(t.base, t.fg, t.mode === 'dark' ? 0.13 : 0.07)
   }
   for (const [k, v] of Object.entries(vars)) root.style.setProperty(k, v)
   api.win.setTheme(t.mode)
@@ -260,7 +268,8 @@ export function toast(text: string) {
 
 export const setTab = (tab: Tab) => set({ tab, detail: null })
 export const setAmbient = (src?: string) => {
-  if (src && get().ambient !== src) set({ ambient: src })
+  // TVs draw no artwork wash, so focusing a card shouldn't touch the store at all
+  if (src && api.device !== 'tv' && get().ambient !== src) set({ ambient: src })
 }
 export const openDetail = (item: Movie | Show) => set({ detail: item })
 export const closeDetail = () => set({ detail: null })

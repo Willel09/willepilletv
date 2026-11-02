@@ -32,11 +32,13 @@ export function Hero({ items }: { items: (Movie | Show)[] }) {
   const art = (item.kind === 'series' && item.backdrop) || item.poster
   const wide = item.kind === 'series' && !!item.backdrop
   const listed = inWatchlist(item.id)
+  // TVs: no blurred full-screen copy of a portrait poster (a huge filter and an extra 1280px decode) and no mask layer
+  const tv = api.device === 'tv'
 
   return (
     <section className="relative h-[calc(var(--vh,1vh)*78)] max-h-[760px] min-h-[540px] overflow-hidden" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
       {/* Masked so the artwork dissolves into the ambient background instead of ending in a hard edge */}
-      <div className="absolute inset-0 [mask-image:linear-gradient(to_bottom,black_45%,transparent_96%)]">
+      <div className={`absolute inset-0 ${tv ? '' : '[mask-image:linear-gradient(to_bottom,black_45%,transparent_96%)]'}`}>
         <AnimatePresence initial={false}>
           <motion.div
             key={item.id}
@@ -46,7 +48,7 @@ export function Hero({ items }: { items: (Movie | Show)[] }) {
             exit={{ opacity: 0 }}
             transition={{ opacity: { duration: 0.9 }, scale: { duration: 9, ease: 'linear' } }}
           >
-            {art && (
+            {art && (wide || !tv) && (
               <img
                 src={artUrl(art, 1280)}
                 alt=""
@@ -59,6 +61,7 @@ export function Hero({ items }: { items: (Movie | Show)[] }) {
         </AnimatePresence>
         <div className="absolute inset-0 bg-gradient-to-r from-[rgb(var(--base-rgb)/0.92)] via-[rgb(var(--base-rgb)/0.45)] to-transparent" />
         <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-[rgb(var(--base-rgb)/0.55)] to-transparent" />
+        {tv && <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-[rgb(var(--base-rgb))] to-transparent" />}
       </div>
 
       <AnimatePresence>
@@ -73,7 +76,7 @@ export function Hero({ items }: { items: (Movie | Show)[] }) {
             animate={{ opacity: 1, y: 0, rotate: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ ...softSpring, delay: 0.15 }}
-            className="absolute right-[9%] top-[18%] hidden aspect-[2/3] h-[56%] rounded-[28px] object-cover shadow-[0_50px_100px_-20px_rgb(0_0_0/0.85),inset_0_1px_0_rgb(255_255_255/0.3)] ring-1 ring-white/15 lg:block"
+            className="absolute right-[9%] top-[18%] hidden aspect-[2/3] h-[56%] rounded-[28px] object-cover shadow-[0_50px_100px_-20px_rgb(0_0_0/0.85),inset_0_1px_0_rgb(255_255_255/0.3)] ring-1 ring-white/15 lg:block tv-flat"
             onError={(e) => (e.currentTarget.style.display = 'none')}
           />
         )}

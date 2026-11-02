@@ -1,11 +1,17 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { artUrl } from '../lib/format'
-import { useApp } from '../store'
+import { api, useApp } from '../store'
 
 const LEVEL = { strong: { opacity: 0.42, sat: 'saturate-[1.6]' }, subtle: { opacity: 0.2, sat: 'saturate-[1.1]' }, off: null }
 
 /** The theme's soft glow, plus (optionally) a blurred wash of whatever artwork is focused */
 export function Ambient() {
+  // TVs: two full-screen gradient layers under every translucent panel cost blending on each scroll; plain background
+  if (api.device === 'tv') return null
+  return <AmbientLayers />
+}
+
+function AmbientLayers() {
   const src = useApp((s) => s.ambient)
   const level = LEVEL[useApp((s) => s.settings.ambient)]
   return (

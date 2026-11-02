@@ -195,7 +195,9 @@ apple-iptv/
   - provider lists and the TV guide are parsed **while they download**, so a 100 MB JSON list or XMLTV file never sits in memory whole;
   - the library is cached in **pieces** (a single IndexedDB value over ~128 MB is refused, which used to leave the TV stuck on *Loading your library…*);
   - TMDB artwork is requested at the size it's shown instead of the original (a 2000×3000 poster costs ~24 MB once decoded);
-  - home rows only exist near the screen, cards have no 3D tilt layers, and there are no backdrop blurs on TV;
+  - home rows only exist near the screen, and a row starts with ~10 cards and grows as you move right;
+  - **no Liquid Glass on TV:** panels are flat and opaque, with no backdrop blurs, blur filters, masks, big soft shadows or artwork glow behind the app. Cards are plain buttons (no animation library per card);
+  - a held arrow key moves focus at most once per frame, so focus stops when you let go (measured at a TV-like CPU speed: a focus step takes half as long as in 1.3.6, with half the page elements);
   - the TV keeps a 12-hour guide (refreshed automatically) and shorter video buffers;
   - titles are stored lean: Xtream stream addresses are built when you press Play, TMDB artwork is stored as its file name, and TVs leave series plots/backdrops to the detail page (~100 MB less for 600k titles);
   - on TVs and phones, **Remove BS** and hidden categories apply while loading, so hidden titles never take memory (changing them reloads the library);

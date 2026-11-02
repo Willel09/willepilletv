@@ -48,7 +48,23 @@ interface CardShellProps {
   className?: string
 }
 
-function CardShell({ aspect, width, art, ambientArt, name, contain, onClick, footer, overlay, className = '' }: CardShellProps) {
+/** TVs: a plain button. Three framer-motion elements per card (hundreds on the home screen) cost mount time,
+ *  memory and a big animated shadow on every focus; the focus ring comes from CSS instead */
+function PlainCard({ aspect, width, art, name, contain, onClick, footer, overlay, className = '' }: CardShellProps) {
+  return (
+    <button className={`card group relative shrink-0 text-left ${className}`} style={{ width }} onClick={onClick}>
+      <div className={`relative overflow-hidden rounded-[22px] bg-[var(--card-bg)] ${aspect}`}>
+        <Img src={art} name={name} contain={contain} className={`size-full ${contain ? 'p-[14%]' : ''}`} />
+        {overlay}
+      </div>
+      {footer}
+    </button>
+  )
+}
+
+const CardShell = TILT ? FancyCard : PlainCard
+
+function FancyCard({ aspect, width, art, ambientArt, name, contain, onClick, footer, overlay, className = '' }: CardShellProps) {
   const t = useTilt()
   const ambient = () => setAmbient(ambientArt ?? art)
   return (
@@ -63,13 +79,13 @@ function CardShell({ aspect, width, art, ambientArt, name, contain, onClick, foo
       onClick={onClick}
       onFocus={ambient}
       onMouseEnter={ambient}
-      onPointerMove={TILT ? t.onPointerMove : undefined}
-      onPointerLeave={TILT ? t.onPointerLeave : undefined}
+      onPointerMove={t.onPointerMove}
+      onPointerLeave={t.onPointerLeave}
     >
       <motion.div
         variants={lift}
         transition={spring}
-        style={TILT ? { rotateX: t.rotateX, rotateY: t.rotateY, transformPerspective: 900 } : undefined}
+        style={{ rotateX: t.rotateX, rotateY: t.rotateY, transformPerspective: 900 }}
         className={`relative overflow-hidden rounded-[22px] bg-[var(--card-bg)] ${aspect}`}
       >
         <Img src={art} name={name} contain={contain} className={`size-full ${contain ? 'p-[14%]' : ''}`} />
