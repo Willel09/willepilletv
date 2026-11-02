@@ -15,9 +15,17 @@ const api: IptvApi = {
   setStore: (key, value) => ipcRenderer.invoke('store:set', key, value),
   getLibrary: () => ipcRenderer.invoke('library:get'),
   refreshLibrary: () => ipcRenderer.invoke('library:refresh'),
-  libraryPart: (list, from) => ipcRenderer.invoke('library:part', list, from),
-  getEpg: () => ipcRenderer.invoke('epg:get'),
-  refreshEpg: () => ipcRenderer.invoke('epg:refresh'),
+  // JSON text from the worker (see worker.ts); parsed here, in the window's process
+  libraryPart: async (list, from) => JSON.parse(await ipcRenderer.invoke('library:part', list, from)),
+  getEpg: async () => {
+    const text: string | null = await ipcRenderer.invoke('epg:get')
+    try {
+      return text ? JSON.parse(text) : null
+    } catch {
+      return null
+    }
+  },
+  refreshEpg: async () => JSON.parse(await ipcRenderer.invoke('epg:refresh')),
   mediaInfo: (sourceId, kind, id) => ipcRenderer.invoke('media:info', sourceId, kind, id),
   pickPlaylistFile: () => ipcRenderer.invoke('dialog:playlist'),
   readPlaylistFile: (path) => ipcRenderer.invoke('file:read', path),

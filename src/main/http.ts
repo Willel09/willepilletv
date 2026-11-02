@@ -1,4 +1,3 @@
-import { net } from 'electron'
 import { readFile } from 'fs/promises'
 import { fileURLToPath } from 'url'
 import { gunzipSync } from 'zlib'
@@ -14,7 +13,8 @@ const FRIENDLY: [RegExp, string][] = [
 ]
 
 function friendly(e: unknown, url: string): Error {
-  const msg = e instanceof Error ? `${e.name} ${e.message}` : String(e)
+  // Node's fetch puts the network error code (ECONNREFUSED…) on e.cause
+  const msg = e instanceof Error ? `${e.name} ${e.message} ${(e.cause as { code?: string })?.code ?? ''}` : String(e)
   const hit = FRIENDLY.find(([re]) => re.test(msg))
   let host = url
   try { host = new URL(url).host } catch { /* local path */ }
@@ -23,7 +23,7 @@ function friendly(e: unknown, url: string): Error {
 
 const decode = (b: Buffer) => (b[0] === 0x1f && b[1] === 0x8b ? gunzipSync(b) : b).toString('utf8')
 
-/** Fetch text from a URL or local file; transparently gunzips .gz guides. Runs in main, so no CORS. */
+/** Fetch text from a URL or local file; transparently gunzips .gz guides. Node's fetch (no CORS), so it also works in the library worker. */
 export async function getText(url: string, ua: string, timeoutMs = 180_000): Promise<string> {
   if (!/^https?:\/\//i.test(url)) {
     try {
@@ -34,7 +34,7 @@ export async function getText(url: string, ua: string, timeoutMs = 180_000): Pro
   }
   let res: Response
   try {
-    res = await net.fetch(url, { headers: { 'User-Agent': ua, Accept: '*/*' }, signal: AbortSignal.timeout(timeoutMs) })
+    res = await fetch(url, { headers: { 'User-Agent': ua, Accept: '*/*' }, signal: AbortSignal.timeout(timeoutMs) })
   } catch (e) {
     throw friendly(e, url)
   }

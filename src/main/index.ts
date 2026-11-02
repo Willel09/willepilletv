@@ -1,3 +1,4 @@
+import { Worker } from 'node:worker_threads'
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, net, session, shell } from 'electron'
 import { spawn } from 'child_process'
 import { existsSync } from 'fs'
@@ -6,13 +7,11 @@ import { fileURLToPath } from 'url'
 import { join } from 'path'
 import Store from 'electron-store'
 import { autoUpdater } from 'electron-updater'
-import { DEFAULT_SETTINGS, STORE_DEFAULTS, type CastMedia, type Library, type Settings, type StoreShape, type UpdateState } from '../shared/types'
-import { buildEpg, buildLibrary, emptyLibrary, isMerged, mergeLibrary } from '../shared/core/library'
+import { DEFAULT_SETTINGS, STORE_DEFAULTS, type CastMedia, type Settings, type StoreShape, type UpdateState } from '../shared/types'
 import { xtreamInfo } from '../shared/core/xtream'
 import { discoverCast, startCast, stopCast } from './cast'
 import { probeStream } from '../shared/core/probe'
 import { getText } from './http'
-import { readCache, writeCache } from './library'
 import { devModeOn, discoverTvs, localIps, openTvInstaller } from './tvinstall'
 
 // Lets <video> expose audioTracks for multi-language MP4/MKV files
@@ -28,7 +27,6 @@ const settings = (): Settings => {
 }
 
 let win: BrowserWindow | null = null
-let library: Library | null = null
 
 const isWin11 = process.platform === 'win32' && Number(process.getSystemVersion().split('.')[2] ?? 0) >= 22000
 
@@ -51,7 +49,7 @@ function createWindow() {
     webPreferences: { preload: join(__dirname, '../preload/index.js'), sandbox: true, contextIsolation: true }
   })
   win.once('ready-to-show', () => win?.show())
-  const sendState = () => win?.webContents.send('win:state', { maximized: win.isMaximized(), fullscreen: win.isFullScreen() })
+  const sendState = () => win && send('win:state', { maximized: win.isMaximized(), fullscreen: win.isFullScreen() })
   for (const ev of ['maximize', 'unmaximize', 'enter-full-screen', 'leave-full-screen'] as const) win.on(ev as 'maximize', sendState)
   // Never navigate the app window away; open links in the browser
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -92,20 +90,37 @@ function patchNetworking() {
   })
 }
 
-const progress = (m: string) => win?.webContents.send('progress', m)
+/** To the window, if it's still open: the updater and the library worker keep going after it's closed */
+const send = (channel: string, v: unknown) => win && !win.isDestroyed() && win.webContents.send(channel, v)
+const progress = (m: string) => send('progress', m)
 const get = (url: string, timeoutMs?: number) => getText(url, settings().userAgent, timeoutMs)
 const STORE_KEYS = Object.keys(STORE_DEFAULTS) as (keyof StoreShape)[]
 
-/**
- * The library goes to the window in pieces: one message with 500k titles takes seconds to unpack and
- * freezes the window meanwhile (on the profile picker at start, for example). Pieces leave gaps for clicks.
- */
-const PART = 20_000
-let outgoing: Library | null = null
-// shortcut: pieces come from the library last handed over; a refresh finishing mid-transfer would mix them (the window loads one at a time)
-const handOver = (lib: Library): Library => {
-  outgoing = lib
-  return { ...lib, channels: [], movies: [], series: [], parts: { channels: lib.channels.length, movies: lib.movies.length, series: lib.series.length } }
+/** Library and guide work runs in a worker thread, see worker.ts */
+let worker: Worker | null = null
+let seq = 0
+const pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>()
+function work<T>(op: string, ...args: unknown[]): Promise<T> {
+  if (!worker) {
+    worker = new Worker(join(__dirname, 'worker.js'), { workerData: { dir: app.getPath('userData') } })
+    worker.on('message', (m: { id?: number; progress?: string; result?: unknown; error?: string }) => {
+      if (m.progress !== undefined) return progress(m.progress)
+      const p = pending.get(m.id!)
+      pending.delete(m.id!)
+      if (m.error) p?.reject(new Error(m.error))
+      else p?.resolve(m.result)
+    })
+    worker.on('error', (e: Error) => {
+      for (const p of pending.values()) p.reject(e)
+      pending.clear()
+      worker = null
+    })
+  }
+  const id = ++seq
+  return new Promise<T>((resolve, reject) => {
+    pending.set(id, { resolve: resolve as (v: unknown) => void, reject })
+    worker!.postMessage({ id, op, args })
+  })
 }
 
 function registerIpc() {
@@ -115,25 +130,11 @@ function registerIpc() {
     if (!STORE_KEYS.includes(key)) throw new Error(`Unknown store key ${key}`)
     store.set(key, value as never)
   })
-  ipcMain.handle('library:get', async () => {
-    library ??= await readCache<Library>('library')
-    // libraries cached unmerged (before 1.3.9) are merged here once, not in the window: 400k titles froze it
-    if (library && !isMerged(library)) await mergeLibrary(library), await writeCache('library', library)
-    return library && handOver(library)
-  })
-  ipcMain.handle('library:refresh', async () => {
-    library = await buildLibrary(store.get('sources'), settings(), get, progress)
-    await writeCache('library', library)
-    return handOver(library)
-  })
-  ipcMain.handle('library:part', (_e, list: 'channels' | 'movies' | 'series', from: number) => outgoing?.[list].slice(from, from + PART) ?? [])
-  ipcMain.handle('epg:get', () => readCache('epg'))
-  ipcMain.handle('epg:refresh', async () => {
-    library ??= await readCache<Library>('library')
-    const epg = await buildEpg(library ?? emptyLibrary(), settings(), get, progress)
-    await writeCache('epg', epg)
-    return epg
-  })
+  ipcMain.handle('library:get', () => work('get'))
+  ipcMain.handle('library:refresh', () => work('refresh', store.get('sources'), settings()))
+  ipcMain.handle('library:part', (_e, list: string, from: number) => work('part', list, from))
+  ipcMain.handle('epg:get', () => work('epgGet'))
+  ipcMain.handle('epg:refresh', () => work('epgRefresh', settings()))
   ipcMain.handle('media:info', (_e, sourceId: string, kind: 'movie' | 'series', id: number) => {
     const src = store.get('sources').find((x) => x.id === sourceId)
     if (!src || src.kind !== 'xtream') return {}
@@ -200,7 +201,7 @@ function registerIpc() {
  * Downloads in the background; the UI offers "Restart to update", otherwise it installs on quit.
  */
 function sendUpdate(s: UpdateState) {
-  win?.webContents.send('update:state', s)
+  send('update:state', s)
 }
 function checkForUpdates() {
   if (!app.isPackaged) return sendUpdate({ status: 'unsupported' })
