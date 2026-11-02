@@ -11,7 +11,7 @@ import { DEFAULT_SETTINGS, STORE_DEFAULTS, type CastMedia, type Settings, type S
 import { xtreamInfo } from '../shared/core/xtream'
 import { discoverCast, startCast, stopCast } from './cast'
 import { probeStream } from '../shared/core/probe'
-import { getText } from './http'
+import { getBytes, getText } from './http'
 import { devModeOn, discoverTvs, localIps, openTvInstaller } from './tvinstall'
 
 // Lets <video> expose audioTracks for multi-language MP4/MKV files
@@ -103,18 +103,31 @@ const pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Err
 function work<T>(op: string, ...args: unknown[]): Promise<T> {
   if (!worker) {
     worker = new Worker(join(__dirname, 'worker.js'), { workerData: { dir: app.getPath('userData') } })
-    worker.on('message', (m: { id?: number; progress?: string; result?: unknown; error?: string }) => {
+    const w = worker
+    w.on('message', (m: { id?: number; progress?: string; result?: unknown; error?: string; fetch?: { rid: number; url: string; timeoutMs?: number } }) => {
       if (m.progress !== undefined) return progress(m.progress)
+      // downloads for the worker go through Chromium's network stack here; the bytes are handed over, not copied
+      if (m.fetch) {
+        const { rid, url, timeoutMs } = m.fetch
+        getBytes(url, settings().userAgent || DEFAULT_SETTINGS.userAgent, timeoutMs).then(
+          (bytes) => w.postMessage({ rid, bytes }, [bytes.buffer as ArrayBuffer]),
+          (e: Error) => w.postMessage({ rid, error: e.message })
+        )
+        return
+      }
       const p = pending.get(m.id!)
       pending.delete(m.id!)
       if (m.error) p?.reject(new Error(m.error))
       else p?.resolve(m.result)
     })
-    worker.on('error', (e: Error) => {
+    // a worker that dies (error, or out of memory) must not leave the app 'Loading…' forever
+    const died = (e: Error) => {
       for (const p of pending.values()) p.reject(e)
       pending.clear()
-      worker = null
-    })
+      if (worker === w) worker = null
+    }
+    w.on('error', died)
+    w.on('exit', (code) => died(new Error(`The library worker stopped (code ${code}). Try Refresh.`)))
   }
   const id = ++seq
   return new Promise<T>((resolve, reject) => {

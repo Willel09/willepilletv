@@ -1,3 +1,4 @@
+import { net } from 'electron'
 import { readFile } from 'fs/promises'
 import { fileURLToPath } from 'url'
 import { gunzipSync } from 'zlib'
@@ -21,23 +22,29 @@ function friendly(e: unknown, url: string): Error {
   return new Error(`${hit ? hit[1] : msg} (${host})`)
 }
 
-const decode = (b: Buffer) => (b[0] === 0x1f && b[1] === 0x8b ? gunzipSync(b) : b).toString('utf8')
+/** Text of a download; transparently gunzips .gz guides */
+export const decode = (b: Uint8Array) => Buffer.from(b[0] === 0x1f && b[1] === 0x8b ? gunzipSync(b) : b).toString('utf8')
 
-/** Fetch text from a URL or local file; transparently gunzips .gz guides. Node's fetch (no CORS), so it also works in the library worker. */
-export async function getText(url: string, ua: string, timeoutMs = 180_000): Promise<string> {
+/**
+ * Bytes of a URL or local file. Chromium's network stack (not Node's fetch, which some IPTV servers fail with,
+ * and which ignores the system proxy); runs in main, so no CORS.
+ */
+export async function getBytes(url: string, ua: string, timeoutMs = 180_000): Promise<Uint8Array> {
   if (!/^https?:\/\//i.test(url)) {
     try {
-      return decode(await readFile(url.startsWith('file:') ? fileURLToPath(url) : url))
+      return new Uint8Array(await readFile(url.startsWith('file:') ? fileURLToPath(url) : url))
     } catch (e) {
       throw new Error(`Could not read file: ${(e as Error).message}`)
     }
   }
   let res: Response
   try {
-    res = await fetch(url, { headers: { 'User-Agent': ua, Accept: '*/*' }, signal: AbortSignal.timeout(timeoutMs) })
+    res = await net.fetch(url, { headers: { 'User-Agent': ua, Accept: '*/*' }, signal: AbortSignal.timeout(timeoutMs) })
   } catch (e) {
     throw friendly(e, url)
   }
   if (!res.ok) throw new Error(HTTP_HINT(res.status, res.statusText))
-  return decode(Buffer.from(await res.arrayBuffer()))
+  return new Uint8Array(await res.arrayBuffer())
 }
+
+export const getText = async (url: string, ua: string, timeoutMs?: number) => decode(await getBytes(url, ua, timeoutMs))

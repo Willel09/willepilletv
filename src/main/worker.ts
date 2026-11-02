@@ -6,7 +6,7 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { Library, Settings, Source } from '../shared/types'
 import { buildEpg, buildLibrary, emptyLibrary, isMerged, mergeLibrary } from '../shared/core/library'
-import { getText } from './http'
+import { gunzipSync } from 'node:zlib'
 
 const dir: string = workerData.dir
 const file = (name: string) => join(dir, `${name}.json`)
@@ -17,8 +17,10 @@ const write = (name: string, text: string) => writeFile(file(name), text).catch(
 const PART = 20_000
 let library: Library | null = null
 let outgoing: Library | null = null
-const loaded = async () => {
-  if (library) return library
+let loading: Promise<Library | null> | null = null
+// one read at a time: boot asks for the library and the guide refresh needs it too
+const loaded = () => (library ? Promise.resolve(library) : (loading ??= load().finally(() => (loading = null))))
+const load = async () => {
   const text = await read('library')
   try {
     library = text ? (JSON.parse(text) as Library) : null
@@ -35,12 +37,20 @@ const handOver = (lib: Library | null): Library | null => {
   return lib && { ...lib, channels: [], movies: [], series: [], parts: { channels: lib.channels.length, movies: lib.movies.length, series: lib.series.length } }
 }
 const progress = (m: string) => parentPort!.postMessage({ progress: m })
-const getter = (s: Settings) => (url: string, timeoutMs?: number) => getText(url, s.userAgent, timeoutMs)
+// downloads are done by the main process (Chromium's network stack); text is decoded here
+let rseq = 0
+const fetches = new Map<number, { resolve: (b: Uint8Array) => void; reject: (e: Error) => void }>()
+const get = (url: string, timeoutMs?: number) =>
+  new Promise<Uint8Array>((resolve, reject) => {
+    const rid = ++rseq
+    fetches.set(rid, { resolve, reject })
+    parentPort!.postMessage({ fetch: { rid, url, timeoutMs } })
+  }).then((b) => Buffer.from(b[0] === 0x1f && b[1] === 0x8b ? gunzipSync(b) : b).toString('utf8'))
 
 const ops: Record<string, (...args: never[]) => Promise<unknown>> = {
   get: async () => handOver(await loaded()),
   refresh: async (sources: Source[], s: Settings) => {
-    library = await buildLibrary(sources, s, getter(s), progress)
+    library = await buildLibrary(sources, s, get, progress)
     await write('library', JSON.stringify(library))
     return handOver(library)
   },
@@ -48,13 +58,18 @@ const ops: Record<string, (...args: never[]) => Promise<unknown>> = {
   part: async (list: 'channels' | 'movies' | 'series', from: number) => JSON.stringify(outgoing?.[list].slice(from, from + PART) ?? []),
   epgGet: () => read('epg'),
   epgRefresh: async (s: Settings) => {
-    const text = JSON.stringify(await buildEpg((await loaded()) ?? emptyLibrary(), s, getter(s), progress))
+    const text = JSON.stringify(await buildEpg((await loaded()) ?? emptyLibrary(), s, get, progress))
     await write('epg', text)
     return text
   }
 }
 
-parentPort!.on('message', async ({ id, op, args }: { id: number; op: string; args: never[] }) => {
+parentPort!.on('message', async ({ id, op, args, rid, bytes, error }: { id: number; op: string; args: never[]; rid?: number; bytes?: Uint8Array; error?: string }) => {
+  if (rid) {
+    const f = fetches.get(rid)
+    fetches.delete(rid)
+    return error ? f?.reject(new Error(error)) : f?.resolve(bytes!)
+  }
   try {
     parentPort!.postMessage({ id, result: await ops[op](...args) })
   } catch (e) {
