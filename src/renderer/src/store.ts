@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { mergeMovies } from '../../shared/core/dedupe'
 import { xtStreamUrl } from '../../shared/core/xtream'
 import { hiddenFilter } from '../../shared/core/filter'
-import { PREPARED, preparedFor } from '../../shared/core/library'
+import { isMerged, PREPARED, preparedFor } from '../../shared/core/library'
 import {
   MAIN_PROFILE,
   STORE_DEFAULTS,
@@ -215,7 +215,7 @@ export async function boot() {
   const active = lists[s.activeProfile] && profilesOf(s.profiles).some((p) => p.id === s.activeProfile) ? s.activeProfile : 'main'
   set({ ...s, ...lists[active], activeProfile: active, lists, booted: true, pickProfile: profilesOf(s.profiles).length > 1 })
   applyAppearance(s.settings)
-  const [library, epg] = await Promise.all([api.getLibrary(), api.getEpg()])
+  const [library, epg] = await Promise.all([api.getLibrary().then(whole), api.getEpg()])
   set({ library, epg })
   startSync()
   // the guide only covers the next hours (12 on TVs): keep it fresh while the app stays open
@@ -231,11 +231,27 @@ export async function boot() {
   else if (!epg || Date.now() - epg.updatedAt > 6 * 3600_000) refreshEpg()
 }
 
+/** Windows hands the library over in pieces (see library:part), so the window keeps answering clicks meanwhile */
+async function whole(lib: Library | null) {
+  if (!lib?.parts || !api.libraryPart) return lib
+  for (const k of ['channels', 'movies', 'series'] as const) {
+    const all: unknown[] = []
+    while (all.length < lib.parts[k]) {
+      const part = await api.libraryPart(k, all.length)
+      if (!part.length) break
+      for (const x of part) all.push(x)
+    }
+    ;(lib[k] as unknown[]) = all
+  }
+  delete lib.parts
+  return lib
+}
+
 export async function refreshLibrary() {
   if (get().loading) return
   set({ loading: true })
   try {
-    const library = await api.refreshLibrary()
+    const library = (await whole(await api.refreshLibrary()))!
     set({ library })
     if (library.errors.length) toast(library.errors[0])
     else toast(`Loaded ${library.channels.length.toLocaleString()} channels, ${library.movies.length.toLocaleString()} movies, ${library.series.length.toLocaleString()} series`)
@@ -518,7 +534,7 @@ export function index(): LibraryIndex {
   const keep = <T extends { group: string; name: string }>(xs: T[]) => (isHidden ? xs.filter((x) => !isHidden(x)) : xs)
   const channels = keep(lib?.channels ?? [])
   // prepared libraries are already merged; after a filter change they're only re-filtered until the reload lands
-  const merged = !!lib?.prepared?.startsWith(PREPARED)
+  const merged = !!lib && isMerged(lib)
   const movies = merged ? keep(lib!.movies) : mergeMovies(keep(lib?.movies ?? []))
   const series = merged ? keep(lib!.series) : mergeMovies(keep(lib?.series ?? []))
   let keys: Map<string, string> | null = null

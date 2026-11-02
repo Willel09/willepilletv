@@ -15,6 +15,7 @@ const api: IptvApi = {
   setStore: (key, value) => ipcRenderer.invoke('store:set', key, value),
   getLibrary: () => ipcRenderer.invoke('library:get'),
   refreshLibrary: () => ipcRenderer.invoke('library:refresh'),
+  libraryPart: (list, from) => ipcRenderer.invoke('library:part', list, from),
   getEpg: () => ipcRenderer.invoke('epg:get'),
   refreshEpg: () => ipcRenderer.invoke('epg:refresh'),
   mediaInfo: (sourceId, kind, id) => ipcRenderer.invoke('media:info', sourceId, kind, id),

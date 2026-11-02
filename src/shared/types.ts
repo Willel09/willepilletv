@@ -128,6 +128,10 @@ export interface Library {
   /** Set when hidden titles were already dropped and duplicates merged while loading (TVs, phones):
       the filter settings it was built with, so the UI can skip redoing that work */
   prepared?: string
+  /** Set when duplicates were merged while loading but nothing was filtered (Windows): the PREPARED version */
+  merged?: string
+  /** Windows: the lists are left empty and fetched with IptvApi.libraryPart; these are their lengths */
+  parts?: Record<'channels' | 'movies' | 'series', number>
 }
 
 export interface Programme {
@@ -298,6 +302,8 @@ export interface IptvApi {
   setStore<K extends keyof StoreShape>(key: K, value: StoreShape[K]): Promise<void>
   getLibrary(): Promise<Library | null>
   refreshLibrary(): Promise<Library>
+  /** Windows: items [from, from + n) of a list of the library last returned by getLibrary/refreshLibrary */
+  libraryPart?(list: 'channels' | 'movies' | 'series', from: number): Promise<unknown[]>
   getEpg(): Promise<Epg | null>
   refreshEpg(): Promise<Epg>
   mediaInfo(sourceId: string, kind: 'movie' | 'series', id: number): Promise<MediaInfo>

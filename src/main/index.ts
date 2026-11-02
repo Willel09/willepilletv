@@ -7,7 +7,7 @@ import { join } from 'path'
 import Store from 'electron-store'
 import { autoUpdater } from 'electron-updater'
 import { DEFAULT_SETTINGS, STORE_DEFAULTS, type CastMedia, type Library, type Settings, type StoreShape, type UpdateState } from '../shared/types'
-import { buildEpg, buildLibrary, emptyLibrary } from '../shared/core/library'
+import { buildEpg, buildLibrary, emptyLibrary, isMerged, mergeLibrary } from '../shared/core/library'
 import { xtreamInfo } from '../shared/core/xtream'
 import { discoverCast, startCast, stopCast } from './cast'
 import { probeStream } from '../shared/core/probe'
@@ -96,6 +96,18 @@ const progress = (m: string) => win?.webContents.send('progress', m)
 const get = (url: string, timeoutMs?: number) => getText(url, settings().userAgent, timeoutMs)
 const STORE_KEYS = Object.keys(STORE_DEFAULTS) as (keyof StoreShape)[]
 
+/**
+ * The library goes to the window in pieces: one message with 500k titles takes seconds to unpack and
+ * freezes the window meanwhile (on the profile picker at start, for example). Pieces leave gaps for clicks.
+ */
+const PART = 20_000
+let outgoing: Library | null = null
+// shortcut: pieces come from the library last handed over; a refresh finishing mid-transfer would mix them (the window loads one at a time)
+const handOver = (lib: Library): Library => {
+  outgoing = lib
+  return { ...lib, channels: [], movies: [], series: [], parts: { channels: lib.channels.length, movies: lib.movies.length, series: lib.series.length } }
+}
+
 function registerIpc() {
   ipcMain.on('app:version', (e) => (e.returnValue = app.getVersion()))
   ipcMain.handle('store:all', () => ({ ...STORE_DEFAULTS, ...store.store, settings: settings() }))
@@ -103,12 +115,18 @@ function registerIpc() {
     if (!STORE_KEYS.includes(key)) throw new Error(`Unknown store key ${key}`)
     store.set(key, value as never)
   })
-  ipcMain.handle('library:get', async () => (library ??= await readCache<Library>('library')))
+  ipcMain.handle('library:get', async () => {
+    library ??= await readCache<Library>('library')
+    // libraries cached unmerged (before 1.3.9) are merged here once, not in the window: 400k titles froze it
+    if (library && !isMerged(library)) await mergeLibrary(library), await writeCache('library', library)
+    return library && handOver(library)
+  })
   ipcMain.handle('library:refresh', async () => {
     library = await buildLibrary(store.get('sources'), settings(), get, progress)
     await writeCache('library', library)
-    return library
+    return handOver(library)
   })
+  ipcMain.handle('library:part', (_e, list: 'channels' | 'movies' | 'series', from: number) => outgoing?.[list].slice(from, from + PART) ?? [])
   ipcMain.handle('epg:get', () => readCache('epg'))
   ipcMain.handle('epg:refresh', async () => {
     library ??= await readCache<Library>('library')

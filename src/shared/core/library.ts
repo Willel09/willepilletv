@@ -48,16 +48,21 @@ export async function buildLibrary(sources: Source[], s: Settings, get: GetText,
       lib.errors.push(`${src.name}: ${(e as Error).message}`)
     }
   }
-  if (opts.lean) {
-    // done here, in steps, so the UI never has to do it in one blocking go (and restarts load it ready-made)
-    progress('Preparing your library…')
-    lib.movies = await mergeMoviesInSteps(lib.movies)
-    lib.series = await mergeMoviesInSteps(lib.series)
-    lib.prepared = preparedFor(s)
-  }
+  // done here, in steps, so the UI never has to do it in one blocking go (and restarts load it ready-made)
+  progress('Preparing your library…')
+  await mergeLibrary(lib)
+  if (opts.lean) lib.prepared = preparedFor(s)
   progress('')
   return lib
 }
+
+/** Merges duplicate movies and series in place; Windows also uses it to upgrade a library cached unmerged */
+export async function mergeLibrary(lib: Library) {
+  lib.movies = await mergeMoviesInSteps(lib.movies)
+  lib.series = await mergeMoviesInSteps(lib.series)
+  lib.merged = PREPARED
+}
+export const isMerged = (lib: Library) => lib.merged === PREPARED || !!lib.prepared?.startsWith(PREPARED)
 
 /** Which filter settings a prepared library was built with (see Library.prepared) */
 // v2: series are merged too, and by TMDB id; libraries prepared by older versions get rebuilt

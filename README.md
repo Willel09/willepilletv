@@ -204,4 +204,5 @@ apple-iptv/
   - on TVs and phones, **Remove BS** and hidden categories apply while loading, so hidden titles never take memory (changing them reloads the library);
   - duplicate merging, home rows and the guide are computed in small steps with breaks for the screen, so the remote never freezes for long (longest pause ~0.5 s at a TV-like CPU speed, down from 4–10 s);
   - no animations on TV: no movement, fades, tilt or rotating hero, and scrolling jumps instead of gliding.
+- **Windows freezes for a few seconds after starting** (e.g. on *Who's watching?*): fixed in 1.3.9. Duplicates are now merged by the background process while loading (an older cached library is merged once on the first start), and the library is handed to the window in pieces, so it keeps answering clicks. Measured with 110k channels + 398k movies + 96k series: the longest freeze went from 8.5 s to under 0.5 s.
 - **Fresh start:** on Windows delete `%APPDATA%\Lumen`. On TV, uninstall and reinstall Lumen.
