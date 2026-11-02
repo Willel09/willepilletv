@@ -18,3 +18,8 @@ test('explanations people can act on', () => {
   assert.match(explainProbe({ status: 200, type: 'text/html', codecs: [] }, 'desktop')!, /web page/)
   assert.equal(explainProbe({ status: 206, type: 'video/x-matroska', codecs: [] }, 'desktop'), null)
 })
+
+test('a 404 is explained as not served to this account, even when the connection count is full', () => {
+  const m = explainProbe({ status: 404, codecs: [], account: { status: 'Active', max: 1, active: 1 } }, 'desktop')
+  assert.match(m!, /doesn't serve this title to your account \(HTTP 404\)/)
+})

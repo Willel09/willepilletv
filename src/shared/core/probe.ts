@@ -84,9 +84,12 @@ export function explainProbe(r: ProbeResult, device: 'desktop' | 'tv' | 'web'): 
   if (acct?.status && acct.status !== 'Active') return `Your provider account is "${acct.status}". Check your subscription with the provider.`
   if (r.status === 0) return "The provider's server didn't answer. Check your internet connection, or try again in a minute."
   if (r.status >= 400) {
+    // 404 = the file isn't served to this account, whatever the connection count says (a channel just closed
+    // still counts for a while). Free and trial accounts list movies and series they don't let you play.
+    if (r.status === 404)
+      return "The provider doesn't serve this title to your account (HTTP 404). Free and trial accounts often list movies and series they don't let you play; live channels may still work."
     if (acct?.max && acct.active !== undefined && acct.active >= acct.max)
       return `The provider refused the stream: your subscription allows ${acct.max} connection${acct.max > 1 ? 's' : ''} and ${acct.active} ${acct.active === 1 ? 'is' : 'are'} in use. Stop playback on your other device (the TV?) and try again.`
-    if (r.status === 404) return 'This title is no longer available at the provider (HTTP 404).'
     if (r.status === 401 || r.status === 403 || r.status === 458 || r.status === 509)
       return `The provider refused the stream (HTTP ${r.status}). Usually the connection limit is reached (another device is playing) or the subscription has expired.`
     return `The provider's server had a problem (HTTP ${r.status}). Try again in a moment.`
