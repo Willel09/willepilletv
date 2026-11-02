@@ -67,12 +67,12 @@ export default function Home() {
         for (const list of [idx.movies, idx.series] as Title[][])
           for (const x of list) {
             if (want.has(x.id)) found.set(x.id, x)
-            if (x.kind === 'movie' && x.versions) for (const v of x.versions) if (want.has(v.id)) found.set(v.id, x)
+            if (x.versions) for (const v of x.versions) if (want.has(v.id)) found.set(v.id, x)
             if (++seen % 20_000 === 0) await new Promise((r) => setTimeout(r, 0)) // a break for the screen
           }
       const watched = wanted.map((id) => found.get(id)).filter((x): x is Title => !!x)
       const saved = [...watchlist, ...favorites].filter((x): x is Title => x.kind === 'movie' || x.kind === 'series')
-      const gs = (x: Title) => (x.kind === 'movie' && x.groups) || [x.group]
+      const gs = (x: Title) => x.groups ?? [x.group]
       const last = watched[0]
       const lastGroups = last ? gs(last) : []
       const none = () => null

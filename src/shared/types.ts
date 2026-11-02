@@ -1,4 +1,5 @@
 // Types shared by the Electron main process, preload bridge and React renderer.
+import type { ProbeResult } from './core/probe'
 
 export type SourceKind = 'm3u' | 'xtream'
 
@@ -51,6 +52,8 @@ export interface Movie {
   added?: number
   /** Xtream VOD id, used to fetch details */
   vodId?: number
+  /** TMDB id when the provider sends it: the same film in every language and quality */
+  tmdb?: number
   /** Set when duplicates were merged into this entry: every copy, best first */
   versions?: MovieVersion[]
   /** Every category the merged copies came from */
@@ -63,6 +66,8 @@ export interface MovieVersion {
   url?: string
   vodId?: number
   ext?: string
+  /** series copies: which one's seasons and episodes to load */
+  seriesId?: number
   /** e.g. "SE-4K", "EN · 1080P" or the category */
   label: string
 }
@@ -94,6 +99,10 @@ export interface Show {
   seriesId?: number
   /** M3U playlists carry their episodes inline */
   episodes?: Episode[]
+  tmdb?: number
+  /** merged duplicates, like Movie.versions */
+  versions?: MovieVersion[]
+  groups?: string[]
 }
 
 export type Item = Channel | Movie | Show
@@ -293,6 +302,8 @@ export interface IptvApi {
     start(deviceId: string, media: CastMedia): Promise<{ ok: boolean; error?: string }>
     stop(): Promise<void>
   }
+  /** Look at a stream that won't play: HTTP answer, codecs, Xtream connection count (see core/probe.ts) */
+  probe?(url: string): Promise<ProbeResult>
   /** Desktop: read a local playlist file so sync can share it with the TV. `sig` changes when the file does. */
   readPlaylistFile?(path: string): Promise<{ text: string; sig: string }>
   openInVlc(url: string, title: string): Promise<{ ok: boolean; error?: string }>

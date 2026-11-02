@@ -58,16 +58,20 @@ export default function Detail({ item }: { item: Movie | Show }) {
   useApp((s) => s.watchlist)
   const history = useApp((s) => s.history)
 
+  // details (and a series' episodes) of the chosen copy
+  const picked = item.versions?.[ver]
   useEffect(() => {
-    const xtId = item.kind === 'movie' ? item.vodId : item.seriesId
+    const xtId = item.kind === 'movie' ? picked?.vodId ?? item.vodId : picked?.seriesId ?? item.seriesId
     if (!xtId) return
+    let live = true
     setLoading(true)
     api
-      .mediaInfo(item.sourceId, item.kind, xtId)
-      .then(setInfo)
+      .mediaInfo(picked?.sourceId ?? item.sourceId, item.kind, xtId)
+      .then((i) => live && setInfo(i))
       .catch((e) => toast(`Couldn't load details: ${e.message}`))
       .finally(() => setLoading(false))
-  }, [item])
+    return () => void (live = false)
+  }, [item, ver]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const art = info.backdrop || (item.kind === 'series' ? item.backdrop : undefined) || info.poster || item.poster
   useEffect(() => {
@@ -94,7 +98,7 @@ export default function Detail({ item }: { item: Movie | Show }) {
   const lastEp = item.kind === 'series' ? history.find((h) => h.parentId === item.id || h.id.startsWith(`${item.id}:`)) : undefined
   const nextEp = lastEp && episodes.find((e) => `${item.id}:${e.id}` === lastEp.id)
 
-  const versions = item.kind === 'movie' ? item.versions : undefined
+  const versions = item.versions
   // keep the merged id so resume/history work whichever copy you pick
   const movie = item.kind === 'movie' && versions?.[ver] ? { ...item, url: versions[ver].url, sourceId: versions[ver].sourceId, vodId: versions[ver].vodId, ext: versions[ver].ext } : item
   // the remote starts on Play; for a series that is once its episodes have loaded (it's disabled until then)
@@ -160,7 +164,7 @@ export default function Detail({ item }: { item: Movie | Show }) {
                     key={v.id}
                     role="radio"
                     aria-checked={i === ver}
-                    onClick={() => setVer(i)}
+                    onClick={() => (setVer(i), setSeason(undefined))}
                     className={`h-9 rounded-full px-4 text-[13px] font-semibold transition-colors ${i === ver ? 'bg-fg text-bg' : 'glass-thin text-fg/70 hover:text-fg'}`}
                   >
                     {versions.findIndex((w) => w.label === v.label) === i ? v.label : `${v.label} (${i + 1})`}

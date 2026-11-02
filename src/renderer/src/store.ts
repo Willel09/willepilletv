@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { mergeMovies } from '../../shared/core/dedupe'
 import { xtStreamUrl } from '../../shared/core/xtream'
 import { hiddenFilter } from '../../shared/core/filter'
-import { preparedFor } from '../../shared/core/library'
+import { PREPARED, preparedFor } from '../../shared/core/library'
 import {
   MAIN_PROFILE,
   STORE_DEFAULTS,
@@ -217,7 +217,8 @@ export async function boot() {
   }, 30 * 60_000)
   if (!s.sources.length) return
   const empty = !library || !(library.channels.length || library.movies.length || library.series.length)
-  const stale = empty || Date.now() - library!.updatedAt > s.settings.refreshHours * 3600_000
+  // also rebuild libraries prepared by an older version (see PREPARED)
+  const stale = empty || Date.now() - library!.updatedAt > s.settings.refreshHours * 3600_000 || (!!library!.prepared && !library!.prepared.startsWith(PREPARED))
   if (stale) await refreshLibrary()
   else if (!epg || Date.now() - epg.updatedAt > 6 * 3600_000) refreshEpg()
 }
@@ -508,8 +509,9 @@ export function index(): LibraryIndex {
   const keep = <T extends { group: string; name: string }>(xs: T[]) => (isHidden ? xs.filter((x) => !isHidden(x)) : xs)
   const channels = keep(lib?.channels ?? [])
   // prepared libraries are already merged; after a filter change they're only re-filtered until the reload lands
-  const movies = lib?.prepared ? keep(lib.movies) : mergeMovies(keep(lib?.movies ?? []))
-  const series = keep(lib?.series ?? [])
+  const merged = !!lib?.prepared?.startsWith(PREPARED)
+  const movies = merged ? keep(lib!.movies) : mergeMovies(keep(lib?.movies ?? []))
+  const series = merged ? keep(lib!.series) : mergeMovies(keep(lib?.series ?? []))
   let keys: Map<string, string> | null = null
   const key = (x: { id: string; name: string }) => {
     if (!keys) {

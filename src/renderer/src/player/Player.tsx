@@ -13,6 +13,7 @@ import { api, canMiniPlayer, closePlayer, setCastTo, expandPlayer, index, isFavo
 
 const desktop = api.device === 'desktop'
 const tv = api.device === 'tv'
+import { explainProbe } from '../../../shared/core/probe'
 import { createEngine, pickEngines, type Engine, type Track } from './engine'
 
 const clamp = (n: number, a = 0, b = 1) => Math.max(a, Math.min(b, n))
@@ -190,8 +191,13 @@ function Session({ req, mini, fullscreen, sleepAt, setSleepAt }: SessionProps) {
       if (done) return
       done = true
       firstError.current ??= msg
-      if (engineIdx < engines.length - 1) setEngineIdx((i) => i + 1)
-      else setError(firstError.current)
+      if (engineIdx < engines.length - 1) return setEngineIdx((i) => i + 1)
+      setError(firstError.current)
+      // every way to play it failed: find out why (provider refusal, connection limit, codec) and say so
+      api.probe?.(url).then((r) => {
+        const why = explainProbe(r, api.device)
+        if (why && video.current) setError(why)
+      })
     }
     const onPlaying = () => (started = true)
     v.addEventListener('playing', onPlaying)

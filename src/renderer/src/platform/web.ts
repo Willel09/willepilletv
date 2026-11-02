@@ -6,6 +6,7 @@ import { Gunzip, gunzipSync } from 'fflate'
 import { buildEpg, buildLibrary, emptyLibrary } from '../../../shared/core/library'
 import { HTTP_HINT, type GetStream } from '../../../shared/core/net'
 import { xtreamInfo } from '../../../shared/core/xtream'
+import { probeStream } from '../../../shared/core/probe'
 import { pullFile } from '../lib/sync'
 import { DEFAULT_SETTINGS, STORE_DEFAULTS, type Epg, type IptvApi, type Programme, type Library, type StoreShape, type UpdateState } from '../../../shared/types'
 
@@ -267,6 +268,7 @@ export function createWebApi(): IptvApi {
       return src?.kind === 'xtream' ? xtreamInfo(src, kind, id, getText) : {}
     },
     pickPlaylistFile: async () => null,
+    probe: (url) => probeStream(url, (u, init) => fetch(u, init), navigator.userAgent),
     openInVlc: async () => ({ ok: false, error: 'VLC is only available in the Windows app.' }),
     win: {
       minimize: () => {},

@@ -52,6 +52,7 @@ export async function buildLibrary(sources: Source[], s: Settings, get: GetText,
     // done here, in steps, so the UI never has to do it in one blocking go (and restarts load it ready-made)
     progress('Preparing your library…')
     lib.movies = await mergeMoviesInSteps(lib.movies)
+    lib.series = await mergeMoviesInSteps(lib.series)
     lib.prepared = preparedFor(s)
   }
   progress('')
@@ -59,7 +60,9 @@ export async function buildLibrary(sources: Source[], s: Settings, get: GetText,
 }
 
 /** Which filter settings a prepared library was built with (see Library.prepared) */
-export const preparedFor = (s: Pick<Settings, 'hiddenGroups' | 'removeBs'>) => `${s.hiddenGroups}|${!!s.removeBs}`
+// v2: series are merged too, and by TMDB id; libraries prepared by older versions get rebuilt
+export const PREPARED = 'v2|'
+export const preparedFor = (s: Pick<Settings, 'hiddenGroups' | 'removeBs'>) => `${PREPARED}${s.hiddenGroups}|${!!s.removeBs}`
 
 /**
  * `stream` parses the guide while it downloads; `hours` limits how far ahead programmes are kept

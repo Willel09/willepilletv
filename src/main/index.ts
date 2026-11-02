@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, nativeTheme, session, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, net, session, shell } from 'electron'
 import { spawn } from 'child_process'
 import { existsSync } from 'fs'
 import { stat } from 'fs/promises'
@@ -10,6 +10,7 @@ import { DEFAULT_SETTINGS, STORE_DEFAULTS, type CastMedia, type Library, type Se
 import { buildEpg, buildLibrary, emptyLibrary } from '../shared/core/library'
 import { xtreamInfo } from '../shared/core/xtream'
 import { discoverCast, startCast, stopCast } from './cast'
+import { probeStream } from '../shared/core/probe'
 import { getText } from './http'
 import { readCache, writeCache } from './library'
 import { devModeOn, discoverTvs, localIps, openTvInstaller } from './tvinstall'
@@ -134,6 +135,9 @@ function registerIpc() {
     const st = await stat(path.startsWith('file:') ? fileURLToPath(path) : path)
     return { text: await get(path), sig: `${st.mtimeMs}:${st.size}` }
   })
+  ipcMain.handle('media:probe', (_e, url: string) =>
+    /^https?:\/\//i.test(url) ? probeStream(url, (u, init) => net.fetch(u, init), settings().userAgent || DEFAULT_SETTINGS.userAgent) : { status: 0, codecs: [] }
+  )
   ipcMain.handle('cast:discover', () => discoverCast())
   ipcMain.handle('cast:start', (_e, id: string, media: CastMedia) => startCast(id, media, settings().userAgent || DEFAULT_SETTINGS.userAgent))
   ipcMain.handle('cast:stop', () => stopCast())

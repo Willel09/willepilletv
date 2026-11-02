@@ -47,3 +47,35 @@ test('identical URLs collapse to one version', () => {
   assert.equal(out.length, 1)
   assert.equal(out[0].versions, undefined)
 })
+
+test('bracket tags, [quality] and (year) anywhere: the Ali G copies become one film', () => {
+  const out = mergeMovies([
+    mv('SC-[4K-Q] - Ali G: Who Iz I? (2026)'),
+    mv('SE-[4K-Q] - Ali G: Who Iz I?'),
+    mv('Ali G: Who Iz I? [1080p]'),
+    mv('Ali G Indahouse (2002)')
+  ])
+  assert.deepEqual(out.map((m) => m.name).sort(), ['Ali G Indahouse (2002)', 'Ali G: Who Iz I? (2026)'].sort())
+  assert.equal(out.find((m) => m.name.startsWith('Ali G: Who'))?.versions?.length, 3)
+  assert.equal(stripTag('SC-[4K-Q] - Ali G: Who Iz I?'), 'Ali G: Who Iz I?')
+})
+
+test('a shared TMDB id joins translated titles; copies without the id join by title', () => {
+  const out = mergeMovies([
+    mv('Ali G: Who Iz I?', { tmdb: 1234 }),
+    mv("Ali G : J'suis qui ? (2026) [1080p]", { tmdb: 1234 }),
+    mv('DE - Ali G: Leben in XXXL', { tmdb: 1234 }),
+    mv('SE-[4K-Q] - Ali G: Who Iz I?'),
+    mv('Up', { tmdb: 14160 })
+  ])
+  assert.equal(out.length, 2)
+  assert.equal(out.find((m) => m.tmdb === 1234)?.versions?.length, 4)
+})
+
+test('series merge too (Xtream ones), with their series ids as versions; M3U series stay apart', () => {
+  const show = (name: string, extra: Record<string, unknown> = {}) => ({ kind: 'series' as const, id: `s${++n}`, sourceId: 's', name, group: 'G', ...extra })
+  const out = mergeMovies([show('SE - Dark', { seriesId: 1 }), show('Dark [4K]', { seriesId: 2 }), show('Dark', { episodes: [] }), show('Dark', { episodes: [] })])
+  const merged = out.find((x) => x.versions)
+  assert.deepEqual(merged?.versions?.map((v) => v.seriesId), [1, 2])
+  assert.equal(out.length, 3)
+})

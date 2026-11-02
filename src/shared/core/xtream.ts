@@ -101,13 +101,13 @@ export async function loadXtream(
     kind: 'movie', id: `${src.id}:m${s.stream_id}`, sourceId: src.id,
     name: str(s.name) ?? 'Movie', group: vcm.get(String(s.category_id)) ?? 'Uncategorized',
     ext: extOf(s.container_extension), poster: art(s.stream_icon),
-    rating: num(s.rating) || undefined, added: num(s.added), vodId: +s.stream_id, year: year(s.year ?? s.releasedate)
+    rating: num(s.rating) || undefined, added: num(s.added), vodId: +s.stream_id, tmdb: num(s.tmdb ?? s.tmdb_id) || undefined, year: year(s.year ?? s.releasedate)
   }))
   const series: Show[] = await list('get_series', (s) => ({
     kind: 'series', id: `${src.id}:s${s.series_id}`, sourceId: src.id,
     name: str(s.name) ?? 'Series', group: scm.get(String(s.category_id)) ?? 'Uncategorized',
     poster: art(s.cover), backdrop: lean ? undefined : art(arr(s.backdrop_path)[0]), rating: num(s.rating) || undefined,
-    year: year(s.releaseDate ?? s.release_date), plot: lean ? undefined : str(s.plot)?.slice(0, 240), added: num(s.last_modified), seriesId: +s.series_id
+    year: year(s.releaseDate ?? s.release_date), plot: lean ? undefined : str(s.plot)?.slice(0, 240), added: num(s.last_modified), seriesId: +s.series_id, tmdb: num(s.tmdb ?? s.tmdb_id) || undefined
   }))
   return { channels, movies, series, account }
 }
