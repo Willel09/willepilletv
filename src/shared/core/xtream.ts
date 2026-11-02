@@ -112,6 +112,8 @@ export async function loadXtream(
   return { channels, movies, series, account }
 }
 
+const imdb = (v: unknown) => (typeof v === 'string' && /^tt\d+$/.test(v) ? v : undefined)
+
 export async function xtreamInfo(src: Source, kind: 'movie' | 'series', id: number, get: GetText): Promise<MediaInfo> {
   const base = api(src)
   if (kind === 'movie') {
@@ -120,7 +122,8 @@ export async function xtreamInfo(src: Source, kind: 'movie' | 'series', id: numb
     return {
       plot: str(i.plot) ?? str(i.description), backdrop: str(arr(i.backdrop_path)[0]), poster: str(i.movie_image),
       cast: str(i.cast) ?? str(i.actors), director: str(i.director), genre: str(i.genre), duration: str(i.duration),
-      rating: num(i.rating) || undefined, year: year(i.releasedate ?? i.release_date)
+      rating: num(i.rating) || undefined, year: year(i.releasedate ?? i.release_date),
+      imdbId: imdb(i.imdb_id), originalName: str(i.o_name)
     }
   }
   const r = await getJson<Json>(get, `${base}&action=get_series_info&series_id=${id}`)
@@ -140,6 +143,6 @@ export async function xtreamInfo(src: Source, kind: 'movie' | 'series', id: numb
   return {
     plot: str(i.plot), backdrop: str(arr(i.backdrop_path)[0]), poster: str(i.cover), cast: str(i.cast),
     director: str(i.director), genre: str(i.genre), rating: num(i.rating) || undefined,
-    year: year(i.releaseDate ?? i.release_date), episodes
+    year: year(i.releaseDate ?? i.release_date), episodes, imdbId: imdb(i.imdb_id)
   }
 }

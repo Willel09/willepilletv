@@ -432,6 +432,18 @@ export default function Settings() {
           )}
         </Card>
 
+        <Card title="Ratings">
+          <div className="py-3.5">
+            <LazyField
+              label="OMDb key (free)"
+              placeholder="e.g. 1a2b3c4d"
+              value={s.omdbKey}
+              onCommit={(omdbKey) => updateSettings({ omdbKey })}
+              hint={<>Shows real IMDb, Rotten Tomatoes and Metacritic ratings on movie and series pages. Get a free key (1,000 lookups a day, just an email) at <b className="text-fg/70">omdbapi.com/apikey.aspx</b>. Synced to your other devices, so you can type it on your PC.</>}
+            />
+          </div>
+        </Card>
+
         <Card title="Profiles">
           <Line label={`Watching as ${currentProfile().name}`} hint="Each profile has its own watchlist, favorites and Continue Watching. Sources and settings are shared.">
             <div className="flex items-center gap-3">

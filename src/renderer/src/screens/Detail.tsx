@@ -8,7 +8,17 @@ import { Row } from '../components/Row'
 import { Button, IconButton, Spinner } from '../components/ui'
 import { artUrl, cleanName, duration } from '../lib/format'
 import { sheetSpring, softSpring, spring } from '../lib/motion'
+import { useRatings } from '../lib/ratings'
 import { api, closeDetail, historyFor, inWatchlist, index, isFavorite, openDetail, playEpisode, playMovie, resumable, urlOf, setAmbient, toast, toggleFavorite, toggleWatchlist, useApp } from '../store'
+
+function Score({ label, short, value, className, title }: { label: string; short?: string; value: string; className: string; title?: string }) {
+  return (
+    <span className="flex items-center gap-1.5" title={title} aria-label={`${label} ${value}`}>
+      <span className={`rounded-[5px] px-1.5 py-px text-[11px] font-extrabold tracking-[-0.01em] ${className}`}>{short ?? label}</span>
+      <span className="font-semibold text-fg/85">{value}</span>
+    </span>
+  )
+}
 
 function EpisodeCard({ show, ep, episodes, art }: { show: Show; ep: Episode; episodes: Episode[]; art?: string }) {
   const h = useApp((s) => s.history.find((x) => x.id === `${show.id}:${ep.id}`))
@@ -51,7 +61,8 @@ function EpisodeCard({ show, ep, episodes, art }: { show: Show; ep: Episode; epi
 
 export default function Detail({ item }: { item: Movie | Show }) {
   const [info, setInfo] = useState<MediaInfo>({})
-  const [loading, setLoading] = useState(false)
+  // starts true when there are provider details to fetch, so nothing (like the ratings lookup) runs on half the data
+  const [loading, setLoading] = useState(() => !!(item.kind === 'movie' ? item.versions?.[0]?.vodId ?? item.vodId : item.versions?.[0]?.seriesId ?? item.seriesId))
   const [season, setSeason] = useState<number>()
   /** Merged duplicates: which copy to play (0 = the best one) */
   const [ver, setVer] = useState(0)
@@ -97,6 +108,8 @@ export default function Detail({ item }: { item: Movie | Show }) {
   const plot = info.plot || item.plot
   const rating = info.rating || item.rating
   const year = info.year || item.year
+  // real ratings once the provider's details (original title, IMDb id) are in
+  const real = useRatings(loading ? null : { kind: item.kind, title: info.originalName || cleanName(item.name), year, imdbId: info.imdbId })
   const movieH = item.kind === 'movie' ? historyFor(item.id) : undefined
   // Series: continue from the most recently watched episode
   const lastEp = item.kind === 'series' ? history.find((h) => h.parentId === item.id || h.id.startsWith(`${item.id}:`)) : undefined
@@ -151,10 +164,18 @@ export default function Detail({ item }: { item: Movie | Show }) {
             <h1 className="text-[40px] font-[800] lg:text-[56px] 2xl:text-[72px] leading-[0.95] tracking-[-0.045em] [text-wrap:balance]">{cleanName(item.name)}</h1>
             <div className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[14px] font-medium text-fg/65">
               {year && <span>{year}</span>}
-              {!!rating && (
-                <span className="flex items-center gap-1">
-                  <Star className="size-3.5 fill-amber-300 text-amber-300" /> {rating.toFixed(1)}
-                </span>
+              {real ? (
+                <>
+                  {!!real.imdb && <Score label="IMDb" className="bg-[#f5c518] text-black" value={real.imdb.toFixed(1)} title={real.votes ? `${real.votes.toLocaleString()} votes` : undefined} />}
+                  {real.rt !== undefined && <Score label="Rotten Tomatoes" short="RT" className="bg-[#fa320a] text-white" value={`${real.rt}%`} />}
+                  {real.meta !== undefined && <Score label="Metacritic" short="MC" className={real.meta >= 61 ? 'bg-[#66cc33] text-black' : real.meta >= 40 ? 'bg-[#ffcc33] text-black' : 'bg-[#ff0000] text-white'} value={String(real.meta)} />}
+                </>
+              ) : (
+                !!rating && (
+                  <span className="flex items-center gap-1">
+                    <Star className="size-3.5 fill-amber-300 text-amber-300" /> {rating.toFixed(1)}
+                  </span>
+                )
               )}
               {info.duration && <span>{info.duration}</span>}
               {info.genre && <span className="text-fg/50">{info.genre}</span>}

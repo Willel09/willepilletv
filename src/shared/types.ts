@@ -155,6 +155,9 @@ export interface MediaInfo {
   rating?: number
   year?: string
   episodes?: Episode[]
+  /** IMDb id (tt…) and original title, when the provider sends them: used to look up real ratings */
+  imdbId?: string
+  originalName?: string
 }
 
 export interface Settings {
@@ -169,6 +172,8 @@ export interface Settings {
   autoProviderEpg: boolean
   userAgent: string
   vlcPath: string
+  /** free OMDb key: IMDb, Rotten Tomatoes and Metacritic ratings on title pages */
+  omdbKey: string
   hiddenGroups: string
   /** Hide Arabic and Indian channels, movies and series */
   removeBs: boolean
@@ -247,6 +252,7 @@ export const DEFAULT_SETTINGS: Settings = {
   autoProviderEpg: true,
   userAgent: DEFAULT_UA,
   vlcPath: '',
+  omdbKey: '',
   hiddenGroups: '',
   removeBs: false,
   autoplayNext: true,
