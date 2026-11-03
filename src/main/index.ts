@@ -20,6 +20,8 @@ registerScheme() // lumen-dl:// plays downloaded files, see downloads.ts
 
 // Lets <video> expose audioTracks for multi-language MP4/MKV files
 app.commandLine.appendSwitch('enable-blink-features', 'AudioVideoTracks')
+// HEVC (H.265) through the PC's graphics chip. Needs a GPU that decodes it and, on Windows, Microsoft's free "HEVC Video Extensions"
+app.commandLine.appendSwitch('enable-features', 'PlatformHEVCDecoderSupport')
 
 // cast: electron-store's dotted-path typing can't express Record<> fields in SyncMeta
 const store = new Store<StoreShape>({ name: 'lumen', defaults: STORE_DEFAULTS as never })

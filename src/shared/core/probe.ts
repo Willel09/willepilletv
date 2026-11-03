@@ -97,6 +97,6 @@ export function explainProbe(r: ProbeResult, device: 'desktop' | 'tv' | 'web'): 
   if (r.type && /text\/html|application\/json/i.test(r.type)) return 'The provider sent a web page instead of the video. The subscription may have expired, or the provider blocks this app.'
   // Samsung TVs decode all of these; browsers and the Windows app don't (HEVC depends on the PC's graphics)
   if (device !== 'tv' && r.codecs.length)
-    return `This video uses ${r.codecs.join(' and ')}, which the built-in player can't play${device === 'desktop' ? ' on this PC. Use Open in VLC, or Cast to TV.' : ' here. Use the Windows or TV app.'}`
+    return `This video uses ${r.codecs.join(' and ')}, which the built-in player can't play${device === 'desktop' ? ` on this PC.${r.codecs.some((c) => /HEVC/.test(c)) ? ' HEVC needs a graphics chip that decodes it and the free "HEVC Video Extensions" from the Microsoft Store.' : ''} Or use Open in VLC, or Cast to TV.` : ' here. Use the Windows or TV app.'}`
   return null
 }
