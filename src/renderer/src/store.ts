@@ -20,7 +20,8 @@ import {
   type Source,
   type StoreShape
 } from '../../shared/types'
-import { cleanName, fold } from './lib/format'
+import { cleanName } from './lib/format'
+import { words } from './lib/search'
 import * as sync from './lib/sync'
 import { hexToRgb, themeById } from './lib/themes'
 import { createWebApi } from './platform/web'
@@ -614,7 +615,7 @@ export interface LibraryIndex {
   movieGroups: Group<Movie>[]
   seriesGroups: Group<Show>[]
   channelById: Map<string, Channel>
-  /** search key (folded name); the table is built on the first search, not at startup */
+  /** search key (words of the name without provider tag, see lib/search); the table is built on the first search, not at startup */
   key: (x: { id: string; name: string }) => string
 }
 
@@ -651,9 +652,9 @@ export function index(): LibraryIndex {
   const key = (x: { id: string; name: string }) => {
     if (!keys) {
       keys = new Map()
-      for (const list of [channels, movies, series] as { id: string; name: string }[][]) for (const y of list) keys.set(y.id, fold(y.name))
+      for (const list of [channels, movies, series] as { id: string; name: string }[][]) for (const y of list) keys.set(y.id, words(cleanName(y.name)))
     }
-    return keys.get(x.id) ?? fold(x.name)
+    return keys.get(x.id) ?? words(cleanName(x.name))
   }
   // built when a screen first needs them: Home doesn't, and each is a pass over up to 400k titles
   let lg: Group<Channel>[] | undefined, mg: Group<Movie>[] | undefined, sg: Group<Show>[] | undefined, byId: Map<string, Channel> | undefined

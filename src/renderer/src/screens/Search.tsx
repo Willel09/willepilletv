@@ -1,11 +1,10 @@
 import { Search as SearchIcon, X } from 'lucide-react'
 import { useDeferredValue, useMemo, useState } from 'react'
-import type { Item } from '../../../shared/types'
 import { ChannelTile, PosterCard } from '../components/Cards'
 import { Row } from '../components/Row'
 import { nowNext } from '../lib/epg'
-import { fold } from '../lib/format'
-import { openDetail, playChannel, useApp, useIndex } from '../store'
+import { rank, words } from '../lib/search'
+import { api, openDetail, playChannel, useApp, useIndex } from '../store'
 
 const LIMIT = 60
 
@@ -16,19 +15,18 @@ export default function Search() {
   const dq = useDeferredValue(q)
 
   const results = useMemo(() => {
-    const terms = fold(dq).split(/\s+/).filter(Boolean)
+    const terms = words(dq).split(' ').filter(Boolean)
     if (!terms.length) return null
-    const hit = (x: Item) => {
-      const k = idx.key(x)
-      return terms.every((t) => k.includes(t))
-    }
-    const take = <T extends Item>(xs: T[]) => {
-      const out: T[] = []
-      let total = 0
-      for (const x of xs) if (hit(x)) total++ < LIMIT && out.push(x)
-      return { items: out, total }
-    }
-    return { channels: take(idx.channels), movies: take(idx.movies), series: take(idx.series) }
+    const run = (fuzzy: boolean) => ({
+      channels: rank(idx.channels, LIMIT, terms, idx.key, fuzzy),
+      movies: rank(idx.movies, LIMIT, terms, idx.key, fuzzy),
+      series: rank(idx.series, LIMIT, terms, idx.key, fuzzy),
+      fuzzy
+    })
+    // typos are only guessed at when little was found: guessing on 500k titles is slow, and exact hits are what's wanted
+    const exact = run(false)
+    const slow = api.device === 'tv' && idx.channels.length + idx.movies.length + idx.series.length > 200_000
+    return slow || exact.channels.total + exact.movies.total + exact.series.total >= 6 ? exact : run(true)
   }, [dq, idx])
 
   const none = results && !results.channels.total && !results.movies.total && !results.series.total
@@ -57,6 +55,7 @@ export default function Search() {
           </p>
         )}
         {none && <p className="mt-10 text-center text-[15px] text-fg/50">No results for “{dq}”</p>}
+        {results?.fuzzy && !none && <p className="mt-4 text-center text-[13px] text-fg/45">Close matches for “{dq}”</p>}
       </div>
       {results && (
         <div className="pb-16">

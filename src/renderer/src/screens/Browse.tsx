@@ -5,7 +5,7 @@ import { PosterCard } from '../components/Cards'
 import { CategorySidebar } from '../components/CategorySidebar'
 import { PosterGrid } from '../components/PosterGrid'
 import { Empty, Segmented } from '../components/ui'
-import { fold } from '../lib/format'
+import { matchScore, words } from '../lib/search'
 import { openDetail, setGroup, toggleWatchlist, useApp, useIndex } from '../store'
 import { ALL, FAV } from './Live'
 
@@ -43,8 +43,8 @@ export default function Browse({ kind }: { kind: 'movies' | 'series' }) {
     else if (group === FAV) list = favs.filter((f): f is Movie | Show => f.kind === itemKind)
     else if (group === WATCH) list = watchlist.filter((f) => f.kind === itemKind)
     else list = groups.find((g) => g.name === group)?.items ?? []
-    const needle = fold(q.trim())
-    if (needle) list = list.filter((it) => idx.key(it).includes(needle))
+    const terms = words(q).split(' ').filter(Boolean)
+    if (terms.length) list = list.filter((it) => matchScore(idx.key(it), terms) !== null)
     if (group === RECENT || sort === 'added') return group === RECENT ? list : [...list].sort((a, b) => (b.added ?? 0) - (a.added ?? 0))
     if (sort === 'az') return [...list].sort((a, b) => a.name.localeCompare(b.name))
     return [...list].sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))
