@@ -7,6 +7,9 @@ import {
   MAIN_PROFILE,
   STORE_DEFAULTS,
   type Channel,
+  type DownloadRec,
+  type DownloadRequest,
+  type DownloadsState,
   type Epg,
   type Episode,
   type HistoryEntry,
@@ -31,7 +34,7 @@ import { relink } from '../../shared/core/relink'
 /** Electron provides window.api from its preload; Samsung TV and browsers use the web implementation */
 export const api = window.api ?? createWebApi()
 
-export type Tab = 'home' | 'live' | 'movies' | 'series' | 'random' | 'search' | 'settings'
+export type Tab = 'home' | 'live' | 'movies' | 'series' | 'random' | 'downloads' | 'search' | 'settings'
 
 export interface PlayRequest {
   kind: 'live' | 'movie' | 'episode'
@@ -42,6 +45,8 @@ export interface PlayRequest {
   subtitle?: string
   poster?: string
   startAt?: number
+  /** a downloaded copy on this PC: played instead of `url`, which stays the history's address */
+  local?: string
   channel?: Channel
   /** channels to zap through with up/down */
   channels?: Channel[]
@@ -75,6 +80,8 @@ interface State extends StoreShape {
   lists: Record<string, ProfileLists>
   /** "Who's watching?" screen open */
   pickProfile: boolean
+  /** Windows: films and episodes saved on this PC */
+  downloads: DownloadsState | null
 }
 
 export const useApp = create<State>(() => ({
@@ -96,7 +103,8 @@ export const useApp = create<State>(() => ({
   group: {},
   syncStatus: { state: 'off' },
   lists: {},
-  pickProfile: false
+  pickProfile: false,
+  downloads: null
 }))
 
 const set = useApp.setState
@@ -232,6 +240,10 @@ export async function boot() {
   set({ ...s, ...lists[active], activeProfile: active, lists, booted: true, pickProfile: profilesOf(s.profiles).length > 1 })
   applyAppearance(s.settings)
   window.addEventListener('pagehide', flushHistory)
+  if (api.downloads) {
+    api.downloads.onChange((downloads) => set({ downloads }))
+    api.downloads.list().then((downloads) => set({ downloads }), () => {})
+  }
   // a cache that can't be read must not stop the app: say so, then sync and reload from the sources as usual
   const [library, epg] = await Promise.all([
     api
@@ -360,6 +372,8 @@ let historyChanges: { changed: Set<string>; removed: Set<string> } | null = null
 let historyTimer: ReturnType<typeof setTimeout> | undefined
 
 export function saveProgress(e: HistoryEntry, now = false) {
+  // watched to the end: the downloaded copy has done its job
+  if (get().settings.deleteWatched && e.duration > 0 && e.position >= e.duration * 0.97 && downloadOf(e.id)) void api.downloads?.remove(e.id)
   const all = [e, ...get().history.filter((h) => h.id !== e.id)]
   historyChanges ??= { changed: new Set(), removed: new Set() }
   historyChanges.changed.add(e.id)
@@ -539,9 +553,47 @@ export const historyFor = (id: string) => get().history.find((h) => h.id === id)
 /** Resume only if meaningfully into the video and not basically finished */
 export const resumable = (h?: HistoryEntry) => !!h && h.kind !== 'live' && h.position > 30 && h.position < h.duration * 0.95
 
+/* ---------------- downloads (Windows) ---------------- */
+
+export const downloadOf = (id: string) => get().downloads?.items.find((d) => d.id === id)
+export const localUrlOf = (id: string) => {
+  const d = downloadOf(id)
+  return d?.state === 'done' ? `lumen-dl://f/${d.file}` : undefined
+}
+export const localPosterOf = (d: DownloadRec) => (d.hasPoster ? `lumen-dl://f/${d.file.replace(/\.\w+$/, '.jpg')}` : d.poster)
+
+export async function startDownloads(reqs: DownloadRequest[]) {
+  if (!api.downloads || !reqs.length) return
+  try {
+    const r = await api.downloads.add(reqs)
+    toast(r.added ? (reqs.length === 1 ? `Downloading “${cleanName(reqs[0].title)}”` : `Downloading ${r.added} episodes`) : 'Already downloaded')
+  } catch (e) {
+    toast(`Couldn't start the download: ${(e as Error).message}`)
+  }
+}
+
+/** A finished download from the Downloads screen or Home: an episode plays as part of the downloaded ones of its series */
+export function playDownload(d: DownloadRec) {
+  const h = historyFor(d.id)
+  const startAt = resumable(h) ? h!.position : undefined
+  if (d.kind === 'movie' || !d.parentId) return play({ kind: 'movie', id: d.id, url: d.url, title: d.title, poster: d.poster, startAt })
+  const parentId = d.parentId
+  const ep = (x: DownloadRec): Episode => {
+    const m = x.subtitle?.match(/S(\d+) · E(\d+)\s*(.*)/)
+    return { id: x.id.slice(parentId.length + 1), title: m?.[3] || x.subtitle || x.title, season: +(m?.[1] ?? 1), episode: +(m?.[2] ?? 1), url: x.url }
+  }
+  const siblings = (get().downloads?.items ?? []).filter((x) => x.parentId === parentId && x.state === 'done').map(ep).sort((a, b) => a.season - b.season || a.episode - b.episode)
+  const show: Show = { kind: 'series', id: parentId, sourceId: '', name: d.title, group: '', poster: d.poster }
+  playEpisode(show, ep(d), siblings)
+}
+
 /* ---------------- playback ---------------- */
 
-export const play = (req: PlayRequest) => set({ player: req, playerMini: false })
+export const play = (req: PlayRequest) => {
+  // a downloaded film or episode plays from the PC, also offline
+  const local = req.kind === 'live' || req.local ? req.local : localUrlOf(req.id)
+  set({ player: local ? { ...req, local } : req, playerMini: false })
+}
 export const closePlayer = () => {
   if (get().castTo) void api.cast?.stop()
   set({ player: null, playerMini: false, castTo: null })

@@ -153,7 +153,7 @@ export class Downloads {
         const res = await this.fetch(url, { headers: { Range: 'bytes=0-0', 'User-Agent': this.ua() }, signal: ac.signal })
         const total = res.headers.get('content-range')?.match(/\/(\d+)$/)?.[1]
         const len = res.status === 200 ? res.headers.get('content-length') : null
-        out.push(total ? +total : len ? +len : null)
+        out.push(+(total ?? len ?? 0) > 1 ? +(total ?? len!) : null) // a 1-byte answer is the probe itself, not the file
         void res.body?.cancel().catch(() => {})
       } catch {
         out.push(null)

@@ -1,8 +1,9 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { Check, ChevronLeft, EyeOff, ExternalLink, Heart, Play, Plus, RotateCcw, Star } from 'lucide-react'
+import { Check, ChevronLeft, Download, EyeOff, ExternalLink, Heart, Play, Plus, RotateCcw, Star } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { Episode, MediaInfo, Movie, Show } from '../../../shared/types'
+import type { DownloadRequest, Episode, MediaInfo, Movie, Show } from '../../../shared/types'
 import { PosterCard } from '../components/Cards'
+import { DownloadSheet, type Choice } from '../components/DownloadSheet'
 import { Img } from '../components/Img'
 import { Row } from '../components/Row'
 import { Button, IconButton, Spinner } from '../components/ui'
@@ -10,7 +11,7 @@ import { artUrl, cleanName, duration } from '../lib/format'
 import { sheetSpring, softSpring, spring } from '../lib/motion'
 import { useRatings } from '../lib/ratings'
 import { useSimilar } from '../lib/tmdb'
-import { api, closeDetail, historyFor, historyOfTitle, inWatchlist, index, isFavorite, openDetail, openPerson, playEpisode, playMovie, removeHistory, resumable, urlOf, setAmbient, toast, toggleFavorite, toggleWatchlist, useApp } from '../store'
+import { api, closeDetail, setTab, startDownloads, historyFor, historyOfTitle, inWatchlist, index, isFavorite, openDetail, openPerson, playEpisode, playMovie, removeHistory, resumable, urlOf, setAmbient, toast, toggleFavorite, toggleWatchlist, useApp } from '../store'
 
 function Score({ label, short, value, className, title }: { label: string; short?: string; value: string; className: string; title?: string }) {
   return (
@@ -38,9 +39,37 @@ function People({ label, names, role }: { label: string; names: string; role: 'a
   )
 }
 
+/** Windows: the download of one episode */
+export const episodeRequest = (show: Show, ep: Episode): DownloadRequest => ({
+  id: `${show.id}:${ep.id}`,
+  kind: 'episode',
+  title: show.name,
+  subtitle: `S${ep.season} · E${ep.episode}  ${ep.title.includes(show.name) ? '' : ep.title}`.trim(),
+  poster: show.poster,
+  parentId: show.id,
+  url: ep.url
+})
+
+function EpisodeDownload({ show, ep }: { show: Show; ep: Episode }) {
+  const d = useApp((s) => s.downloads?.items.find((x) => x.id === `${show.id}:${ep.id}`))
+  const pct = d?.size ? Math.round((d.received / d.size) * 100) : 0
+  const label = !d ? 'Download episode' : d.state === 'done' ? 'Downloaded' : d.state === 'error' ? `Download failed: ${d.error}` : `Downloading ${pct}%`
+  return (
+    <IconButton
+      label={label}
+      onClick={() => (d ? (closeDetail(), setTab('downloads')) : void startDownloads([episodeRequest(show, ep)]))}
+      className="absolute right-3 top-3 z-10 size-9 bg-black/55 text-white"
+    >
+      {d?.state === 'done' ? <Check className="size-4" /> : d && d.state !== 'error' ? <span className="text-[10px] font-bold tabular-nums">{pct}</span> : <Download className="size-4" />}
+    </IconButton>
+  )
+}
+
 function EpisodeCard({ show, ep, episodes, art }: { show: Show; ep: Episode; episodes: Episode[]; art?: string }) {
   const h = useApp((s) => s.history.find((x) => x.id === `${show.id}:${ep.id}`))
   return (
+    <div className="relative">
+    {api.downloads && <EpisodeDownload show={show} ep={ep} />}
     <motion.button
       // layout animations measure every card on each render: not on TVs
       layout={api.device !== 'tv'}
@@ -50,7 +79,7 @@ function EpisodeCard({ show, ep, episodes, art }: { show: Show; ep: Episode; epi
       whileFocus={{ scale: 1.035 }}
       transition={spring}
       onClick={() => playEpisode(show, ep, episodes)}
-      className="card group glass-thin flex flex-col overflow-hidden rounded-[22px] text-left"
+      className="card group glass-thin flex size-full flex-col overflow-hidden rounded-[22px] text-left"
     >
       <div className="relative aspect-video overflow-hidden">
         <Img src={ep.still || art} name={ep.title} size={780} className="size-full" />
@@ -74,6 +103,7 @@ function EpisodeCard({ show, ep, episodes, art }: { show: Show; ep: Episode; epi
         {ep.plot && <p className="mt-1.5 line-clamp-2 text-[12.5px] leading-relaxed text-fg/55">{ep.plot}</p>}
       </div>
     </motion.button>
+    </div>
   )
 }
 
@@ -87,6 +117,8 @@ export default function Detail({ item }: { item: Movie | Show }) {
   useApp((s) => s.favorites)
   useApp((s) => s.watchlist)
   const history = useApp((s) => s.history)
+  const dl = useApp((s) => (api.downloads && item.kind === 'movie' ? s.downloads?.items.find((d) => d.id === item.id) : undefined))
+  const [sheet, setSheet] = useState<Choice[] | null>(null)
 
   // details (and a series' episodes) of the chosen copy
   const picked = item.versions?.[ver]
@@ -151,6 +183,19 @@ export default function Detail({ item }: { item: Movie | Show }) {
     const ep = nextEp ?? episodes[0]
     if (ep && item.kind === 'series') playEpisode(item, ep, episodes)
   }
+  // Windows: save the film. With several copies, the sheet shows each one's size so the smallest can be picked.
+  const download = () => {
+    if (item.kind !== 'movie') return
+    const copies = (item.versions?.length ? item.versions : [undefined]).map((v, i, all) => ({
+      label: v ? (all.findIndex((w) => w!.label === v.label) === i ? v.label : `${v.label} (${i + 1})`) : cleanName(item.name),
+      url: urlOf(v ? { ...item, url: v.url, sourceId: v.sourceId, vodId: v.vodId, ext: v.ext } : item)
+    }))
+    const go = (i: number) => startDownloads([{ id: item.id, kind: 'movie', title: item.name, poster: item.poster, url: copies[i].url }])
+    if (copies.length === 1) return void go(0)
+    setSheet(copies)
+    sheetPick.current = go
+  }
+  const sheetPick = useRef<(i: number) => void>(() => {})
   const vlc = async () => {
     const url = movie.kind === 'movie' ? urlOf(movie) : (nextEp ?? episodes[0])?.url
     if (!url) return
@@ -243,6 +288,11 @@ export default function Detail({ item }: { item: Movie | Show }) {
               <IconButton label={fav ? 'Remove from Favorites' : 'Add to Favorites'} className="size-13" onClick={() => toggleFavorite(item)}>
                 <Heart className={`size-5 ${fav ? 'fill-rose-400 text-rose-400' : ''}`} />
               </IconButton>
+              {api.downloads && item.kind === 'movie' && (
+                <Button size="lg" icon={dl?.state === 'done' ? <Check className="size-5" /> : <Download className="size-5" />} onClick={dl ? () => (closeDetail(), setTab('downloads')) : download}>
+                  {!dl ? 'Download' : dl.state === 'done' ? 'Downloaded' : dl.state === 'error' ? 'Download failed' : dl.state === 'paused' ? 'Paused' : dl.state === 'queued' ? 'Queued' : `Downloading ${dl.size ? Math.round((dl.received / dl.size) * 100) : 0}%`}
+                </Button>
+              )}
               {history.some((h) => resumable(h) && historyOfTitle(item).includes(h)) && (
                 <Button size="lg" icon={<EyeOff className="size-4.5" />} onClick={() => (removeHistory(historyOfTitle(item).map((h) => h.id)), toast(`Removed “${cleanName(item.name)}” from Continue Watching`))}>
                   Remove from Continue Watching
@@ -282,6 +332,13 @@ export default function Detail({ item }: { item: Movie | Show }) {
               ))}
             </div>
           )}
+          {api.downloads && seasonEps.length > 0 && (
+            <div className="mb-5 flex justify-end">
+              <Button icon={<Download className="size-4" />} onClick={() => startDownloads(seasonEps.map((ep) => episodeRequest(item, ep)))}>
+                Download {seasons.length > 1 ? `season ${curSeason}` : 'all episodes'}
+              </Button>
+            </div>
+          )}
           {loading && !episodes.length ? (
             <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-6">
               {Array.from({ length: 8 }, (_, i) => <div key={i} className="skeleton aspect-[16/12] rounded-[22px]" />)}
@@ -305,6 +362,9 @@ export default function Detail({ item }: { item: Movie | Show }) {
           </Row>
         </div>
       )}
+      <AnimatePresence>
+        {sheet && <DownloadSheet title={cleanName(item.name)} choices={sheet} selected={Math.min(ver, sheet.length - 1)} onPick={(i) => sheetPick.current(i)} onClose={() => setSheet(null)} />}
+      </AnimatePresence>
     </motion.div>
   )
 }

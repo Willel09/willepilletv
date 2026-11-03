@@ -3,7 +3,7 @@ import { ProfilePicker } from './screens/Profiles'
 import { useEffect } from 'react'
 import { Ambient } from './components/Ambient'
 import { Screensaver, useIdle } from './components/Screensaver'
-import { TABS, TitleBar } from './components/TitleBar'
+import { TitleBar, visibleTabs } from './components/TitleBar'
 import { Toast } from './components/Toast'
 import { initSpatialNav } from './lib/nav'
 import { initTvKeys } from './lib/tv'
@@ -11,6 +11,7 @@ import { spring } from './lib/motion'
 import Player from './player/Player'
 import Browse from './screens/Browse'
 import Detail from './screens/Detail'
+import Downloads from './screens/Downloads'
 import Home from './screens/Home'
 import PersonPage from './screens/Person'
 import Live from './screens/Live'
@@ -37,6 +38,7 @@ function Screen() {
         {tab === 'movies' && <Browse kind="movies" />}
         {tab === 'series' && <Browse kind="series" />}
         {tab === 'random' && <Random />}
+        {tab === 'downloads' && <Downloads />}
         {tab === 'search' && <Search />}
         {tab === 'settings' && <Settings />}
       </motion.div>
@@ -75,7 +77,7 @@ export default function App() {
         e.preventDefault()
         return setTab('search')
       }
-      if (e.ctrlKey && /^[1-7]$/.test(e.key)) return setTab(TABS[+e.key - 1].id)
+      if (e.ctrlKey && /^[1-7]$/.test(e.key)) return visibleTabs()[+e.key - 1] && setTab(visibleTabs()[+e.key - 1].id)
       if (e.key === 'Escape' || (e.key === 'Backspace' && !isTyping())) {
         if (s.person) closePerson()
         else if (s.detail) closeDetail()

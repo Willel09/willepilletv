@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion'
 import { Avatar } from './Avatar'
-import { Clapperboard, Copy, Dices, Home, Minus, RefreshCw, Search, Settings, Square, Tv, Library, X } from 'lucide-react'
+import { Clapperboard, Copy, Dices, Download, Home, Minus, RefreshCw, Search, Settings, Square, Tv, Library, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { spring } from '../lib/motion'
 import { api, currentProfile, openProfilePicker, refreshLibrary, setTab, useApp, type Tab } from '../store'
@@ -12,15 +12,19 @@ export const TABS: { id: Tab; label: string; icon: typeof Home }[] = [
   { id: 'movies', label: 'Movies', icon: Clapperboard },
   { id: 'series', label: 'Series', icon: Library },
   { id: 'random', label: 'Random', icon: Dices },
+  { id: 'downloads', label: 'Downloads', icon: Download },
   { id: 'search', label: 'Search', icon: Search },
   { id: 'settings', label: 'Settings', icon: Settings }
 ]
+
+/** Downloads exist in the Windows app only */
+export const visibleTabs = () => TABS.filter((t) => t.id !== 'downloads' || !!api.downloads)
 
 function TabBar() {
   const tab = useApp((s) => s.tab)
   return (
     <nav className="glass no-drag flex items-center gap-0.5 rounded-full p-1.5">
-      {TABS.map(({ id, label, icon: Icon }) => {
+      {visibleTabs().map(({ id, label, icon: Icon }) => {
         const active = tab === id
         return (
           <button

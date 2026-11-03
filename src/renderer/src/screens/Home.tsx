@@ -10,7 +10,7 @@ import { cleanName } from '../lib/format'
 import { forYouScore, newestScore, topMany, topRatedScore } from '../lib/recommend'
 import { softSpring } from '../lib/motion'
 import { useRecommended } from '../lib/tmdb'
-import { api, openDetail, openSourceSheet, playChannel, playMovie, removeHistory, resume, resumable, setGroup, setTab, toggleWatchlist, useApp, useIndex } from '../store'
+import { api, localPosterOf, openDetail, openSourceSheet, playChannel, playDownload, playMovie, removeHistory, resume, resumable, setGroup, setTab, toggleWatchlist, useApp, useIndex } from '../store'
 import type { Channel, Item, Movie, Show } from '../../../shared/types'
 import { RECENT } from './Browse'
 import { startPairing } from './Settings'
@@ -50,6 +50,8 @@ export default function Home() {
   const watchlist = useApp((s) => s.watchlist)
   const history = useApp((s) => s.history)
   const epg = useApp((s) => s.epg)
+  const downloads = useApp((s) => s.downloads)
+  const downloaded = useMemo(() => downloads?.items.filter((d) => d.state === 'done' && d.kind === 'movie').slice(0, 20), [downloads])
 
   // Curated rows (not one row per category), all computed in one pass over the library with breaks for the
   // screen in between: on a TV with 500k titles, separate passes froze the remote for seconds
@@ -153,6 +155,11 @@ export default function Home() {
             {cont.map((h) => (
               <WideCard key={h.id} name={h.name} subtitle={h.subtitle} art={h.poster} progress={h.position / h.duration} onClick={() => resume(h)} onRemove={() => removeHistory([h.id])} removeLabel="Remove from Continue Watching" />
             ))}
+          </Row>
+        )}
+        {downloaded && downloaded.length > 0 && (
+          <Row title="Downloaded" onSeeAll={() => setTab('downloads')}>
+            {downloaded.map((d) => <WideCard key={d.id} name={d.title} art={localPosterOf(d)} onClick={() => playDownload(d)} />)}
           </Row>
         )}
         {recommended.length > 0 && <Row title="Recommended for You">{recommended.map(titleCard)}</Row>}

@@ -151,7 +151,9 @@ function Session({ req, mini, fullscreen, sleepAt, setSleepAt }: SessionProps) {
   // Xtream live channels can be switched between MPEG-TS and HLS
   const fmt = req.channel?.xt ? (altFormat ? (settings.liveFormat === 'ts' ? 'm3u8' : 'ts') : settings.liveFormat) : null
   const url = fmt ? req.url.replace(/\.(ts|m3u8)$/, `.${fmt}`) : req.url
-  const engines = useMemo(() => pickEngines(url, live), [url, live])
+  // a downloaded copy plays from this PC; `url` stays what casting, VLC and the history use
+  const playUrl = req.local ?? url
+  const engines = useMemo(() => pickEngines(playUrl, live), [playUrl, live])
 
   // casting: hand the stream to the TV (again after zapping) and keep the local video paused
   useEffect(() => {
@@ -218,6 +220,7 @@ function Session({ req, mini, fullscreen, sleepAt, setSleepAt }: SessionProps) {
         return setEngineIdx((i) => i + 1)
       }
       setError(firstError.current)
+      if (req.local) return setError("This downloaded file can't be played. Delete it under Downloads and download it again.")
       // every way to play it failed: find out why (provider refusal, connection limit, codec) and say so
       api.probe?.(url).then((r) => {
         const why = explainProbe(r, api.device)
@@ -231,7 +234,7 @@ function Session({ req, mini, fullscreen, sleepAt, setSleepAt }: SessionProps) {
       const e = engine.current
       if (e) setTracks({ audio: e.audio(), subs: e.subs(), ca: e.currentAudio(), cs: e.currentSub() })
     }
-    engine.current = createEngine(engines[engineIdx], v, url, live, fail, syncTracks)
+    engine.current = createEngine(engines[engineIdx], v, playUrl, live, fail, syncTracks)
     return () => {
       done = true
       clearTimeout(stall)
@@ -239,7 +242,7 @@ function Session({ req, mini, fullscreen, sleepAt, setSleepAt }: SessionProps) {
       engine.current?.destroy()
       engine.current = null
     }
-  }, [url, engineIdx, nonce, engines, live])
+  }, [playUrl, engineIdx, nonce, engines, live]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const retry = () => {
     firstError.current = null

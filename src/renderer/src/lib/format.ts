@@ -6,6 +6,14 @@ export function duration(sec: number) {
   return h ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}` : `${m}:${String(s).padStart(2, '0')}`
 }
 
+/** 1536 -> "1.5 KB", 2_300_000_000 -> "2.14 GB" */
+export function bytes(n: number) {
+  const u = ['B', 'KB', 'MB', 'GB', 'TB']
+  let i = 0
+  while (n >= 1024 && i < u.length - 1) (n /= 1024), i++
+  return `${n >= 100 || i === 0 ? Math.round(n) : n.toFixed(1)} ${u[i]}`
+}
+
 export const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 
 export function ago(ms: number) {
