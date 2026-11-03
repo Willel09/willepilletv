@@ -187,6 +187,10 @@ export interface Settings {
   refreshHours: number
   /** minutes without input before the screensaver starts; 0 = never */
   screensaverMins: number
+  /** Windows: room downloaded films and episodes may take, in GB; 0 = no limit */
+  downloadLimitGb: number
+  /** Windows: remove a download once you've watched it to the end */
+  deleteWatched: boolean
 }
 
 export interface HistoryEntry {
@@ -266,7 +270,9 @@ export const DEFAULT_SETTINGS: Settings = {
   removeBs: false,
   autoplayNext: true,
   refreshHours: 12,
-  screensaverMins: 5
+  screensaverMins: 5,
+  downloadLimitGb: 20,
+  deleteWatched: false
 }
 
 export type WindowState = { maximized: boolean; fullscreen: boolean }
@@ -342,6 +348,17 @@ export interface IptvApi {
     install(): void
     onState(cb: (s: UpdateState) => void): () => void
   }
+  /** Windows app only: films and episodes saved on this PC to watch offline */
+  downloads?: {
+    list(): Promise<DownloadsState>
+    add(reqs: DownloadRequest[]): Promise<{ added: number; error?: string }>
+    pause(id: string): Promise<void>
+    resume(id: string): Promise<void>
+    remove(id: string): Promise<void>
+    /** file sizes in bytes (null = the server doesn't say), to pick the smallest version */
+    sizes(urls: string[]): Promise<(number | null)[]>
+    onChange(cb: (s: DownloadsState) => void): () => void
+  }
   /** Windows app only: helpers for installing Lumen on a Samsung TV */
   tvInstall?: {
     localIps(): Promise<string[]>
@@ -349,6 +366,42 @@ export interface IptvApi {
     checkDevMode(ip: string): Promise<boolean>
     openInstaller(): Promise<{ ok: boolean; error?: string }>
   }
+}
+
+/** What to download: a film or one episode */
+export interface DownloadRequest {
+  /** the history id: the movie's id, or "<show id>:<episode id>" */
+  id: string
+  kind: 'movie' | 'episode'
+  title: string
+  subtitle?: string
+  poster?: string
+  /** episodes: the show's id */
+  parentId?: string
+  url: string
+}
+
+export interface DownloadRec extends DownloadRequest {
+  /** file name in the downloads folder; the poster beside it is the same name with .jpg */
+  file: string
+  hasPoster: boolean
+  /** bytes in all, 0 until the server has said */
+  size: number
+  received: number
+  state: 'queued' | 'downloading' | 'paused' | 'done' | 'error'
+  error?: string
+  addedAt: number
+  doneAt?: number
+}
+
+export interface DownloadsState {
+  items: DownloadRec[]
+  /** bytes the downloads may take (0 = no limit) */
+  limit: number
+  /** bytes taken now */
+  used: number
+  /** bytes free on the disk, if known */
+  free: number | null
 }
 
 export interface CastDevice {

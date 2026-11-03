@@ -47,6 +47,19 @@ const api: IptvApi = {
   },
   onWindowState: (cb) => on('win:state', cb),
   onProgress: (cb) => on('progress', cb),
+  // Windows only: saved films and episodes
+  downloads:
+    process.platform === 'win32'
+      ? {
+          list: () => ipcRenderer.invoke('dl:list'),
+          add: (reqs) => ipcRenderer.invoke('dl:add', reqs),
+          pause: (id) => ipcRenderer.invoke('dl:pause', id),
+          resume: (id) => ipcRenderer.invoke('dl:resume', id),
+          remove: (id) => ipcRenderer.invoke('dl:remove', id),
+          sizes: (urls) => ipcRenderer.invoke('dl:sizes', urls),
+          onChange: (cb) => on('dl:state', cb)
+        }
+      : undefined,
   tvInstall: {
     localIps: () => ipcRenderer.invoke('tv:ips'),
     discover: () => ipcRenderer.invoke('tv:discover'),

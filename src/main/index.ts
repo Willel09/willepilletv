@@ -7,12 +7,16 @@ import { fileURLToPath, pathToFileURL } from 'url'
 import { join } from 'path'
 import Store from 'electron-store'
 import { autoUpdater } from 'electron-updater'
-import { DEFAULT_SETTINGS, STORE_DEFAULTS, type CastMedia, type Settings, type StoreShape, type UpdateState } from '../shared/types'
+import { DEFAULT_SETTINGS, STORE_DEFAULTS, type CastMedia, type DownloadRequest, type Settings, type StoreShape, type UpdateState } from '../shared/types'
 import { xtreamInfo } from '../shared/core/xtream'
 import { discoverCast, startCast, stopCast } from './cast'
+import { Downloads } from './downloads'
+import { registerScheme, serveDownloads } from './dlprotocol'
 import { probeStream } from '../shared/core/probe'
 import { getBytes, getText } from './http'
 import { devModeOn, discoverTvs, localIps, openTvInstaller } from './tvinstall'
+
+registerScheme() // lumen-dl:// plays downloaded files, see downloads.ts
 
 // Lets <video> expose audioTracks for multi-language MP4/MKV files
 app.commandLine.appendSwitch('enable-blink-features', 'AudioVideoTracks')
@@ -27,6 +31,7 @@ const settings = (): Settings => {
 }
 
 let win: BrowserWindow | null = null
+let downloads: Downloads
 
 const isWin11 = process.platform === 'win32' && Number(process.getSystemVersion().split('.')[2] ?? 0) >= 22000
 
@@ -209,6 +214,12 @@ function registerIpc() {
     spawn(exe, [url, `--http-user-agent=${s.userAgent}`, `--meta-title=${title}`], { detached: true, stdio: 'ignore' }).unref()
     return { ok: true }
   })
+  ipcMain.handle('dl:list', () => downloads.state())
+  ipcMain.handle('dl:add', (_e, reqs: DownloadRequest[]) => (Array.isArray(reqs) ? downloads.add(reqs.slice(0, 500)) : { added: 0 }))
+  ipcMain.handle('dl:pause', (_e, id: string) => downloads.pause(String(id)))
+  ipcMain.handle('dl:resume', (_e, id: string) => downloads.resume(String(id)))
+  ipcMain.handle('dl:remove', (_e, id: string) => downloads.remove(String(id)))
+  ipcMain.handle('dl:sizes', (_e, urls: string[]) => downloads.sizes(Array.isArray(urls) ? urls.slice(0, 20).map(String) : []))
   ipcMain.handle('tv:ips', () => localIps())
   ipcMain.handle('tv:discover', () => discoverTvs())
   ipcMain.handle('tv:devmode', (_e, ip: string) => devModeOn(String(ip)))
@@ -264,9 +275,12 @@ app.on('second-instance', () => {
 app.whenReady().then(() => {
   app.setAppUserModelId('app.lumen.iptv')
   patchNetworking()
+  downloads = new Downloads(join(app.getPath('userData'), 'downloads'), () => settings().userAgent || DEFAULT_SETTINGS.userAgent, () => settings().downloadLimitGb, (st) => send('dl:state', st), (input, init) => net.fetch(input instanceof URL ? input.href : input, init))
+  serveDownloads(downloads.dir)
   registerIpc()
   createWindow()
   setupUpdater()
   app.on('activate', () => BrowserWindow.getAllWindows().length === 0 && createWindow())
 })
+app.on('before-quit', () => downloads?.save()) // a download cut short continues from the file's size next time
 app.on('window-all-closed', () => app.quit())
