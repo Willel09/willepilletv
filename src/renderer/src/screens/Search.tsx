@@ -7,12 +7,36 @@ import { rank, words } from '../lib/search'
 import { api, openDetail, playChannel, useApp, useIndex } from '../store'
 
 const LIMIT = 60
+const RECENT_KEY = 'lumen:recent-searches'
+const recent = (): string[] => {
+  try {
+    return JSON.parse(localStorage.getItem(RECENT_KEY) ?? '[]')
+  } catch {
+    return []
+  }
+}
+const keep = (list: string[]) => {
+  try {
+    localStorage.setItem(RECENT_KEY, JSON.stringify(list))
+  } catch {
+    /* private mode or full: they're just not remembered */
+  }
+}
 
 export default function Search() {
   const idx = useIndex()
   const epg = useApp((s) => s.epg)
   const [q, setQ] = useState('')
   const dq = useDeferredValue(q)
+  const [past, setPast] = useState(recent)
+  // what you opened a result for is worth remembering; typing alone isn't
+  const remember = () => {
+    const t = q.trim()
+    if (t.length < 2) return
+    const list = [t, ...past.filter((x) => x.toLowerCase() !== t.toLowerCase())].slice(0, 8)
+    setPast(list)
+    keep(list)
+  }
 
   const results = useMemo(() => {
     const terms = words(dq).split(' ').filter(Boolean)
@@ -49,6 +73,18 @@ export default function Search() {
             </button>
           )}
         </label>
+        {!results && past.length > 0 && (
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+            {past.map((t) => (
+              <button key={t} onClick={() => setQ(t)} className="glass-thin rounded-full px-4 py-1.5 text-[13px] font-medium text-fg/75 hover:text-fg">
+                {t}
+              </button>
+            ))}
+            <button onClick={() => (setPast([]), keep([]))} className="px-2 text-[12px] font-semibold text-fg/40 hover:text-fg">
+              Clear
+            </button>
+          </div>
+        )}
         {!results && (
           <p className="mt-5 text-center text-[13.5px] text-fg/40">
             Search across {idx.channels.length.toLocaleString()} channels, {idx.movies.length.toLocaleString()} movies and {idx.series.length.toLocaleString()} series
@@ -62,18 +98,18 @@ export default function Search() {
           {results.channels.total > 0 && (
             <Row title="Channels" count={results.channels.total}>
               {results.channels.items.map((c) => (
-                <ChannelTile key={c.id} name={c.name} logo={c.logo} subtitle={nowNext(epg?.programmes[c.id]).now?.title ?? c.group} onClick={() => playChannel(c, results.channels.items)} />
+                <ChannelTile key={c.id} name={c.name} logo={c.logo} subtitle={nowNext(epg?.programmes[c.id]).now?.title ?? c.group} onClick={() => (remember(), playChannel(c, results.channels.items))} />
               ))}
             </Row>
           )}
           {results.movies.total > 0 && (
             <Row title="Movies" count={results.movies.total}>
-              {results.movies.items.map((m) => <PosterCard key={m.id} name={m.name} poster={m.poster} rating={m.rating} onClick={() => openDetail(m)} />)}
+              {results.movies.items.map((m) => <PosterCard key={m.id} name={m.name} poster={m.poster} rating={m.rating} onClick={() => (remember(), openDetail(m))} />)}
             </Row>
           )}
           {results.series.total > 0 && (
             <Row title="Series" count={results.series.total}>
-              {results.series.items.map((s) => <PosterCard key={s.id} name={s.name} poster={s.poster} rating={s.rating} onClick={() => openDetail(s)} />)}
+              {results.series.items.map((s) => <PosterCard key={s.id} name={s.name} poster={s.poster} rating={s.rating} onClick={() => (remember(), openDetail(s))} />)}
             </Row>
           )}
         </div>

@@ -603,7 +603,16 @@ export const canMiniPlayer = api.device !== 'tv'
 export const minimizePlayer = () => canMiniPlayer && set({ playerMini: true })
 export const expandPlayer = () => set({ playerMini: false })
 
+/** The channel watched before the current one, for the "last channel" key */
+let previousChannel: { channel: Channel; channels?: Channel[] } | null = null
+export const hasPreviousChannel = () => !!previousChannel
+export function playPreviousChannel() {
+  if (previousChannel) playChannel(previousChannel.channel, previousChannel.channels)
+}
+
 export function playChannel(channel: Channel, channels?: Channel[]) {
+  const cur = get().player
+  if (cur?.channel && cur.channel.id !== channel.id) previousChannel = { channel: cur.channel, channels: cur.channels }
   play({ kind: 'live', id: channel.id, url: urlOf(channel), title: channel.name, poster: channel.logo, channel, channels })
 }
 

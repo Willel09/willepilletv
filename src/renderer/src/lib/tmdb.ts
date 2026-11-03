@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { titleKey } from '../../../shared/core/dedupe'
-import { fetchPerson, fetchRecommendations, resolveTmdb, type GetJson, type Person, type TmdbKind, type TmdbTitle } from '../../../shared/core/tmdb'
+import { fetchGenreTitles, fetchPerson, fetchRecommendations, fetchTrailer, MOVIE_GENRES, resolveTmdb, SERIES_GENRES, type GetJson, type Person, type TmdbKind, type TmdbTitle, type Trailer } from '../../../shared/core/tmdb'
 import type { Movie, Show } from '../../../shared/types'
 import { cleanName } from './format'
 import { index, useApp } from '../store'
@@ -77,15 +77,18 @@ const yearOf = (x: Title) => x.year?.match(/(19|20)\d\d/)?.[0]
  * The library's copy of each TMDB title: by TMDB id when the provider sent one, otherwise by name and year.
  * One pass over the library for all of them, with breaks for the screen (500k titles).
  */
-export async function matchLibrary(cands: TmdbTitle[]): Promise<Map<number, Title>> {
+/** Key of a TMDB title in matchLibrary's answer: a film and a series can share a number */
+export const tmdbKey = (c: { kind: TmdbKind; tmdb: number }) => `${c.kind}${c.tmdb}`
+
+export async function matchLibrary(cands: TmdbTitle[]): Promise<Map<string, Title>> {
   const idx = index()
   const memo = found.get(idx.movies) ?? (found.set(idx.movies, new Map()), found.get(idx.movies)!)
-  const out = new Map<number, Title>()
+  const out = new Map<string, Title>()
   const todo = new Map<string, TmdbTitle>()
   for (const c of cands) {
-    const k = `${c.kind}${c.tmdb}`
+    const k = tmdbKey(c)
     const m = memo.get(k)
-    if (m) out.set(c.tmdb, m)
+    if (m) out.set(k, m)
     else if (m === undefined) todo.set(k, c)
   }
   if (todo.size) {
@@ -115,7 +118,7 @@ export async function matchLibrary(cands: TmdbTitle[]): Promise<Map<number, Titl
     for (const [k, c] of todo) {
       const x = hit.get(k) ?? null
       memo.set(k, x)
-      if (x) out.set(c.tmdb, x)
+      if (x) out.set(k, x)
     }
   }
   return out
@@ -127,7 +130,7 @@ export async function inLibrary(recs: TmdbTitle[], skipTmdb?: number): Promise<T
   const seen = new Set<string>()
   const out: Title[] = []
   for (const r of recs) {
-    const x = m.get(r.tmdb)
+    const x = m.get(tmdbKey(r))
     if (x && !seen.has(x.id)) (seen.add(x.id), out.push(x))
   }
   return out
@@ -212,4 +215,65 @@ export function useRecommended(signals: Title[]): Title[] {
     return () => (clearTimeout(timer), void (live = false))
   }, [key, sig]) // eslint-disable-line react-hooks/exhaustive-deps
   return list
+}
+
+/** The trailer on YouTube, when TMDB has one (pass null to wait) */
+export function useTrailer(item: Title | null, imdbId?: string): Trailer | null {
+  const key = useApp((s) => s.settings.tmdbKey)
+  const [t, setT] = useState<Trailer | null>(null)
+  const id = item && `${item.id}|${imdbId ?? ''}`
+  useEffect(() => {
+    setT(null)
+    if (!key || !item) return
+    let live = true
+    void (async () => {
+      const tmdb = await tmdbIdOf(key, item, imdbId)
+      if (!tmdb) return
+      const r = await cached<Trailer>(`trailer:${kindOf(item)}:${tmdb}`, 14, () => fetchTrailer(get, key, kindOf(item), tmdb))
+      if (live) setT(r)
+    })().catch(() => {})
+    return () => void (live = false)
+  }, [key, id]) // eslint-disable-line react-hooks/exhaustive-deps
+  return t
+}
+
+export interface GenreRow {
+  name: string
+  kind: TmdbKind
+  items: Title[]
+}
+
+/**
+ * Rows like "Thriller" and "Crime series": TMDB's most popular titles of each genre, the ones your library has.
+ * Starts a few seconds after the app so the library and the recommendations get the CPU first.
+ */
+export function useGenreRows(): GenreRow[] {
+  const key = useApp((s) => s.settings.tmdbKey)
+  const library = useApp((s) => s.library)
+  const [rows, setRows] = useState<GenreRow[]>([])
+  useEffect(() => {
+    if (!key || !library) return setRows([])
+    let live = true
+    const timer = setTimeout(() => {
+      void (async () => {
+        const jobs = [...MOVIE_GENRES.map((g) => ({ g, kind: 'movie' as const })), ...SERIES_GENRES.map((g) => ({ g, kind: 'series' as const }))]
+        const lists = await Promise.all(jobs.map(({ g, kind }) => cached<TmdbTitle[]>(`genre:${kind}:${g.id}`, 7, () => fetchGenreTitles(get, key, kind, g.id)).catch(() => null)))
+        // one pass over the library for all of them
+        const m = await matchLibrary(lists.flatMap((l) => l ?? []))
+        const out: GenreRow[] = []
+        jobs.forEach(({ g, kind }, i) => {
+          const seen = new Set<string>()
+          const items: Title[] = []
+          for (const t of lists[i] ?? []) {
+            const x = m.get(tmdbKey(t))
+            if (x && !seen.has(x.id)) (seen.add(x.id), items.push(x))
+          }
+          if (items.length >= 6) out.push({ name: kind === 'movie' ? g.name : `${g.name} series`, kind, items: items.slice(0, 30) })
+        })
+        if (live) setRows(out)
+      })().catch(() => {})
+    }, 3500)
+    return () => (clearTimeout(timer), void (live = false))
+  }, [key, library])
+  return rows
 }

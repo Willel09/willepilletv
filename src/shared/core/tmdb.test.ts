@@ -83,3 +83,31 @@ test('a rejected key is explained', async () => {
   }
   await assert.rejects(findPerson(get, 'bad', 'x'), /did not accept the key/)
 })
+
+import { fetchGenreTitles, fetchTrailer, pickTrailer } from './tmdb.ts'
+
+test('the trailer: official and English first, a teaser only when there is no trailer, YouTube only', () => {
+  const v = [
+    { site: 'Vimeo', type: 'Trailer', key: 'v' },
+    { site: 'YouTube', type: 'Teaser', key: 'teaser', official: true, iso_639_1: 'en' },
+    { site: 'YouTube', type: 'Trailer', key: 'fan', official: false, iso_639_1: 'en', name: 'Fan' },
+    { site: 'YouTube', type: 'Trailer', key: 'real', official: true, iso_639_1: 'en', name: 'Official Trailer' },
+    { site: 'YouTube', type: 'Featurette', key: 'x' }
+  ]
+  assert.deepEqual(pickTrailer(v), { key: 'real', name: 'Official Trailer' })
+  assert.equal(pickTrailer(v.filter((x) => x.key !== 'real' && x.key !== 'fan'))?.key, 'teaser')
+  assert.equal(pickTrailer([{ site: 'YouTube', type: 'Featurette', key: 'x' }]), null)
+})
+
+test('a title without videos has no trailer', async () => {
+  assert.equal(await fetchTrailer(async () => ({ results: [] }), 'k', 'movie', 1), null)
+})
+
+test('genre titles: three pages merged without repeats, a failing page is skipped', async () => {
+  const get = async (u: string) => {
+    if (u.includes('page=3')) throw new Error('HTTP 500')
+    return u.includes('page=1') ? { results: [{ id: 1, title: 'A' }, { id: 2, title: 'B' }] } : { results: [{ id: 2, title: 'B' }, { id: 3, title: 'C' }] }
+  }
+  const r = await fetchGenreTitles(get, 'k', 'movie', 53)
+  assert.deepEqual(r.map((t) => t.tmdb), [1, 2, 3])
+})

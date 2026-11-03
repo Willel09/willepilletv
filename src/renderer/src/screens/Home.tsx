@@ -9,7 +9,8 @@ import { nowNext } from '../lib/epg'
 import { cleanName } from '../lib/format'
 import { forYouScore, newestScore, topMany, topRatedScore } from '../lib/recommend'
 import { softSpring } from '../lib/motion'
-import { useRecommended } from '../lib/tmdb'
+import { hasNew, markSeen, seenOf } from '../lib/seen'
+import { useGenreRows, useRecommended } from '../lib/tmdb'
 import { api, localPosterOf, openDetail, openSourceSheet, playChannel, playDownload, playMovie, removeHistory, resume, resumable, setGroup, setTab, toggleWatchlist, useApp, useIndex } from '../store'
 import type { Channel, Item, Movie, Show } from '../../../shared/types'
 import { RECENT } from './Browse'
@@ -56,14 +57,16 @@ export default function Home() {
   // Curated rows (not one row per category), all computed in one pass over the library with breaks for the
   // screen in between: on a TV with 500k titles, separate passes froze the remote for seconds
   type Title = Movie | Show
-  const [rows, setRows] = useState<{ featured: Title[]; forYou: Title[]; newMovies: Title[]; newSeries: Title[]; topRated: Title[]; last?: Title; similar: Title[]; signals: Title[] } | null>(null)
+  const [rows, setRows] = useState<{ featured: Title[]; forYou: Title[]; newMovies: Title[]; newSeries: Title[]; topRated: Title[]; last?: Title; similar: Title[]; signals: Title[]; fresh: Show[] } | null>(null)
   const hero = useRef<{ idx: unknown; items: Title[] } | null>(null)
   useEffect(() => {
     let live = true
     void (async () => {
       // look up only the (at most 300) titles in the history, not a table of the whole library
       const wanted = history.filter((h) => h.kind !== 'live').map((h) => (h.kind === 'episode' && h.parentId ? h.parentId : h.id))
-      const want = new Set(wanted)
+      // series on the watchlist or in favorites are looked up too, to see whether they have new episodes
+      const tracked = [...watchlist, ...favorites].filter((x) => x.kind === 'series').map((x) => x.id)
+      const want = new Set([...wanted, ...tracked])
       const found = new Map<string, Title>()
       let seen = 0
       if (want.size)
@@ -91,16 +94,29 @@ export default function Home() {
           { n: 30, score: last ? newestScore((x) => x.kind === last.kind && x.id !== last.id && gs(x).some((g) => lastGroups.includes(g))) : none }
         ]
       )
+      // new episodes: the provider changed the series after you last opened it or watched an episode
+      const fresh: Show[] = []
+      const counted = new Set<string>()
+      for (const id of new Set([...tracked, ...wanted])) {
+        const x = found.get(id)
+        if (!x || x.kind !== 'series' || counted.has(x.id)) continue
+        counted.add(x.id)
+        const ids = [id, x.id, ...(x.versions ?? []).map((v) => v.id)]
+        const watchedAt = Math.max(0, ...history.filter((h) => h.kind === 'episode' && ids.includes(h.parentId ?? '')).map((h) => h.updatedAt / 1000))
+        if (hasNew(x.added, seenOf(ids), watchedAt)) fresh.push(x)
+      }
+      fresh.sort((a, b) => (b.added ?? 0) - (a.added ?? 0))
       if (!live) return
       // the hero only reshuffles when the library changes, not every time the history does
       if (hero.current?.idx !== idx) hero.current = { idx, items: (featRated.length >= 6 ? featRated : featAny).sort(() => Math.random() - 0.5).slice(0, 6) }
-      setRows({ featured: hero.current.items, forYou, newMovies, newSeries, topRated, last, similar, signals: [...watched, ...saved].slice(0, 6) })
+      setRows({ featured: hero.current.items, forYou, newMovies, newSeries, topRated, last, similar, signals: [...watched, ...saved].slice(0, 6), fresh: fresh.slice(0, 30) })
     })()
     return () => void (live = false)
   }, [idx, history, watchlist, favorites])
   const featured = rows?.featured ?? []
   // needs a TMDB key (Settings); until then "For You" below picks by category
   const recommended = useRecommended(rows?.signals ?? [])
+  const genres = useGenreRows()
 
   // channels on air right now (favorites first), so live TV has a place on Home
   const liveNow = useMemo(() => {
@@ -157,6 +173,20 @@ export default function Home() {
             ))}
           </Row>
         )}
+        {rows && rows.fresh.length > 0 && (
+          <Row title="New Episodes">
+            {rows.fresh.map((it) => (
+              <PosterCard
+                key={it.id}
+                name={it.name}
+                poster={it.poster}
+                rating={it.rating}
+                onClick={() => openDetail(it)}
+                badge={<span className="absolute bottom-2.5 left-2.5 rounded-full bg-[var(--accent)] px-2.5 py-0.5 text-[11px] font-extrabold uppercase tracking-wide text-white shadow-lg">New</span>}
+              />
+            ))}
+          </Row>
+        )}
         {downloaded && downloaded.length > 0 && (
           <Row title="Downloaded" onSeeAll={() => setTab('downloads')}>
             {downloaded.map((d) => <WideCard key={d.id} name={d.title} art={localPosterOf(d)} onClick={() => playDownload(d)} />)}
@@ -170,6 +200,7 @@ export default function Home() {
         {rows?.last && rows.similar.length > 0 && <Row title={`Because you watched ${cleanName(rows.last.name)}`}>{rows.similar.map(titleCard)}</Row>}
         {liveNow.length > 0 && <Row title="Live Now" onSeeAll={() => setTab('live')}>{liveNow.map(poster)}</Row>}
         {rows && rows.topRated.length > 0 && <Row title="Top Rated">{rows.topRated.map(titleCard)}</Row>}
+        {genres.map((g) => <Row key={g.kind + g.name} title={g.name}>{g.items.map(titleCard)}</Row>)}
         {favorites.length > 0 && <Row title="Favorites">{favorites.slice(0, 40).map(poster)}</Row>}
         {recentLive.length > 0 && (
           <Row title="Recently Watched Channels">

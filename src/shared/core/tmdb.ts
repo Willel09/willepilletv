@@ -196,3 +196,57 @@ export async function fetchRecommendations(get: GetJson, key: string, kind: Tmdb
   }
   return out
 }
+
+export interface Trailer {
+  /** YouTube video id */
+  key: string
+  name: string
+}
+
+type RawVideo = { site?: string; type?: string; key?: string; name?: string; official?: boolean; iso_639_1?: string }
+
+/** The best YouTube trailer: official before unofficial, English first, then a teaser if there is no trailer */
+export function pickTrailer(videos: RawVideo[]): Trailer | null {
+  const yt = videos.filter((v) => v.site === 'YouTube' && v.key && (v.type === 'Trailer' || v.type === 'Teaser'))
+  const score = (v: RawVideo) => (v.type === 'Trailer' ? 4 : 0) + (v.official ? 2 : 0) + (v.iso_639_1 === 'en' ? 1 : 0)
+  const best = yt.sort((a, b) => score(b) - score(a))[0]
+  return best ? { key: best.key!, name: best.name ?? 'Trailer' } : null
+}
+
+export async function fetchTrailer(get: GetJson, key: string, kind: TmdbKind, tmdb: number): Promise<Trailer | null> {
+  const path = `/${kind === 'movie' ? 'movie' : 'tv'}/${tmdb}/videos`
+  const en = await call<{ results?: RawVideo[] }>(get, key, path, { language: 'en-US' })
+  return pickTrailer(en.results ?? [])
+}
+
+export interface Genre {
+  id: number
+  name: string
+}
+
+/** TMDB's genre ids; films and series name some of them differently */
+export const MOVIE_GENRES: Genre[] = [
+  { id: 53, name: 'Thriller' }, { id: 35, name: 'Comedy' }, { id: 28, name: 'Action' }, { id: 878, name: 'Science Fiction' },
+  { id: 27, name: 'Horror' }, { id: 18, name: 'Drama' }, { id: 10749, name: 'Romance' }, { id: 16, name: 'Animation' }, { id: 80, name: 'Crime' }, { id: 12, name: 'Adventure' }
+]
+export const SERIES_GENRES: Genre[] = [
+  { id: 80, name: 'Crime' }, { id: 35, name: 'Comedy' }, { id: 18, name: 'Drama' }, { id: 10765, name: 'Sci-Fi & Fantasy' },
+  { id: 10759, name: 'Action & Adventure' }, { id: 9648, name: 'Mystery' }, { id: 16, name: 'Animation' }
+]
+
+/** The most popular titles of a genre (3 pages: a library has only some of them, so a short list would match nothing) */
+export async function fetchGenreTitles(get: GetJson, key: string, kind: TmdbKind, genre: number): Promise<TmdbTitle[]> {
+  const path = kind === 'movie' ? '/discover/movie' : '/discover/tv'
+  const pages = await Promise.all(
+    [1, 2, 3].map((page) =>
+      call<{ results?: RawTitle[] }>(get, key, path, { with_genres: genre, sort_by: 'popularity.desc', 'vote_count.gte': 300, include_adult: 'false', page }).catch(() => ({ results: [] as RawTitle[] }))
+    )
+  )
+  const seen = new Set<number>()
+  const out: TmdbTitle[] = []
+  for (const r of pages.flatMap((p) => p.results ?? [])) {
+    const t = parseTitle(r, kind)
+    if (t && !seen.has(t.tmdb)) (seen.add(t.tmdb), out.push(t))
+  }
+  return out
+}

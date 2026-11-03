@@ -8,7 +8,7 @@ import { Img } from '../components/Img'
 import { Row } from '../components/Row'
 import { Button, IconButton, Spinner } from '../components/ui'
 import { sheetSpring, softSpring } from '../lib/motion'
-import { matchLibrary, usePerson } from '../lib/tmdb'
+import { matchLibrary, tmdbKey, usePerson } from '../lib/tmdb'
 import { closePerson, openDetail, setTab, useApp } from '../store'
 
 const when = (d: string) => new Date(d).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
@@ -39,14 +39,17 @@ export default function PersonPage({ name, role }: { name: string; role: 'actor'
     void matchLibrary(p.credits).then((m) => {
       if (!live) return
       const seen = new Set<string>()
-      setOwn(p.credits.flatMap((credit) => (m.has(credit.tmdb) && !seen.has(m.get(credit.tmdb)!.id) ? (seen.add(m.get(credit.tmdb)!.id), [{ credit, title: m.get(credit.tmdb)! }]) : [])))
+      setOwn(p.credits.flatMap((credit) => {
+        const title = m.get(tmdbKey(credit))
+        return title && !seen.has(title.id) ? (seen.add(title.id), [{ credit, title }]) : []
+      }))
     })
     return () => void (live = false)
   }, [p])
   useEffect(() => root.current?.querySelector<HTMLElement>('button')?.focus({ preventScroll: true }), [p])
 
-  const owned = useMemo(() => new Set((own ?? []).map((o) => o.credit.tmdb)), [own])
-  const others = useMemo(() => (p?.credits ?? []).filter((c) => !owned.has(c.tmdb)), [p, owned])
+  const owned = useMemo(() => new Set((own ?? []).map((o) => tmdbKey(o.credit))), [own])
+  const others = useMemo(() => (p?.credits ?? []).filter((c) => !owned.has(tmdbKey(c))), [p, owned])
   useApp((s) => s.settings.tmdbKey)
 
   return (

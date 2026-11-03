@@ -18,6 +18,8 @@ export default function Browse({ kind }: { kind: 'movies' | 'series' }) {
   const idx = useIndex()
   const favs = useApp((s) => s.favorites)
   const watchlist = useApp((s) => s.watchlist)
+  const history = useApp((s) => s.history)
+  const [hideSeen, setHideSeen] = useState(false)
   const group = useApp((s) => s.group[kind]) ?? ALL
   const [sort, setSort] = useState<Sort>('added')
   const [q, setQ] = useState('')
@@ -44,11 +46,16 @@ export default function Browse({ kind }: { kind: 'movies' | 'series' }) {
     else if (group === WATCH) list = watchlist.filter((f) => f.kind === itemKind)
     else list = groups.find((g) => g.name === group)?.items ?? []
     const terms = words(q).split(' ').filter(Boolean)
+    if (hideSeen && kind === 'movies') {
+      // watched to the end (the history keeps the last 300)
+      const seen = new Set(history.filter((h) => h.kind === 'movie' && h.duration > 0 && h.position >= h.duration * 0.95).map((h) => h.id))
+      list = list.filter((m) => !seen.has(m.id) && !(m as Movie).versions?.some((v) => seen.has(v.id)))
+    }
     if (terms.length) list = list.filter((it) => matchScore(idx.key(it), terms) !== null)
     if (group === RECENT || sort === 'added') return group === RECENT ? list : [...list].sort((a, b) => (b.added ?? 0) - (a.added ?? 0))
     if (sort === 'az') return [...list].sort((a, b) => a.name.localeCompare(b.name))
     return [...list].sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))
-  }, [all, groups, favs, watchlist, group, sort, itemKind, q, idx])
+  }, [all, groups, favs, watchlist, group, sort, itemKind, q, idx, hideSeen, history, kind])
 
   if (!all.length)
     return (
@@ -84,6 +91,16 @@ export default function Browse({ kind }: { kind: 'movies' | 'series' }) {
               </button>
             )}
           </label>
+          {kind === 'movies' && (
+            <button
+              role="switch"
+              aria-checked={hideSeen}
+              onClick={() => setHideSeen(!hideSeen)}
+              className={`h-9 shrink-0 rounded-full px-4 text-[13px] font-semibold transition-colors ${hideSeen ? 'bg-fg text-bg' : 'glass-thin text-fg/70 hover:text-fg'}`}
+            >
+              Hide watched
+            </button>
+          )}
           {group !== RECENT && (
             <Segmented
               layoutId={`${kind}-sort`}
@@ -100,7 +117,7 @@ export default function Browse({ kind }: { kind: 'movies' | 'series' }) {
         {items.length ? (
           <PosterGrid
             items={items}
-            resetKey={`${group}:${sort}:${q}`}
+            resetKey={`${group}:${sort}:${q}:${hideSeen}`}
             render={(it, w) => <PosterCard key={it.id} name={it.name} poster={it.poster} rating={it.rating} width={w} onClick={() => openDetail(it)} onRemove={group === WATCH ? () => toggleWatchlist(it as Movie | Show) : undefined} />}
           />
         ) : (

@@ -284,13 +284,13 @@ function UpdateCard() {
 }
 
 const KEYS_DESKTOP: [string, string][] = [
-  ['Arrow keys', 'Move focus'], ['Enter', 'Select / play'], ['Esc / Backspace', 'Back'], ['Ctrl + 1…6', 'Switch tabs'], ['/ or Ctrl + F', 'Search'],
+  ['Arrow keys', 'Move focus'], ['Enter', 'Select / play'], ['Esc / Backspace', 'Back'], ['Ctrl + 1…8', 'Switch tabs'], ['/ or Ctrl + F', 'Search'],
   ['Space / K', 'Play / pause'], ['← / →', 'Seek 10 s (VOD)'], ['↑ / ↓ · PgUp / PgDn', 'Channel up / down'], ['0–9', 'Jump to channel number'],
-  ['Esc (player)', 'Mini player'], ['F', 'Fullscreen'], ['M', 'Mute'], ['P', 'Picture in Picture'], ['C', 'Subtitles on / off'], ['Ctrl + V', 'Play a copied stream URL']
+  ['Esc (player)', 'Mini player'], ['F', 'Fullscreen'], ['M', 'Mute'], ['P', 'Picture in Picture'], ['C', 'Subtitles on / off'], ['L', 'Previous channel'], ['Ctrl + V', 'Play a copied stream URL']
 ]
 const KEYS_TV: [string, string][] = [
   ['Arrows / OK', 'Move / select'], ['Back', 'Back (exit on Home)'], ['Play / Pause', 'Play / pause'], ['◀◀ / ▶▶', 'Seek 10 s'],
-  ['CH + / CH −', 'Channel up / down'], ['0–9', 'Jump to channel'], ['Red', 'Add to Favorites'], ['Green', 'Subtitles on / off']
+  ['CH + / CH −', 'Channel up / down'], ['0–9', 'Jump to channel'], ['Red', 'Add to Favorites'], ['Green', 'Subtitles on / off'], ['Yellow', 'Previous channel']
 ]
 
 export default function Settings() {

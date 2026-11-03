@@ -9,7 +9,7 @@ import { nowNext, useNow } from '../lib/epg'
 import { artUrl, cleanName, clock, duration } from '../lib/format'
 import { sheetSpring, spring } from '../lib/motion'
 import type { CastDevice } from '../../../shared/types'
-import { api, canMiniPlayer, closePlayer, setCastTo, expandPlayer, index, isFavorite, minimizePlayer, playChannel, playEpisode, saveProgress, toast, toggleFavorite, useApp, type PlayRequest } from '../store'
+import { api, canMiniPlayer, closePlayer, setCastTo, expandPlayer, index, isFavorite, minimizePlayer, playChannel, playEpisode, playPreviousChannel, saveProgress, toast, toggleFavorite, useApp, type PlayRequest } from '../store'
 
 const desktop = api.device === 'desktop'
 const tv = api.device === 'tv'
@@ -394,6 +394,8 @@ function Session({ req, mini, fullscreen, sleepAt, setSleepAt }: SessionProps) {
       case 'ChannelDown': zap(-1); break
       case 'ColorF0Red': if (req.channel) toggleFavorite(req.channel); break
       case 'ColorF1Green': toggleSubs(); break
+      case 'ColorF2Yellow':
+      case 'l': if (req.channel) playPreviousChannel(); break
       case 'Escape':
       case 'Backspace': if (menu) setMenu(null); else close(); break
       case 'ArrowLeft': seek(-10); break

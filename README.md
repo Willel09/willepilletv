@@ -144,6 +144,10 @@ You need **Node.js 22 LTS** from <https://nodejs.org>.
 - **Screensaver** (*Settings → Appearance*): after 2, 5 (default) or 15 minutes without input, slowly drifting artwork from your library with title, year, rating and a clock. Any key, click or mouse movement ends it, and that key press is not passed on. It never starts while something is playing.
 - **Random:** pick Movie, Series or Channel (and *Rated 7+* if you like), press **Spin**, and a reel of posters rolls and slows to a stop on tonight's pick, with **Play**, **Details** and **Spin again**. Titles you've already watched are skipped when there are others.
 - **Downloads** (Windows app only): **Download** on a film's page, on an episode (the arrow on its card), or **Download season**. When a film has several copies, a list shows each one's size and marks the smallest, so you can keep the most room. Downloads run one at a time, can be paused and continue where they stopped, are capped by a limit you set on the *Downloads* tab (5, 10, 20, 50 GB or none; a download that would pass it stops with a message) and can be deleted automatically once you've watched them to the end. They are plain video files in `%APPDATA%\Lumen\downloads` that play only inside Lumen (including seeking, audio tracks and *Continue Watching*), also with no internet. Lumen does not re-encode files: that would take hours of CPU per film and needs a bundled encoder, so the saving comes from choosing the smallest copy. Most providers allow one stream at a time, so a running download can make a second stream refuse.
+- **Trailers:** with the TMDB key, a **Trailer** button on a title's page opens the official YouTube trailer in your browser (not shown on Samsung TVs). Looked-up trailers are remembered for two weeks.
+- **New Episodes:** series on your watchlist, in favorites or that you've watched get a **New** badge on Home when the provider has updated them since you last opened the series or watched an episode. Opening the series clears it. A series you already had when you first got this version doesn't count as new until it changes again. Kept per device. (Providers report when a series changed, not which episode, so it can't say how many.)
+- **Genre rows** (TMDB key): Home shows rows like *Thriller*, *Comedy*, *Horror*, *Crime series* made of TMDB's most popular titles in each genre that your library has (only genres with at least six matches appear). Looked up once a week.
+- **Small things:** *Hide watched* in Movies, the last searches as chips under the search box, and **L** (Yellow on a Samsung remote) for the previous channel.
 - **Profiles:** each profile has its own watchlist, favorites and Continue Watching (sources and settings are shared). Pick one on the *Who's watching?* screen at start, or with the avatar top right. 12 hand-drawn avatars (kitty, robot, alien, ghost, panda…). Profiles sync between devices like everything else.
 - **Themes:** Graphite (default), Midnight (OLED black), Crimson, Nordic, Ember, Forest, Rosé, Aurora, Daylight and Sand. You can also set a custom accent colour and choose **Artwork glow: Vivid / Subtle / Off** for how much posters tint the background.
 - **Updates:** see *Settings → Updates* for the current version and **Check for updates**.
@@ -155,7 +159,7 @@ You need **Node.js 22 LTS** from <https://nodejs.org>.
 | --- | --- |
 | Arrow keys / Enter | Move focus / select |
 | Esc or Backspace | Back |
-| Ctrl+1…6 | Switch tabs |
+| Ctrl+1…8 | Switch tabs |
 | `/` or Ctrl+F | Search |
 | Space / K | Play / pause |
 | ← / → | Seek 10 s |
@@ -163,6 +167,7 @@ You need **Node.js 22 LTS** from <https://nodejs.org>.
 | 0–9 | Jump to channel number |
 | Esc | Shrink to the mini player (leaves fullscreen first) |
 | F · M · P · C · N | Fullscreen · Mute · PiP · Subtitles · Next episode |
+| L (Yellow on a Samsung remote) | Previous channel |
 
 ---
 

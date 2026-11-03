@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { Check, ChevronLeft, Download, EyeOff, ExternalLink, Heart, Play, Plus, RotateCcw, Star } from 'lucide-react'
+import { Check, ChevronLeft, Clapperboard, Download, EyeOff, ExternalLink, Heart, Play, Plus, RotateCcw, Star } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { DownloadRequest, Episode, MediaInfo, Movie, Show } from '../../../shared/types'
 import { PosterCard } from '../components/Cards'
@@ -10,7 +10,8 @@ import { Button, IconButton, Spinner } from '../components/ui'
 import { artUrl, cleanName, duration } from '../lib/format'
 import { sheetSpring, softSpring, spring } from '../lib/motion'
 import { useRatings } from '../lib/ratings'
-import { useSimilar } from '../lib/tmdb'
+import { markSeen } from '../lib/seen'
+import { useSimilar, useTrailer } from '../lib/tmdb'
 import { api, closeDetail, setTab, startDownloads, historyFor, historyOfTitle, inWatchlist, index, isFavorite, openDetail, openPerson, playEpisode, playMovie, removeHistory, resumable, urlOf, setAmbient, toast, toggleFavorite, toggleWatchlist, useApp } from '../store'
 
 function Score({ label, short, value, className, title }: { label: string; short?: string; value: string; className: string; title?: string }) {
@@ -150,6 +151,11 @@ export default function Detail({ item }: { item: Movie | Show }) {
 
   // what TMDB recommends after this title (when a TMDB key is set), otherwise the same category
   const recommended = useSimilar(loading ? null : item, info.imdbId)
+  const trailer = useTrailer(loading ? null : item, info.imdbId)
+  // opening a series clears its "new episodes" badge
+  useEffect(() => {
+    if (item.kind === 'series') markSeen([item.id, ...(item.versions ?? []).map((v) => v.id)])
+  }, [item])
   const similar = useMemo(() => {
     if (recommended.length) return recommended
     const idx = index()
@@ -288,6 +294,11 @@ export default function Detail({ item }: { item: Movie | Show }) {
               <IconButton label={fav ? 'Remove from Favorites' : 'Add to Favorites'} className="size-13" onClick={() => toggleFavorite(item)}>
                 <Heart className={`size-5 ${fav ? 'fill-rose-400 text-rose-400' : ''}`} />
               </IconButton>
+              {trailer && api.device !== 'tv' && (
+                <Button size="lg" icon={<Clapperboard className="size-5" />} onClick={() => window.open(`https://www.youtube.com/watch?v=${trailer.key}`, '_blank', 'noopener')}>
+                  Trailer
+                </Button>
+              )}
               {api.downloads && item.kind === 'movie' && (
                 <Button size="lg" icon={dl?.state === 'done' ? <Check className="size-5" /> : <Download className="size-5" />} onClick={dl ? () => (closeDetail(), setTab('downloads')) : download}>
                   {!dl ? 'Download' : dl.state === 'done' ? 'Downloaded' : dl.state === 'error' ? 'Download failed' : dl.state === 'paused' ? 'Paused' : dl.state === 'queued' ? 'Queued' : `Downloading ${dl.size ? Math.round((dl.received / dl.size) * 100) : 0}%`}
