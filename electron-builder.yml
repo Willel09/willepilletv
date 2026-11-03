@@ -6,7 +6,8 @@ directories:
 files:
   - out/**/*
   - package.json
-asarUnpack: []
+asarUnpack:
+  - node_modules/ffmpeg-static/ffmpeg*
 win:
   target:
     - target: nsis

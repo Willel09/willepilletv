@@ -359,6 +359,10 @@ export interface IptvApi {
     sizes(urls: string[]): Promise<(number | null)[]>
     onChange(cb: (s: DownloadsState) => void): () => void
   }
+  /** Windows app only: what is in a film (sound formats, length), and the address of the converter that makes Dolby/DTS sound playable */
+  transcode?: {
+    info(src: string): Promise<{ base: string; duration: number; video: string; audio: string[] } | null>
+  }
   /** Windows app only: helpers for installing Lumen on a Samsung TV */
   tvInstall?: {
     localIps(): Promise<string[]>

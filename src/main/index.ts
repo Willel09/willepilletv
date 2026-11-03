@@ -10,7 +10,10 @@ import { autoUpdater } from 'electron-updater'
 import { DEFAULT_SETTINGS, STORE_DEFAULTS, type CastMedia, type DownloadRequest, type Settings, type StoreShape, type UpdateState } from '../shared/types'
 import { xtreamInfo } from '../shared/core/xtream'
 import { discoverCast, startCast, stopCast } from './cast'
+import ffmpegPath from 'ffmpeg-static'
 import { Downloads } from './downloads'
+import { NAME } from '../shared/core/dlutil'
+import { startTranscoder } from './transcode'
 import { registerScheme, serveDownloads } from './dlprotocol'
 import { probeStream } from '../shared/core/probe'
 import { getBytes, getText } from './http'
@@ -34,6 +37,16 @@ const settings = (): Settings => {
 
 let win: BrowserWindow | null = null
 let downloads: Downloads
+/** Converts Dolby/DTS sound for the player, see transcode.ts; started when first needed */
+let transcoder: ReturnType<typeof startTranscoder> | null = null
+const transcode = () =>
+  (transcoder ??= startTranscoder({
+    // the binary sits outside app.asar once packaged (asarUnpack in electron-builder.yml)
+    ffmpeg: (ffmpegPath ?? '').replace('app.asar', 'app.asar.unpacked'),
+    ua: () => settings().userAgent || DEFAULT_SETTINGS.userAgent,
+    // a web address, or a file in the downloads folder (dl:<name>): never any other file on the PC
+    resolve: (src) => (/^https?:\/\//i.test(src) ? src : src.startsWith('dl:') && NAME.test(src.slice(3)) ? join(downloads.dir, src.slice(3)) : null)
+  }))
 
 const isWin11 = process.platform === 'win32' && Number(process.getSystemVersion().split('.')[2] ?? 0) >= 22000
 
@@ -216,6 +229,15 @@ function registerIpc() {
     spawn(exe, [url, `--http-user-agent=${s.userAgent}`, `--meta-title=${title}`], { detached: true, stdio: 'ignore' }).unref()
     return { ok: true }
   })
+  ipcMain.handle('tc:info', async (_e, src: string) => {
+    try {
+      const t = await transcode()
+      const r = await fetch(`${t.base}/info?src=${encodeURIComponent(String(src))}`)
+      return r.ok ? { base: t.base, ...((await r.json()) as object) } : null
+    } catch {
+      return null
+    }
+  })
   ipcMain.handle('dl:list', () => downloads.state())
   ipcMain.handle('dl:add', (_e, reqs: DownloadRequest[]) => (Array.isArray(reqs) ? downloads.add(reqs.slice(0, 500)) : { added: 0 }))
   ipcMain.handle('dl:pause', (_e, id: string) => downloads.pause(String(id)))
@@ -284,5 +306,5 @@ app.whenReady().then(() => {
   setupUpdater()
   app.on('activate', () => BrowserWindow.getAllWindows().length === 0 && createWindow())
 })
-app.on('before-quit', () => downloads?.save()) // a download cut short continues from the file's size next time
+app.on('before-quit', () => (downloads?.save(), void transcoder?.then((t) => t.close()))) // a download cut short continues from the file's size next time
 app.on('window-all-closed', () => app.quit())

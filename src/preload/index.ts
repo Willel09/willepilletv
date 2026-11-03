@@ -60,6 +60,8 @@ const api: IptvApi = {
           onChange: (cb) => on('dl:state', cb)
         }
       : undefined,
+  // Windows only: Dolby/DTS sound made playable
+  transcode: process.platform === 'win32' ? { info: (src) => ipcRenderer.invoke('tc:info', src) } : undefined,
   tvInstall: {
     localIps: () => ipcRenderer.invoke('tv:ips'),
     discover: () => ipcRenderer.invoke('tv:discover'),

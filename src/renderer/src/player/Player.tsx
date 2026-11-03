@@ -151,8 +151,12 @@ function Session({ req, mini, fullscreen, sleepAt, setSleepAt }: SessionProps) {
   // Xtream live channels can be switched between MPEG-TS and HLS
   const fmt = req.channel?.xt ? (altFormat ? (settings.liveFormat === 'ts' ? 'm3u8' : 'ts') : settings.liveFormat) : null
   const url = fmt ? req.url.replace(/\.(ts|m3u8)$/, `.${fmt}`) : req.url
+  // Dolby/DTS sound: the converter (Windows, see main/transcode.ts) streams the film with stereo AAC sound, starting
+  // `at` seconds in; the <video>'s own clock then starts at 0, so `at` is added to every time shown or saved
+  const [tc, setTc] = useState<{ base: string; dur: number; hevc: boolean; src: string; at: number } | null>(null)
+  const off = tc?.at ?? 0
   // a downloaded copy plays from this PC; `url` stays what casting, VLC and the history use
-  const playUrl = req.local ?? url
+  const playUrl = tc ? `${tc.base}/stream.mp4?src=${encodeURIComponent(tc.src)}&ss=${tc.at}${tc.hevc ? '&hevc=1' : ''}` : req.local ?? url
   const engines = useMemo(() => pickEngines(playUrl, live), [playUrl, live])
 
   // casting: hand the stream to the TV (again after zapping) and keep the local video paused
@@ -195,7 +199,50 @@ function Session({ req, mini, fullscreen, sleepAt, setSleepAt }: SessionProps) {
     toastResume.current = !!req.startAt
     reconnects.current = 0
     pos.current = { t: 0, d: 0 } // not the previous title's position
+    setTc(null)
   }, [req])
+
+  /** Switch to the converted stream at the current position */
+  const convert = useCallback(
+    async (auto = false) => {
+      if (!api.transcode || live) return
+      const src = req.local ? `dl:${req.local.split('/').pop()}` : url
+      const i = await api.transcode.info(src)
+      if (!i?.duration) return auto ? undefined : toast("Couldn't convert the sound of this file.")
+      if (auto && !i.audio.some((a) => /^(ac3|eac3|dts|truehd|mlp)$/i.test(a))) return
+      const at = Math.max(0, pos.current.t || seekTo.current || 0)
+      seekTo.current = null // the converted stream starts there
+      toastResume.current = false
+      setTc({ base: i.base, dur: i.duration, hevc: i.video === 'hevc', src, at })
+      if (!auto) toast('Converting the sound to stereo')
+    },
+    [req, url, live]
+  )
+  // films whose container header names Dolby/DTS sound (a quick look at the first bytes) are converted straight away
+  useEffect(() => {
+    if (live || !api.transcode) return
+    if (req.local) return void convert(true)
+    void api.probe?.(url).then((r) => {
+      if (r.codecs.some((c) => /Dolby|DTS/.test(c))) void convert(true)
+    })
+  }, [req]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (tc) setDur(tc.dur)
+  }, [tc])
+
+  /** Seek: within what is loaded, or (converted films) restart the stream there */
+  const jump = (x: number) => {
+    const el = video.current!
+    if (tc) {
+      const rel = x - tc.at
+      const b = el.buffered
+      let inside = false
+      for (let i = 0; i < b.length; i++) if (rel >= b.start(i) - 0.05 && rel <= b.end(i)) inside = true
+      if (!inside) return void setTc({ ...tc, at: Math.max(0, x) })
+      el.currentTime = rel
+    } else el.currentTime = x
+  }
 
   useEffect(() => {
     const v = video.current!
@@ -274,7 +321,7 @@ function Session({ req, mini, fullscreen, sleepAt, setSleepAt }: SessionProps) {
     v.playbackRate = rate
     setRes(v.videoHeight ? (v.videoHeight >= 2000 ? '4K' : `${v.videoHeight >= 1000 ? 1080 : v.videoHeight >= 700 ? 720 : v.videoHeight}p`) : '')
     if (seekTo.current) {
-      v.currentTime = seekTo.current
+      jump(seekTo.current)
       if (toastResume.current) toast(`Resumed from ${duration(seekTo.current)}`)
       seekTo.current = null
       toastResume.current = false
@@ -287,7 +334,7 @@ function Session({ req, mini, fullscreen, sleepAt, setSleepAt }: SessionProps) {
   const onEnded = () => {
     const v = video.current!
     if (live) return setError('The stream ended.')
-    saveProgress({ id: req.id, kind: req.kind, name: req.title, subtitle: req.subtitle, poster: req.poster, url: req.url, position: v.duration, duration: v.duration, updatedAt: Date.now(), parentId: req.show?.id }, true)
+    saveProgress({ id: req.id, kind: req.kind, name: req.title, subtitle: req.subtitle, poster: req.poster, url: req.url, position: tc?.dur ?? v.duration, duration: tc?.dur ?? v.duration, updatedAt: Date.now(), parentId: req.show?.id }, true)
     if (nextEp && settings.autoplayNext) setUpNext(8)
     else closePlayer()
   }
@@ -314,7 +361,7 @@ function Session({ req, mini, fullscreen, sleepAt, setSleepAt }: SessionProps) {
 
   const v = () => video.current!
   const toggle = () => (v().paused ? v().play().catch(() => {}) : v().pause())
-  const seek = (d: number) => !live && (v().currentTime = clamp(v().currentTime + d, 0, v().duration || 0))
+  const seek = (d: number) => !live && jump(clamp(v().currentTime + off + d, 0, tc?.dur ?? (v().duration || 0)))
   const setVol = (x: number) => {
     const n = clamp(x)
     v().volume = n
@@ -458,13 +505,13 @@ function Session({ req, mini, fullscreen, sleepAt, setSleepAt }: SessionProps) {
         onLoadedData={onFirstPlay}
         onTimeUpdate={(e) => {
           const el = e.currentTarget
-          if (el.currentSrc || el.srcObject) pos.current = { t: el.currentTime, d: el.duration }
-          setTime(el.currentTime)
+          if (el.currentSrc || el.srcObject) pos.current = { t: el.currentTime + off, d: tc?.dur ?? el.duration }
+          setTime(el.currentTime + off)
         }}
-        onDurationChange={(e) => setDur(isFinite(e.currentTarget.duration) ? e.currentTarget.duration : 0)}
+        onDurationChange={(e) => setDur(tc ? tc.dur : isFinite(e.currentTarget.duration) ? e.currentTarget.duration : 0)}
         onProgress={(e) => {
           const b = e.currentTarget.buffered
-          if (b.length) setBuffered(b.end(b.length - 1))
+          if (b.length) setBuffered(b.end(b.length - 1) + off)
         }}
         onVolumeChange={(e) => setMuted(e.currentTarget.muted)}
         onRateChange={(e) => setRate(e.currentTarget.playbackRate)}
@@ -554,7 +601,7 @@ function Session({ req, mini, fullscreen, sleepAt, setSleepAt }: SessionProps) {
           ) : (
             <div className="flex items-center gap-4 text-[12.5px] font-medium tabular-nums text-white/65">
               <span className="w-14 text-right">{duration(time)}</span>
-              <div className="flex-1"><SeekBar time={time} dur={dur} buffered={buffered} onSeek={(x) => (v().currentTime = x)} /></div>
+              <div className="flex-1"><SeekBar time={time} dur={dur} buffered={buffered} onSeek={jump} /></div>
               <span className="w-14">-{duration(Math.max(0, dur - time))}</span>
             </div>
           )}
@@ -592,7 +639,11 @@ function Session({ req, mini, fullscreen, sleepAt, setSleepAt }: SessionProps) {
                     value={tracks.ca}
                     options={tracks.audio.length ? tracks.audio.map((a) => ({ value: a.id, label: a.label })) : [{ value: -1, label: 'Default' }]}
                     onPick={(id) => (engine.current?.setAudio(id), setTracks((x) => ({ ...x, ca: id })), setMenu(null))}
-                    footer={desktop ? "No sound? AC3/DTS audio isn't supported by the built-in player — open the stream in VLC." : undefined}
+                    footer={
+                      desktop && api.transcode && !live ? (
+                        tc ? 'Dolby/DTS sound is being converted to stereo.' : <button className="font-semibold text-white/80 underline" onClick={() => (setMenu(null), void convert())}>No sound? Convert Dolby/DTS sound</button>
+                      ) : desktop ? "No sound? AC3/DTS audio isn't supported by the built-in player — open the stream in VLC." : undefined
+                    }
                   />
                 )}
               </AnimatePresence>
