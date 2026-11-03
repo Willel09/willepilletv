@@ -58,6 +58,8 @@ interface State extends StoreShape {
   progress: string
   tab: Tab
   detail: Movie | Show | null
+  /** actor or director page open on top of the title page */
+  person: { name: string; role: 'actor' | 'director' } | null
   player: PlayRequest | null
   /** player shrunk into the floating mini player (Windows + web) */
   playerMini: boolean
@@ -84,6 +86,7 @@ export const useApp = create<State>(() => ({
   progress: '',
   tab: 'home',
   detail: null,
+  person: null,
   player: null,
   playerMini: false,
   castTo: null,
@@ -317,13 +320,15 @@ export function toast(text: string) {
   setTimeout(() => get().toast?.id === id && set({ toast: null }), 4500)
 }
 
-export const setTab = (tab: Tab) => set({ tab, detail: null })
+export const setTab = (tab: Tab) => set({ tab, detail: null, person: null })
 export const setAmbient = (src?: string) => {
   // TVs draw no artwork wash, so focusing a card shouldn't touch the store at all
   if (src && api.device !== 'tv' && get().ambient !== src) set({ ambient: src })
 }
 export const openDetail = (item: Movie | Show) => set({ detail: item })
-export const closeDetail = () => set({ detail: null })
+export const closeDetail = () => set({ detail: null, person: null })
+export const openPerson = (name: string, role: 'actor' | 'director') => set({ person: { name, role } })
+export const closePerson = () => set({ person: null })
 export const setGroup = (screen: 'live' | 'movies' | 'series', group: string) => set({ group: { ...get().group, [screen]: group } })
 export const openSourceSheet = (kind: Source['kind'], source?: Source, file?: boolean) => set({ sourceSheet: { kind, source, file } })
 

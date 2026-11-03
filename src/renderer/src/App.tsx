@@ -11,10 +11,11 @@ import Player from './player/Player'
 import Browse from './screens/Browse'
 import Detail from './screens/Detail'
 import Home from './screens/Home'
+import PersonPage from './screens/Person'
 import Live from './screens/Live'
 import Search from './screens/Search'
 import Settings, { SourceSheet } from './screens/Settings'
-import { api, boot, closeDetail, play, setTab, toast, useApp } from './store'
+import { api, boot, closeDetail, closePerson, play, setTab, toast, useApp } from './store'
 
 
 function Screen() {
@@ -51,6 +52,7 @@ if (api.device === 'tv') MotionGlobalConfig.skipAnimations = true
 export default function App() {
   const booted = useApp((s) => s.booted)
   const detail = useApp((s) => s.detail)
+  const person = useApp((s) => s.person)
   const pickProfile = useApp((s) => s.pickProfile)
   const player = useApp((s) => s.player)
   const sheet = useApp((s) => s.sourceSheet)
@@ -71,7 +73,8 @@ export default function App() {
       }
       if (e.ctrlKey && /^[1-6]$/.test(e.key)) return setTab(TABS[+e.key - 1].id)
       if (e.key === 'Escape' || (e.key === 'Backspace' && !isTyping())) {
-        if (s.detail) closeDetail()
+        if (s.person) closePerson()
+        else if (s.detail) closeDetail()
         else if (isTyping()) (document.activeElement as HTMLElement).blur()
         else if (s.tab !== 'home') setTab('home')
         else if (api.device === 'tv') api.win.close() // Back on Home exits the TV app
@@ -104,6 +107,7 @@ export default function App() {
             <Screen />
           </main>
           <AnimatePresence>{detail && <Detail key={detail.id} item={detail} />}</AnimatePresence>
+          <AnimatePresence>{person && <PersonPage key={`${person.role}:${person.name}`} name={person.name} role={person.role} />}</AnimatePresence>
           <TitleBar />
         </div>
       )}

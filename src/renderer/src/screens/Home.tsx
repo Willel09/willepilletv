@@ -9,6 +9,7 @@ import { nowNext } from '../lib/epg'
 import { cleanName } from '../lib/format'
 import { forYouScore, newestScore, topMany, topRatedScore } from '../lib/recommend'
 import { softSpring } from '../lib/motion'
+import { useRecommended } from '../lib/tmdb'
 import { api, openDetail, openSourceSheet, playChannel, playMovie, removeHistory, resume, resumable, setGroup, setTab, toggleWatchlist, useApp, useIndex } from '../store'
 import type { Channel, Item, Movie, Show } from '../../../shared/types'
 import { RECENT } from './Browse'
@@ -53,7 +54,7 @@ export default function Home() {
   // Curated rows (not one row per category), all computed in one pass over the library with breaks for the
   // screen in between: on a TV with 500k titles, separate passes froze the remote for seconds
   type Title = Movie | Show
-  const [rows, setRows] = useState<{ featured: Title[]; forYou: Title[]; newMovies: Title[]; newSeries: Title[]; topRated: Title[]; last?: Title; similar: Title[] } | null>(null)
+  const [rows, setRows] = useState<{ featured: Title[]; forYou: Title[]; newMovies: Title[]; newSeries: Title[]; topRated: Title[]; last?: Title; similar: Title[]; signals: Title[] } | null>(null)
   const hero = useRef<{ idx: unknown; items: Title[] } | null>(null)
   useEffect(() => {
     let live = true
@@ -91,11 +92,13 @@ export default function Home() {
       if (!live) return
       // the hero only reshuffles when the library changes, not every time the history does
       if (hero.current?.idx !== idx) hero.current = { idx, items: (featRated.length >= 6 ? featRated : featAny).sort(() => Math.random() - 0.5).slice(0, 6) }
-      setRows({ featured: hero.current.items, forYou, newMovies, newSeries, topRated, last, similar })
+      setRows({ featured: hero.current.items, forYou, newMovies, newSeries, topRated, last, similar, signals: [...watched, ...saved].slice(0, 6) })
     })()
     return () => void (live = false)
   }, [idx, history, watchlist, favorites])
   const featured = rows?.featured ?? []
+  // needs a TMDB key (Settings); until then "For You" below picks by category
+  const recommended = useRecommended(rows?.signals ?? [])
 
   // channels on air right now (favorites first), so live TV has a place on Home
   const liveNow = useMemo(() => {
@@ -152,7 +155,8 @@ export default function Home() {
             ))}
           </Row>
         )}
-        {rows && rows.forYou.length > 0 && <Row title="For You">{rows.forYou.map(titleCard)}</Row>}
+        {recommended.length > 0 && <Row title="Recommended for You">{recommended.map(titleCard)}</Row>}
+        {rows && rows.forYou.length > 0 && <Row title={recommended.length ? "More Like Your Taste" : "For You"}>{rows.forYou.map(titleCard)}</Row>}
         {watchlist.length > 0 && <Row title="My Watchlist" count={watchlist.length}>{watchlist.slice(0, 40).map((it) => <PosterCard key={it.id} name={it.name} poster={it.poster} rating={it.rating} onClick={() => openDetail(it)} onRemove={() => toggleWatchlist(it)} />)}</Row>}
         {rows && rows.newMovies.length > 0 && <Row title="Newest Movies" onSeeAll={seeAll('movies', RECENT)}>{rows.newMovies.map(titleCard)}</Row>}
         {rows && rows.newSeries.length > 0 && <Row title="Newest Series" onSeeAll={seeAll('series', RECENT)}>{rows.newSeries.map(titleCard)}</Row>}

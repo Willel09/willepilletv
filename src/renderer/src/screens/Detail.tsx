@@ -9,7 +9,8 @@ import { Button, IconButton, Spinner } from '../components/ui'
 import { artUrl, cleanName, duration } from '../lib/format'
 import { sheetSpring, softSpring, spring } from '../lib/motion'
 import { useRatings } from '../lib/ratings'
-import { api, closeDetail, historyFor, historyOfTitle, inWatchlist, index, isFavorite, openDetail, playEpisode, playMovie, removeHistory, resumable, urlOf, setAmbient, toast, toggleFavorite, toggleWatchlist, useApp } from '../store'
+import { useSimilar } from '../lib/tmdb'
+import { api, closeDetail, historyFor, historyOfTitle, inWatchlist, index, isFavorite, openDetail, openPerson, playEpisode, playMovie, removeHistory, resumable, urlOf, setAmbient, toast, toggleFavorite, toggleWatchlist, useApp } from '../store'
 
 function Score({ label, short, value, className, title }: { label: string; short?: string; value: string; className: string; title?: string }) {
   return (
@@ -17,6 +18,23 @@ function Score({ label, short, value, className, title }: { label: string; short
       <span className={`rounded-[5px] px-1.5 py-px text-[11px] font-extrabold tracking-[-0.01em] ${className}`}>{short ?? label}</span>
       <span className="font-semibold text-fg/85">{value}</span>
     </span>
+  )
+}
+
+/** "Tom Hanks, Tim Allen" as buttons that open the person's page */
+const NAMES_MAX = 14
+function People({ label, names, role }: { label: string; names: string; role: 'actor' | 'director' }) {
+  const list = [...new Set(names.split(/[,/;]|\band\b/).map((n) => n.trim()).filter((n) => n.length > 1))].slice(0, NAMES_MAX)
+  if (!list.length) return null
+  return (
+    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1.5">
+      <span className="mr-1 font-semibold text-fg/70">{label}</span>
+      {list.map((n) => (
+        <button key={n} onClick={() => openPerson(n, role)} className="glass-thin rounded-full px-3 py-1 text-[12.5px] font-medium text-fg/80 transition-colors hover:text-fg focus-visible:text-fg">
+          {n}
+        </button>
+      ))}
+    </div>
   )
 }
 
@@ -98,11 +116,14 @@ export default function Detail({ item }: { item: Movie | Show }) {
   const curSeason = season ?? seasons[0]
   const seasonEps = episodes.filter((e) => e.season === curSeason)
 
+  // what TMDB recommends after this title (when a TMDB key is set), otherwise the same category
+  const recommended = useSimilar(loading ? null : item, info.imdbId)
   const similar = useMemo(() => {
+    if (recommended.length) return recommended
     const idx = index()
     const groups = item.kind === 'movie' ? idx.movieGroups : idx.seriesGroups
     return ((groups.find((g) => g.name === item.group)?.items ?? []) as (Movie | Show)[]).filter((x) => x.id !== item.id).slice(0, 24)
-  }, [item])
+  }, [item, recommended])
 
   const fav = isFavorite(item.id)
   const plot = info.plot || item.plot
@@ -200,9 +221,9 @@ export default function Detail({ item }: { item: Movie | Show }) {
             )}
             {plot && <p className="mt-5 max-w-2xl text-[16px] leading-relaxed text-fg/80">{plot}</p>}
             {(info.cast || info.director) && (
-              <div className="mt-4 max-w-2xl space-y-1 text-[13px] text-fg/50">
-                {info.director && <p><span className="font-semibold text-fg/70">Director</span> {info.director}</p>}
-                {info.cast && <p className="line-clamp-2"><span className="font-semibold text-fg/70">Cast</span> {info.cast}</p>}
+              <div className="mt-4 max-w-2xl space-y-2 text-[13px] text-fg/50">
+                {info.director && <People label="Director" names={info.director} role="director" />}
+                {info.cast && <People label="Cast" names={info.cast} role="actor" />}
               </div>
             )}
             <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -279,7 +300,7 @@ export default function Detail({ item }: { item: Movie | Show }) {
 
       {similar.length > 0 && (
         <div className="relative pb-12">
-          <Row title="More Like This">
+          <Row title={recommended.length ? 'Recommended' : 'More Like This'}>
             {similar.map((it) => <PosterCard key={it.id} name={it.name} poster={it.poster} rating={it.rating} onClick={() => openDetail(it)} />)}
           </Row>
         </div>

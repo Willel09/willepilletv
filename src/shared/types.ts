@@ -178,6 +178,8 @@ export interface Settings {
   vlcPath: string
   /** free OMDb key: IMDb, Rotten Tomatoes and Metacritic ratings on title pages */
   omdbKey: string
+  /** free TMDB key: actor and director pages, recommendations */
+  tmdbKey: string
   hiddenGroups: string
   /** Hide Arabic and Indian channels, movies and series */
   removeBs: boolean
@@ -257,6 +259,7 @@ export const DEFAULT_SETTINGS: Settings = {
   userAgent: DEFAULT_UA,
   vlcPath: '',
   omdbKey: '',
+  tmdbKey: '',
   hiddenGroups: '',
   removeBs: false,
   autoplayNext: true,

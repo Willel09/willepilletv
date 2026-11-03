@@ -448,13 +448,20 @@ export default function Settings() {
         </Card>
 
         <Card title="Ratings">
-          <div className="py-3.5">
+          <div className="space-y-4 py-3.5">
             <LazyField
               label="OMDb key (free)"
               placeholder="e.g. 1a2b3c4d"
               value={s.omdbKey}
               onCommit={(omdbKey) => updateSettings({ omdbKey })}
               hint={<>Shows real IMDb, Rotten Tomatoes and Metacritic ratings on movie and series pages. Get a free key (1,000 lookups a day, just an email) at <b className="text-fg/70">omdbapi.com/apikey.aspx</b>. Synced to your other devices, so you can type it on your PC.</>}
+            />
+            <LazyField
+              label="TMDB key (free)"
+              placeholder="API key or read access token"
+              value={s.tmdbKey}
+              onCommit={(tmdbKey) => updateSettings({ tmdbKey: tmdbKey.trim() })}
+              hint={<>Turns the cast and director on a title page into pages with age, facts and all their films, and adds recommendations based on what you watch. Free account at <b className="text-fg/70">themoviedb.org/settings/api</b> (copy the “API Key”). Synced to your other devices.</>}
             />
           </div>
         </Card>

@@ -13,7 +13,7 @@ const SB_URL = 'https://cbqjczxbcodebmgawknz.supabase.co/rest/v1/rpc'
 const SB_KEY = 'sb_publishable_FyC8lK8Cz_QkvHemKUnkCA_SNL85fh0'
 
 /** Settings that follow you between devices. Window material, VLC path etc. stay per device. */
-export const SYNCED_PREFS = ['theme', 'accent', 'ambient', 'epgUrl', 'autoProviderEpg', 'hiddenGroups', 'removeBs', 'liveFormat', 'autoplayNext', 'omdbKey'] as const
+export const SYNCED_PREFS = ['theme', 'accent', 'ambient', 'epgUrl', 'autoProviderEpg', 'hiddenGroups', 'removeBs', 'liveFormat', 'autoplayNext', 'omdbKey', 'tmdbKey'] as const
 export type Prefs = Partial<Pick<Settings, (typeof SYNCED_PREFS)[number]>>
 
 export interface SyncDoc {
