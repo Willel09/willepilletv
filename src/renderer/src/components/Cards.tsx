@@ -1,6 +1,6 @@
 import { motion, useMotionTemplate, useMotionValue, useSpring, useTransform } from 'framer-motion'
 import { Heart, Play, Star, X } from 'lucide-react'
-import type { PointerEvent, ReactNode } from 'react'
+import type { KeyboardEvent, PointerEvent, ReactNode } from 'react'
 import { cleanName } from '../lib/format'
 import { spring } from '../lib/motion'
 import { api, setAmbient } from '../store'
@@ -46,13 +46,15 @@ interface CardShellProps {
   footer?: ReactNode
   overlay?: ReactNode
   className?: string
+  /** remote/keyboard shortcut on the focused card (e.g. Red to remove) */
+  onKeyDown?: (e: KeyboardEvent<HTMLElement>) => void
 }
 
 /** TVs: a plain button. Three framer-motion elements per card (hundreds on the home screen) cost mount time,
  *  memory and a big animated shadow on every focus; the focus ring comes from CSS instead */
-function PlainCard({ aspect, width, art, name, contain, onClick, footer, overlay, className = '' }: CardShellProps) {
+function PlainCard({ aspect, width, art, name, contain, onClick, footer, overlay, className = '', onKeyDown }: CardShellProps) {
   return (
-    <button className={`card group relative shrink-0 text-left ${className}`} style={{ width }} onClick={onClick}>
+    <button className={`card group relative shrink-0 text-left ${className}`} style={{ width }} onClick={onClick} onKeyDown={onKeyDown}>
       <div className={`relative overflow-hidden rounded-[22px] bg-[var(--card-bg)] ${aspect}`}>
         <Img src={art} name={name} contain={contain} className={`size-full ${contain ? 'p-[14%]' : ''}`} />
         {overlay}
@@ -64,7 +66,7 @@ function PlainCard({ aspect, width, art, name, contain, onClick, footer, overlay
 
 const CardShell = TILT ? FancyCard : PlainCard
 
-function FancyCard({ aspect, width, art, ambientArt, name, contain, onClick, footer, overlay, className = '' }: CardShellProps) {
+function FancyCard({ aspect, width, art, ambientArt, name, contain, onClick, footer, overlay, className = '', onKeyDown }: CardShellProps) {
   const t = useTilt()
   const ambient = () => setAmbient(ambientArt ?? art)
   return (
@@ -77,6 +79,7 @@ function FancyCard({ aspect, width, art, ambientArt, name, contain, onClick, foo
       whileFocus="focus"
       whileTap={{ scale: 0.97 }}
       onClick={onClick}
+      onKeyDown={onKeyDown}
       onFocus={ambient}
       onMouseEnter={ambient}
       onPointerMove={t.onPointerMove}
@@ -102,6 +105,25 @@ function FancyCard({ aspect, width, art, ambientArt, name, contain, onClick, foo
       {footer}
     </motion.button>
   )
+}
+
+/** Sibling of the card button (a button can't contain a button), always visible so it's easy to find */
+function RemoveButton({ label, title, onClick }: { label: string; title: string; onClick: () => void }) {
+  return (
+    <button
+      aria-label={label}
+      title={title}
+      onClick={onClick}
+      className="absolute left-2.5 top-2.5 z-10 flex h-8 items-center gap-1.5 rounded-full bg-black/65 pl-2 pr-3 text-[12px] font-semibold text-white ring-1 ring-white/20 backdrop-blur-md transition hover:bg-red-500 focus-visible:bg-red-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+    >
+      <X className="size-4" strokeWidth={2.5} /> Remove
+    </button>
+  )
+}
+
+/** Red button on a Samsung remote, or Delete on a keyboard */
+const removeKey = (onRemove: () => void) => (e: KeyboardEvent<HTMLElement>) => {
+  if (e.key === 'ColorF0Red' || e.key === 'Delete') (e.preventDefault(), onRemove())
 }
 
 const Title = ({ children }: { children: ReactNode }) => (
@@ -132,18 +154,10 @@ export function PosterCard({ name, poster, rating, onClick, width = 176, badge, 
   )
   // TVs: an extra button on each card is a trap for the remote; remove from the title's page instead
   if (!onRemove || !TILT) return card
-  // sibling of the card button (a button can't contain a button), always visible so it's easy to find
   return (
     <div className="relative shrink-0" style={{ width }}>
       {card}
-      <button
-        aria-label={`Remove “${cleanName(name)}” from Watchlist`}
-        title="Remove from Watchlist"
-        onClick={onRemove}
-        className="absolute left-2.5 top-2.5 z-10 flex h-8 items-center gap-1.5 rounded-full bg-black/65 pl-2 pr-3 text-[12px] font-semibold text-white ring-1 ring-white/20 backdrop-blur-md transition hover:bg-red-500 focus-visible:bg-red-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-      >
-        <X className="size-4" strokeWidth={2.5} /> Remove
-      </button>
+      <RemoveButton label={`Remove “${cleanName(name)}” from Watchlist`} title="Remove from Watchlist" onClick={onRemove} />
     </div>
   )
 }
@@ -168,9 +182,10 @@ export function ChannelTile({ name, logo, subtitle, onClick, width = 236, fav }:
   )
 }
 
-export function WideCard({ name, art, subtitle, progress, onClick, width = 340 }: { name: string; art?: string; subtitle?: string; progress?: number; onClick: () => void; width?: number }) {
-  return (
+export function WideCard({ name, art, subtitle, progress, onClick, width = 340, onRemove, removeLabel = 'Remove' }: { name: string; art?: string; subtitle?: string; progress?: number; onClick: () => void; width?: number; onRemove?: () => void; removeLabel?: string }) {
+  const card = (
     <CardShell
+      onKeyDown={onRemove && removeKey(onRemove)}
       aspect="aspect-video"
       width={width}
       art={art}
@@ -195,5 +210,12 @@ export function WideCard({ name, art, subtitle, progress, onClick, width = 340 }
         </div>
       }
     />
+  )
+  if (!onRemove || !TILT) return card
+  return (
+    <div className="relative shrink-0" style={{ width }}>
+      {card}
+      <RemoveButton label={`${removeLabel}: “${cleanName(name)}”`} title={removeLabel} onClick={onRemove} />
+    </div>
   )
 }

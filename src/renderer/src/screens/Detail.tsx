@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { Check, ChevronLeft, ExternalLink, Heart, Play, Plus, RotateCcw, Star } from 'lucide-react'
+import { Check, ChevronLeft, EyeOff, ExternalLink, Heart, Play, Plus, RotateCcw, Star } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Episode, MediaInfo, Movie, Show } from '../../../shared/types'
 import { PosterCard } from '../components/Cards'
@@ -9,7 +9,7 @@ import { Button, IconButton, Spinner } from '../components/ui'
 import { artUrl, cleanName, duration } from '../lib/format'
 import { sheetSpring, softSpring, spring } from '../lib/motion'
 import { useRatings } from '../lib/ratings'
-import { api, closeDetail, historyFor, inWatchlist, index, isFavorite, openDetail, playEpisode, playMovie, resumable, urlOf, setAmbient, toast, toggleFavorite, toggleWatchlist, useApp } from '../store'
+import { api, closeDetail, historyFor, historyOfTitle, inWatchlist, index, isFavorite, openDetail, playEpisode, playMovie, removeHistory, resumable, urlOf, setAmbient, toast, toggleFavorite, toggleWatchlist, useApp } from '../store'
 
 function Score({ label, short, value, className, title }: { label: string; short?: string; value: string; className: string; title?: string }) {
   return (
@@ -222,6 +222,11 @@ export default function Detail({ item }: { item: Movie | Show }) {
               <IconButton label={fav ? 'Remove from Favorites' : 'Add to Favorites'} className="size-13" onClick={() => toggleFavorite(item)}>
                 <Heart className={`size-5 ${fav ? 'fill-rose-400 text-rose-400' : ''}`} />
               </IconButton>
+              {history.some((h) => resumable(h) && historyOfTitle(item).includes(h)) && (
+                <Button size="lg" icon={<EyeOff className="size-4.5" />} onClick={() => (removeHistory(historyOfTitle(item).map((h) => h.id)), toast(`Removed “${cleanName(item.name)}” from Continue Watching`))}>
+                  Remove from Continue Watching
+                </Button>
+              )}
               {api.device === 'desktop' && (
                 <IconButton label="Open in VLC" className="size-13" onClick={vlc}>
                   <ExternalLink className="size-5" />

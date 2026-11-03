@@ -377,6 +377,20 @@ function relinkSaved() {
   }
 }
 
+/** Takes entries out of Continue Watching (and the history behind it); the removal syncs to the other devices */
+export function removeHistory(ids: string[]) {
+  flushHistory() // pending positions are written first, so the removal isn't undone by them
+  const drop = new Set(ids)
+  const gone = get().history.filter((h) => drop.has(h.id)).map((h) => h.id)
+  if (gone.length) persistSynced('history', get().history.filter((h) => !drop.has(h.id)), [], gone)
+}
+
+/** Every history entry of a title: the movie itself, or any of its episodes (also under a merged copy's id) */
+export function historyOfTitle(item: { id: string; versions?: { id: string }[] }): HistoryEntry[] {
+  const ids = [item.id, ...(item.versions ?? []).map((v) => v.id)]
+  return get().history.filter((h) => ids.some((id) => h.id === id || h.parentId === id || h.id.startsWith(`${id}:`)))
+}
+
 export function flushHistory() {
   clearTimeout(historyTimer)
   historyTimer = undefined

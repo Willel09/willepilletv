@@ -9,7 +9,7 @@ import { nowNext } from '../lib/epg'
 import { cleanName } from '../lib/format'
 import { forYouScore, newestScore, topMany, topRatedScore } from '../lib/recommend'
 import { softSpring } from '../lib/motion'
-import { openDetail, openSourceSheet, playChannel, playMovie, resume, resumable, setGroup, setTab, toggleWatchlist, useApp, useIndex } from '../store'
+import { api, openDetail, openSourceSheet, playChannel, playMovie, removeHistory, resume, resumable, setGroup, setTab, toggleWatchlist, useApp, useIndex } from '../store'
 import type { Channel, Item, Movie, Show } from '../../../shared/types'
 import { RECENT } from './Browse'
 import { startPairing } from './Settings'
@@ -146,9 +146,9 @@ export default function Home() {
       {featured.length > 0 ? <Hero items={featured} /> : <div className="h-28" />}
       <div className={`relative space-y-2 pb-16 ${featured.length ? '-mt-28' : ''}`}>
         {cont.length > 0 && (
-          <Row title="Continue Watching">
+          <Row title="Continue Watching" hint={api.device === 'tv' ? 'Press the red button to remove' : undefined}>
             {cont.map((h) => (
-              <WideCard key={h.id} name={h.name} subtitle={h.subtitle} art={h.poster} progress={h.position / h.duration} onClick={() => resume(h)} />
+              <WideCard key={h.id} name={h.name} subtitle={h.subtitle} art={h.poster} progress={h.position / h.duration} onClick={() => resume(h)} onRemove={() => removeHistory([h.id])} removeLabel="Remove from Continue Watching" />
             ))}
           </Row>
         )}

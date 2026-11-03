@@ -10,7 +10,7 @@ const STEP = api.device === 'tv' ? 10 : Infinity
  * Netflix-style horizontal shelf. Its cards only exist while the row is near the screen: older TV
  * browsers (Chromium 76) ignore content-visibility, and every poster costs decoded-image memory.
  */
-export function Row({ title, onSeeAll, children, count }: { title: string; onSeeAll?: () => void; children: ReactNode; count?: number }) {
+export function Row({ title, onSeeAll, children, count, hint }: { title: string; onSeeAll?: () => void; children: ReactNode; count?: number; hint?: string }) {
   const ref = useRef<HTMLDivElement>(null)
   const section = useRef<HTMLElement>(null)
   const [near, setNear] = useState(false)
@@ -34,6 +34,7 @@ export function Row({ title, onSeeAll, children, count }: { title: string; onSee
       <header className="mb-1 flex items-baseline gap-3 px-14">
         <h2 className="text-[21px] font-semibold tracking-[-0.025em]">{title}</h2>
         {count !== undefined && <span className="text-[13px] font-medium text-fg/40">{count.toLocaleString()}</span>}
+        {hint && <span className="text-[13px] font-medium text-fg/40">{hint}</span>}
         {onSeeAll && (
           <button tabIndex={-1} onClick={onSeeAll} className="ml-auto flex items-center text-[13px] font-semibold text-fg/55 transition hover:text-fg">
             See All <ChevronRight className="size-4" />
