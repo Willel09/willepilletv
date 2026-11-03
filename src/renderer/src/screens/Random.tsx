@@ -29,11 +29,8 @@ function sample<T extends { id: string }>(list: T[], n: number, ok: (x: T) => bo
     const x = list[Math.floor(Math.random() * list.length)]
     if (x && !seen.has(x.id) && ok(x)) (seen.add(x.id), out.push(x))
   }
-  // a small or picky library: fill up with anything
-  for (let tries = 0; list.length && out.length < n && tries < n * 20; tries++) {
-    const x = list[Math.floor(Math.random() * list.length)]
-    if (!seen.has(x.id)) (seen.add(x.id), out.push(x))
-  }
+  // a small or picky library: fill up with anything, repeats included, so the reel is never short
+  while (list.length && out.length < n) out.push(list[Math.floor(Math.random() * list.length)])
   return out
 }
 
@@ -66,7 +63,7 @@ function Card({ x, kind, won }: { x: Pick; kind: Kind; won: boolean }) {
   return (
     <div className="relative shrink-0" style={{ width: w }}>
       <div className={`relative overflow-hidden rounded-[22px] bg-[var(--card-bg)] ${kind === 'channel' ? 'aspect-video glass-thin' : 'aspect-[2/3]'} ${won ? 'rnd-pop z-10 shadow-[0_0_80px_-4px_rgb(var(--accent-rgb)/0.9)] ring-2 ring-white' : ''}`}>
-        <Img src={imgOf(x)} name={x.name} contain={kind === 'channel'} className={`size-full ${kind === 'channel' ? 'p-[14%]' : ''}`} />
+        <Img src={imgOf(x)} name={x.name} loading="eager" contain={kind === 'channel'} className={`size-full ${kind === 'channel' ? 'p-[14%]' : ''}`} />
       </div>
     </div>
   )
@@ -157,7 +154,7 @@ export default function Random() {
             }}
           >
             {spin.cards.map((c, i) => (
-              <Card key={c.id} x={c} kind={spin.kind} won={spin.phase === 'done' && i === STOP} />
+              <Card key={`${i}:${c.id}`} x={c} kind={spin.kind} won={spin.phase === 'done' && i === STOP} />
             ))}
           </div>
         )}
@@ -167,7 +164,7 @@ export default function Random() {
           </div>
         )}
         {/* the marker the reel stops at */}
-        {spin && <div className="pointer-events-none absolute inset-y-4 left-1/2 w-px -translate-x-1/2 bg-gradient-to-b from-transparent via-white/60 to-transparent" />}
+        {spin && spin.phase !== 'done' && <div className="pointer-events-none absolute inset-y-4 left-1/2 w-px -translate-x-1/2 bg-gradient-to-b from-transparent via-white/60 to-transparent" />}
         {done && <Burst />}
       </div>
 

@@ -19,10 +19,10 @@ export function Img({ src: raw, name, className = '', contain, size = 342, ...re
   }
   return (
     <img
+      loading="lazy"
       {...rest}
       src={src}
       alt=""
-      loading="lazy"
       decoding="async"
       referrerPolicy="no-referrer"
       draggable={false}
