@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion'
 import { Avatar } from './Avatar'
-import { Clapperboard, Copy, Home, Minus, RefreshCw, Search, Settings, Square, Tv, Library, X } from 'lucide-react'
+import { Clapperboard, Copy, Dices, Home, Minus, RefreshCw, Search, Settings, Square, Tv, Library, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { spring } from '../lib/motion'
 import { api, currentProfile, openProfilePicker, refreshLibrary, setTab, useApp, type Tab } from '../store'
@@ -11,6 +11,7 @@ export const TABS: { id: Tab; label: string; icon: typeof Home }[] = [
   { id: 'live', label: 'Live TV', icon: Tv },
   { id: 'movies', label: 'Movies', icon: Clapperboard },
   { id: 'series', label: 'Series', icon: Library },
+  { id: 'random', label: 'Random', icon: Dices },
   { id: 'search', label: 'Search', icon: Search },
   { id: 'settings', label: 'Settings', icon: Settings }
 ]

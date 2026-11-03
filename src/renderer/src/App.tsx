@@ -2,6 +2,7 @@ import { AnimatePresence, MotionConfig, MotionGlobalConfig, motion } from 'frame
 import { ProfilePicker } from './screens/Profiles'
 import { useEffect } from 'react'
 import { Ambient } from './components/Ambient'
+import { Screensaver, useIdle } from './components/Screensaver'
 import { TABS, TitleBar } from './components/TitleBar'
 import { Toast } from './components/Toast'
 import { initSpatialNav } from './lib/nav'
@@ -13,6 +14,7 @@ import Detail from './screens/Detail'
 import Home from './screens/Home'
 import PersonPage from './screens/Person'
 import Live from './screens/Live'
+import Random from './screens/Random'
 import Search from './screens/Search'
 import Settings, { SourceSheet } from './screens/Settings'
 import { api, boot, closeDetail, closePerson, play, setTab, toast, useApp } from './store'
@@ -34,6 +36,7 @@ function Screen() {
         {tab === 'live' && <Live />}
         {tab === 'movies' && <Browse kind="movies" />}
         {tab === 'series' && <Browse kind="series" />}
+        {tab === 'random' && <Random />}
         {tab === 'search' && <Search />}
         {tab === 'settings' && <Settings />}
       </motion.div>
@@ -56,6 +59,7 @@ export default function App() {
   const pickProfile = useApp((s) => s.pickProfile)
   const player = useApp((s) => s.player)
   const sheet = useApp((s) => s.sourceSheet)
+  const [saver, wake] = useIdle(useApp((s) => s.settings.screensaverMins))
 
   useEffect(() => {
     // must run before every other key handler (registers the first capture listener)
@@ -71,7 +75,7 @@ export default function App() {
         e.preventDefault()
         return setTab('search')
       }
-      if (e.ctrlKey && /^[1-6]$/.test(e.key)) return setTab(TABS[+e.key - 1].id)
+      if (e.ctrlKey && /^[1-7]$/.test(e.key)) return setTab(TABS[+e.key - 1].id)
       if (e.key === 'Escape' || (e.key === 'Backspace' && !isTyping())) {
         if (s.person) closePerson()
         else if (s.detail) closeDetail()
@@ -115,6 +119,7 @@ export default function App() {
       <AnimatePresence>{sheet && <SourceSheet key="sheet" sheet={sheet} />}</AnimatePresence>
       <AnimatePresence>{booted && pickProfile && <ProfilePicker key="profiles" />}</AnimatePresence>
       <Toast />
+      {saver && <Screensaver onWake={wake} />}
     </MotionConfig>
   )
 }

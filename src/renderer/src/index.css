@@ -186,6 +186,39 @@ input[type='range'] {
   accent-color: var(--accent);
 }
 
+/* ---------- Screensaver ---------- */
+@keyframes ss-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes ss-drift {
+  from { transform: scale(1.04) translate3d(0, 0, 0); }
+  to { transform: scale(1.16) translate3d(var(--ss-dx, -2%), var(--ss-dy, -1.5%), 0); }
+}
+.ss-slide { animation: ss-in 1.8s ease-out both; }
+.ss-bg { animation: ss-drift 16s ease-in-out both; }
+
+/* ---------- Random ---------- */
+@keyframes rnd-burst {
+  from { transform: translate(0, 0) scale(1); opacity: 1; }
+  to { transform: translate(var(--bx), var(--by)) scale(0.2); opacity: 0; }
+}
+@keyframes rnd-pop {
+  0% { transform: scale(1); }
+  45% { transform: scale(1.22); }
+  100% { transform: scale(1.12); }
+}
+@keyframes rnd-rise {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: none; }
+}
+.rnd-burst { animation: rnd-burst 1.1s cubic-bezier(0.1, 0.7, 0.3, 1) forwards; }
+.rnd-pop { animation: rnd-pop 0.6s cubic-bezier(0.2, 1.4, 0.4, 1) forwards; }
+.rnd-rise { animation: rnd-rise 0.6s ease-out both; }
+@media (prefers-reduced-motion: reduce) {
+  .rnd-burst, .rnd-pop, .rnd-rise, .ss-slide, .ss-bg { animation: none; }
+}
+
 /* ---------- Samsung TV ---------- */
 /* No liquid glass on TVs: panels are flat and opaque. Translucent layers must be blended with everything
    behind them on every scroll, backdrop blurs need extra full-size surfaces, and big soft shadows are slow

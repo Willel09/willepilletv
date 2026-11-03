@@ -415,6 +415,9 @@ export default function Settings() {
           <Line label="Artwork glow" hint="How much the background takes on the colours of the focused poster">
             <Segmented layoutId="ambient" value={s.ambient} onChange={(ambient) => updateSettings({ ambient })} options={[{ value: 'strong', label: 'Vivid' }, { value: 'subtle', label: 'Subtle' }, { value: 'off', label: 'Off' }]} />
           </Line>
+          <Line label="Screensaver" hint="Shows artwork from your library after you haven't touched anything for a while. Never while something is playing.">
+            <Segmented layoutId="saver" value={String(s.screensaverMins)} onChange={(v) => updateSettings({ screensaverMins: +v })} options={[{ value: '0', label: 'Off' }, { value: '2', label: '2 min' }, { value: '5', label: '5 min' }, { value: '15', label: '15 min' }]} />
+          </Line>
           {api.platform === 'win32' && (
             <Line label="Window material" hint="Windows 11 only. Lets your desktop tint through the glass.">
               <Segmented layoutId="mat" value={s.material} onChange={(material) => updateSettings({ material })} options={[{ value: 'mica', label: 'Mica' }, { value: 'acrylic', label: 'Acrylic' }, { value: 'none', label: 'Solid' }]} />

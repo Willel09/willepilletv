@@ -185,6 +185,8 @@ export interface Settings {
   removeBs: boolean
   autoplayNext: boolean
   refreshHours: number
+  /** minutes without input before the screensaver starts; 0 = never */
+  screensaverMins: number
 }
 
 export interface HistoryEntry {
@@ -263,7 +265,8 @@ export const DEFAULT_SETTINGS: Settings = {
   hiddenGroups: '',
   removeBs: false,
   autoplayNext: true,
-  refreshHours: 12
+  refreshHours: 12,
+  screensaverMins: 5
 }
 
 export type WindowState = { maximized: boolean; fullscreen: boolean }

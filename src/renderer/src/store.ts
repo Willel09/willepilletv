@@ -31,7 +31,7 @@ import { relink } from '../../shared/core/relink'
 /** Electron provides window.api from its preload; Samsung TV and browsers use the web implementation */
 export const api = window.api ?? createWebApi()
 
-export type Tab = 'home' | 'live' | 'movies' | 'series' | 'search' | 'settings'
+export type Tab = 'home' | 'live' | 'movies' | 'series' | 'random' | 'search' | 'settings'
 
 export interface PlayRequest {
   kind: 'live' | 'movie' | 'episode'
