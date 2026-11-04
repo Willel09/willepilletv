@@ -235,6 +235,15 @@ input[type='range'] {
 [data-device='tv'] .tv-flat {
   box-shadow: none;
 }
+/* Over a playing video a backdrop blur is redone for every frame: the player's panels are plain dark glass instead */
+[data-player] .glass-strong {
+  backdrop-filter: none;
+  background: rgb(18 18 22 / 0.82);
+}
+[data-player] .glass-thin {
+  backdrop-filter: none;
+  background: rgb(50 50 56 / 0.7);
+}
 /* one universal rule (they're matched against every element): no blurs, filters or transitions on TV */
 [data-device='tv'] *,
 [data-device='tv'] *::before,

@@ -484,6 +484,16 @@ function Session({ req, mini, fullscreen, sleepAt, setSleepAt }: SessionProps) {
   }, [sleepAt, setSleepAt])
 
   const shown = !mini && (visible || !playing || !!menu || !!error)
+  // Time and buffer only matter while something on screen shows them: otherwise skip the re-render (4x a second)
+  const watching = shown || mini
+  const watchRef = useRef(watching)
+  watchRef.current = watching
+  useEffect(() => {
+    const el = video.current
+    if (!watching || !el) return
+    setTime(el.currentTime + off)
+    if (el.buffered.length) setBuffered(el.buffered.end(el.buffered.length - 1) + off)
+  }, [watching]) // eslint-disable-line react-hooks/exhaustive-deps
   const { now, next, progress } = live ? nowNext(epg?.programmes[req.id], t) : {}
   const VolIcon = muted || volume === 0 ? VolumeX : volume < 0.5 ? Volume1 : Volume2
   const fav = req.channel && isFavorite(req.channel.id)
@@ -506,12 +516,12 @@ function Session({ req, mini, fullscreen, sleepAt, setSleepAt }: SessionProps) {
         onTimeUpdate={(e) => {
           const el = e.currentTarget
           if (el.currentSrc || el.srcObject) pos.current = { t: el.currentTime + off, d: tc?.dur ?? el.duration }
-          setTime(el.currentTime + off)
+          if (watchRef.current) setTime(el.currentTime + off)
         }}
         onDurationChange={(e) => setDur(tc ? tc.dur : isFinite(e.currentTarget.duration) ? e.currentTarget.duration : 0)}
         onProgress={(e) => {
           const b = e.currentTarget.buffered
-          if (b.length) setBuffered(b.end(b.length - 1) + off)
+          if (b.length && watchRef.current) setBuffered(b.end(b.length - 1) + off)
         }}
         onVolumeChange={(e) => setMuted(e.currentTarget.muted)}
         onRateChange={(e) => setRate(e.currentTarget.playbackRate)}
@@ -850,9 +860,10 @@ export default function Player({ req }: { req: PlayRequest }) {
       // a drag that ends over the player must not count as "click to expand"
       onClickCapture={(e) => dragged.current && e.stopPropagation()}
       className={`force-dark no-drag fixed z-50 overflow-hidden bg-black text-fg ${mini ? `shadow-[0_30px_80px_-10px_rgb(0_0_0/0.8)] ring-1 ring-white/15 ${dragging ? 'cursor-grabbing' : ''}` : ''}`}
-      initial={{ opacity: 0, scale: 1.06, filter: 'blur(12px)', ...box }}
-      animate={{ opacity: 1, scale: 1, filter: 'blur(0px)', ...box }}
-      exit={{ opacity: 0, scale: mini ? 0.9 : 1.03, filter: 'blur(8px)' }}
+      // no `filter` here: framer leaves `blur(0px)` behind, and a filter above the <video> sends every frame through an extra GPU pass
+      initial={{ opacity: 0, scale: 1.06, ...box }}
+      animate={{ opacity: 1, scale: 1, ...box }}
+      exit={{ opacity: 0, scale: mini ? 0.9 : 1.03 }}
       transition={dragging ? { duration: 0 } : sheetSpring}
     >
       <Session key={req.id} req={req} mini={mini} fullscreen={fullscreen} sleepAt={sleepAt} setSleepAt={setSleepAt} />

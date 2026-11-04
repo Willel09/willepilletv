@@ -1,6 +1,6 @@
 import { AnimatePresence, MotionConfig, MotionGlobalConfig, motion } from 'framer-motion'
 import { ProfilePicker } from './screens/Profiles'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Ambient } from './components/Ambient'
 import { Screensaver, useIdle } from './components/Screensaver'
 import { TitleBar, visibleTabs } from './components/TitleBar'
@@ -62,6 +62,17 @@ export default function App() {
   const player = useApp((s) => s.player)
   const sheet = useApp((s) => s.sourceSheet)
   const [saver, wake] = useIdle(useApp((s) => s.settings.screensaverMins))
+  // Behind a full-screen player nobody sees the app, so stop drawing it (the blurred backdrop alone is a big GPU job).
+  // Waits for the player's fade-in so it still dissolves from the app; showing again is immediate.
+  const mini = useApp((s) => s.playerMini)
+  const full = !!player && !mini
+  const [covered, setCovered] = useState(false)
+  useEffect(() => {
+    if (!full) return setCovered(false)
+    const id = setTimeout(() => setCovered(true), 800)
+    return () => clearTimeout(id)
+  }, [full])
+  const hide = covered ? { visibility: 'hidden' as const } : undefined
 
   useEffect(() => {
     // must run before every other key handler (registers the first capture listener)
@@ -106,9 +117,9 @@ export default function App() {
   return (
     // TVs: no movement animations (framer then jumps straight to the end state), which keeps the remote snappy
     <MotionConfig reducedMotion={api.device === 'tv' ? 'always' : 'user'} transition={api.device === 'tv' ? { duration: 0 } : spring}>
-      <Ambient />
+      <div style={hide}><Ambient /></div>
       {booted && (
-        <div className="relative h-full">
+        <div className="relative h-full" style={hide}>
           <main className="absolute inset-0">
             <Screen />
           </main>
