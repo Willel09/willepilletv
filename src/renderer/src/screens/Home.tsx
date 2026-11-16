@@ -149,7 +149,15 @@ export default function Home() {
       </div>
     )
 
-  const cont = history.filter((h) => resumable(h)).slice(0, 20)
+  // one card per series, its latest episode (sorted: synced entries can arrive out of order); `also` are its other unfinished episodes
+  const groupOf = (h: (typeof history)[number]) => (h.kind === 'episode' ? `show:${h.name.toLowerCase()}` : h.id)
+  const groups = new Map<string, { h: (typeof history)[number]; also: string[] }>()
+  for (const h of history.filter((h) => resumable(h)).sort((a, b) => b.updatedAt - a.updatedAt)) {
+    const g = groups.get(groupOf(h))
+    if (g) g.also.push(h.id)
+    else groups.set(groupOf(h), { h, also: [] })
+  }
+  const cont = [...groups.values()].slice(0, 20)
   const recentLive = history.filter((h) => h.kind === 'live').slice(0, 20)
   const open = (it: Item) => (it.kind === 'live' ? playChannel(it) : it.kind === 'movie' ? playMovie(it) : openDetail(it))
   const poster = (it: Item) =>
@@ -168,8 +176,8 @@ export default function Home() {
       <div className={`relative space-y-2 pb-16 ${featured.length ? '-mt-28' : ''}`}>
         {cont.length > 0 && (
           <Row title="Continue Watching" hint={api.device === 'tv' ? 'Press the red button to remove' : undefined}>
-            {cont.map((h) => (
-              <WideCard key={h.id} name={h.name} subtitle={h.subtitle} art={h.poster} progress={h.position / h.duration} onClick={() => resume(h)} onRemove={() => removeHistory([h.id])} removeLabel="Remove from Continue Watching" />
+            {cont.map(({ h, also }) => (
+              <WideCard key={h.id} name={h.name} subtitle={h.subtitle} art={h.poster} progress={h.position / h.duration} onClick={() => resume(h)} onRemove={() => removeHistory([h.id, ...also])} removeLabel="Remove from Continue Watching" />
             ))}
           </Row>
         )}
