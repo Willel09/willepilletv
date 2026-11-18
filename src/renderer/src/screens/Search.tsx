@@ -62,6 +62,7 @@ export default function Search() {
           <SearchIcon className="size-5.5 shrink-0 text-fg/50" />
           <input
             autoFocus
+            data-keyboard-auto
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Channels, movies and series"

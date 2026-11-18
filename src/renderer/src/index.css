@@ -132,7 +132,6 @@ img {
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
-  border-radius: 14px;
 }
 .card:focus-visible,
 input:focus-visible {
@@ -270,25 +269,48 @@ input[type='range'] {
   scroll-margin-left: 72px;
   scroll-margin-right: 72px;
 }
-/* Seen from the sofa: a thick, bright focus ring that can't be missed */
+/* Seen from the sofa, Apple TV style: what has focus grows a little, lifts off the page and gets a soft white
+   rim. box-shadow, not outline: Chromium 76 draws outlines as square boxes, even around rounded corners. */
 [data-device='tv'] :focus,
 [data-device='tv'] :focus-visible {
-  outline: 4px solid #fff;
-  outline-offset: 4px;
+  outline: none;
+  /* a thin dark gap before the white rim, so it also shows around white buttons (Play) */
+  box-shadow:
+    0 0 0 3px rgb(var(--base-rgb)),
+    0 0 0 6px rgb(255 255 255 / 0.95),
+    0 12px 32px -8px rgb(0 0 0 / 0.8);
 }
-[data-device='tv'] input:focus,
-[data-device='tv'] input:focus-visible {
-  outline-offset: 2px;
+[data-device='tv'] button:focus,
+[data-device='tv'] a:focus {
+  transform: scale(1.05);
 }
-/* cards: the ring goes around the poster itself, not around poster + title */
+/* only transform animates (the GPU does it without repainting); every other TV transition stays off */
+[data-device='tv'] button,
+[data-device='tv'] a,
+[data-device='tv'] .card > div:first-child {
+  transition: transform 140ms ease-out !important;
+}
+/* cards: the poster itself grows and lifts above its neighbours; no ring around poster + title */
 [data-device='tv'] .card:focus,
 [data-device='tv'] .card:focus-visible {
-  outline: none;
+  box-shadow: none;
+  transform: none;
 }
 [data-device='tv'] .card:focus > div:first-child,
 [data-device='tv'] .card:focus-visible > div:first-child {
-  outline: 4px solid #fff;
-  outline-offset: 4px;
+  position: relative;
+  z-index: 1;
+  transform: scale(1.08);
+  box-shadow:
+    0 0 0 3px rgb(255 255 255 / 0.9),
+    0 28px 50px -12px rgb(0 0 0 / 0.9);
+}
+/* on-screen keyboard: the focused key turns white, like the remote's highlight on tvOS */
+[data-device='tv'] .kb-key:focus {
+  background: #fff;
+  color: #000;
+  box-shadow: 0 10px 24px -6px rgb(0 0 0 / 0.7);
+  transform: scale(1.1);
 }
 /* the player stays dark over the video whatever the theme; a dim veil is cheap there (video is its own layer) */
 [data-device='tv'] .force-dark .glass,

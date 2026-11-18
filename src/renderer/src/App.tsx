@@ -5,6 +5,7 @@ import { Ambient } from './components/Ambient'
 import { Screensaver, useIdle } from './components/Screensaver'
 import { TitleBar, visibleTabs } from './components/TitleBar'
 import { Toast } from './components/Toast'
+import { TvKeyboard } from './components/TvKeyboard'
 import { initSpatialNav } from './lib/nav'
 import { initTvKeys } from './lib/tv'
 import { spring } from './lib/motion'
@@ -132,6 +133,7 @@ export default function App() {
       <AnimatePresence>{sheet && <SourceSheet key="sheet" sheet={sheet} />}</AnimatePresence>
       <AnimatePresence>{booted && pickProfile && <ProfilePicker key="profiles" />}</AnimatePresence>
       <Toast />
+      {api.device === 'tv' && <TvKeyboard />}
       {saver && <Screensaver onWake={wake} />}
     </MotionConfig>
   )
