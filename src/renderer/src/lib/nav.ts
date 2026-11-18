@@ -97,7 +97,7 @@ export function initSpatialNav() {
     const dir = KEYS[e.key]
     if (!dir || e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return
     const active = document.activeElement as HTMLElement | null
-    if (active && (active.closest('[data-nav-ignore]') || (isText(active) && !(active as HTMLInputElement).readOnly && (dir === 'left' || dir === 'right')))) return
+    if (active && (active.closest('[data-nav-ignore]') || (isText(active) && (dir === 'left' || dir === 'right')))) return
     const scopes = document.querySelectorAll<HTMLElement>('[data-nav-scope]')
     const scope: ParentNode = scopes[scopes.length - 1] ?? document
     e.preventDefault()

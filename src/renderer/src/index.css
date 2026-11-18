@@ -305,13 +305,6 @@ input[type='range'] {
     0 0 0 3px rgb(255 255 255 / 0.9),
     0 28px 50px -12px rgb(0 0 0 / 0.9);
 }
-/* on-screen keyboard: the focused key turns white, like the remote's highlight on tvOS */
-[data-device='tv'] .kb-key:focus {
-  background: #fff;
-  color: #000;
-  box-shadow: 0 10px 24px -6px rgb(0 0 0 / 0.7);
-  transform: scale(1.1);
-}
 /* the player stays dark over the video whatever the theme; a dim veil is cheap there (video is its own layer) */
 [data-device='tv'] .force-dark .glass,
 [data-device='tv'] .force-dark .glass-strong,
