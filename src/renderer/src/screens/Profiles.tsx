@@ -72,7 +72,7 @@ export function ProfilePicker() {
               animate={{ y: 0, opacity: 1 }}
               transition={{ ...softSpring, delay: 0.05 * i }}
               onClick={() => (manage ? setEditing(p) : switchProfile(p.id))}
-              className="group flex w-28 flex-col items-center gap-3 rounded-[28px] p-2 outline-none md:w-36"
+              className="own-focus group flex w-28 flex-col items-center gap-3 rounded-[28px] p-2 outline-none md:w-36"
             >
               <span className="relative block w-full">
                 <span className="block rounded-[30%] transition group-hover:scale-105 group-focus-visible:scale-105 group-focus-visible:ring-4 group-focus-visible:ring-fg">
@@ -84,7 +84,7 @@ export function ProfilePicker() {
             </motion.button>
           ))}
           {profiles.length < 8 && (
-            <motion.button initial={{ y: 30, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ ...softSpring, delay: 0.05 * profiles.length }} onClick={() => setEditing(null)} className="group flex w-28 flex-col items-center gap-3 rounded-[28px] p-2 outline-none md:w-36">
+            <motion.button initial={{ y: 30, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ ...softSpring, delay: 0.05 * profiles.length }} onClick={() => setEditing(null)} className="own-focus group flex w-28 flex-col items-center gap-3 rounded-[28px] p-2 outline-none md:w-36">
               <span className="glass-thin grid aspect-square w-full place-items-center rounded-[30%] transition group-hover:scale-105 group-focus-visible:ring-4 group-focus-visible:ring-fg">
                 <Plus className="size-10 text-fg/60" />
               </span>

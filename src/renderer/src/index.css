@@ -305,6 +305,15 @@ input[type='range'] {
     0 0 0 3px rgb(255 255 255 / 0.9),
     0 28px 50px -12px rgb(0 0 0 / 0.9);
 }
+/* tiles that draw their own focus (the avatar grows and gets a ring): no box around the whole button, PC or TV */
+.own-focus:focus,
+.own-focus:focus-visible,
+[data-device] .own-focus:focus,
+[data-device] .own-focus:focus-visible {
+  outline: none;
+  box-shadow: none;
+  transform: none;
+}
 /* the player stays dark over the video whatever the theme; a dim veil is cheap there (video is its own layer) */
 [data-device='tv'] .force-dark .glass,
 [data-device='tv'] .force-dark .glass-strong,
