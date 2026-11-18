@@ -6,7 +6,7 @@ import { gcm } from '@noble/ciphers/aes.js'
 import { pbkdf2Async } from '@noble/hashes/pbkdf2.js'
 import { sha256 } from '@noble/hashes/sha2.js'
 import { gunzipSync, gzipSync } from 'fflate'
-import type { HistoryEntry, Item, Movie, Profile, ProfileLists, Settings, Show, Source, SyncMeta } from '../../../shared/types'
+import type { CustomList, HistoryEntry, Item, Movie, Profile, ProfileLists, Settings, Show, Source, SyncMeta } from '../../../shared/types'
 
 const SB_URL = 'https://cbqjczxbcodebmgawknz.supabase.co/rest/v1/rpc'
 // Publishable key: safe to ship in the app (the database only exposes the three sync_* functions)
@@ -336,4 +336,32 @@ export async function pullProfiles(code: string): Promise<ProfilesDoc | null> {
 
 export async function pushProfiles(code: string, doc: ProfilesDoc) {
   await rpc('sync_put', { p_id: profilesId(code), p_data: await (await derive(code, 'sync')).seal(doc) })
+}
+
+/* ---------------- custom lists ----------------
+   Their own blob too, for the same reason as profiles. Each list is one item for the merge: whoever saved
+   last wins that list, so two devices adding to the SAME list within one sync interval keep only one of the adds
+   (shortcut: per-list, not per-title, merging; upgrade if that ever bites). */
+
+export interface ListsDoc {
+  v: 1
+  lists: CustomList[]
+  meta: SyncMeta
+}
+
+export function mergeLists(local: ListsDoc, remote: ListsDoc | null): ListsDoc {
+  if (!remote) return local
+  const m = merge(asDoc({ sources: local.lists }, remeta(local.meta, 'lists:', 'sources:')), asDoc({ sources: remote.lists }, remeta(remote.meta, 'lists:', 'sources:')))
+  return { v: 1, lists: m.sources as unknown as CustomList[], meta: remeta(m.meta, 'sources:', 'lists:') }
+}
+
+const listsId = (code: string) => hex(sha256(enc.encode(`lumen-lists:${normalize(code)}`)))
+
+export async function pullLists(code: string): Promise<ListsDoc | null> {
+  const rows = await rpc<{ data: string }[]>('sync_get', { p_id: listsId(code) })
+  return rows.length ? (await derive(code, 'sync')).open<ListsDoc>(rows[0].data) : null
+}
+
+export async function pushLists(code: string, doc: ListsDoc) {
+  await rpc('sync_put', { p_id: listsId(code), p_data: await (await derive(code, 'sync')).seal(doc) })
 }

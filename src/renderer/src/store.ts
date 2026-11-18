@@ -7,6 +7,7 @@ import {
   MAIN_PROFILE,
   STORE_DEFAULTS,
   type Channel,
+  type CustomList,
   type DownloadRec,
   type DownloadRequest,
   type DownloadsState,
@@ -130,7 +131,7 @@ type Synced = 'sources' | ListKey
 const EMPTY_LISTS: ProfileLists = { favorites: [], watchlist: [], history: [] }
 
 /** Record changes/deletions for the merge, under "<prefix><key>:<id>" in meta or profileMeta */
-function touch(metaKey: 'meta' | 'profileMeta', prefix: string, changed: string[], removed: string[]) {
+function touch(metaKey: 'meta' | 'profileMeta' | 'customMeta', prefix: string, changed: string[], removed: string[]) {
   const now = Date.now()
   const meta = { at: { ...get()[metaKey].at }, tomb: { ...get()[metaKey].tomb } }
   for (const k of changed) (meta.at[prefix + k] = now), delete meta.tomb[prefix + k]
@@ -188,6 +189,8 @@ export function deleteProfile(id: string) {
   delete lists[id]
   set({ lists })
   persist('profileData', Object.fromEntries(Object.entries(lists).filter(([k]) => k !== 'main')))
+  const own = get().customLists.filter((l) => l.profile === id)
+  if (own.length) saveLists(get().customLists.filter((l) => l.profile !== id), [], own.map((l) => l.id))
   scheduleSync()
 }
 
@@ -366,6 +369,42 @@ export function toggleWatchlist(item: Movie | Show) {
   toast(on ? `Removed “${cleanName(item.name)}” from your Watchlist` : `Added “${cleanName(item.name)}” to your Watchlist`)
 }
 
+/* ---------------- custom lists ---------------- */
+
+function saveLists(next: CustomList[], changed: string[], removed: string[]) {
+  touch('customMeta', 'lists:', changed, removed)
+  persist('customLists', next)
+  scheduleSync()
+}
+
+/** The active profile's lists, in the order they were made */
+export const listsOf = (all: CustomList[], profile: string) => all.filter((l) => l.profile === profile)
+
+export function createList(name: string, first?: Movie | Show): CustomList | null {
+  const n = name.trim().slice(0, 40)
+  if (!n) return null
+  const list: CustomList = { id: `l${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, profile: get().activeProfile, name: n, items: first ? [snapshot(first)] : [] }
+  saveLists([...get().customLists, list], [list.id], [])
+  if (first) toast(`Saved “${cleanName(first.name)}” to ${n}`)
+  return list
+}
+
+export function toggleInList(listId: string, item: Movie | Show) {
+  const all = get().customLists
+  const l = all.find((x) => x.id === listId)
+  if (!l) return
+  const on = l.items.some((i) => i.id === item.id)
+  saveLists(all.map((x) => (x.id === listId ? { ...l, items: on ? l.items.filter((i) => i.id !== item.id) : [snapshot(item), ...l.items] } : x)), [listId], [])
+  toast(on ? `Removed “${cleanName(item.name)}” from ${l.name}` : `Saved “${cleanName(item.name)}” to ${l.name}`)
+}
+
+export function deleteList(id: string) {
+  saveLists(get().customLists.filter((l) => l.id !== id), [], [id])
+  // a browse screen showing it goes back to its first category
+  const group = Object.fromEntries(Object.entries(get().group).filter(([, g]) => g !== `__list:${id}`))
+  set({ group })
+}
+
 // Watching updates the position every 15 s and every zap adds a channel: Continue Watching changes in memory
 // right away, but the list is written and synced at most once a minute, or at once on pause/close/end
 let historyChanges: { changed: Set<string>; removed: Set<string> } | null = null
@@ -483,6 +522,7 @@ export function syncNow(): Promise<void> {
         if (attempt === 4) throw new Error('Another device kept changing the synced data at the same time. Try again.')
       }
       await syncProfiles(code)
+      await syncCustomLists(code)
       persist('sync', { ...get().sync, lastSync: Date.now() })
       set({ syncStatus: fileError ? { state: 'error', message: fileError } : { state: 'ok' } })
       if (sourcesChanged) refreshLibrary()
@@ -516,6 +556,19 @@ async function syncProfiles(code: string) {
     persist('profileData', Object.fromEntries(Object.entries(lists).filter(([id]) => id !== 'main')))
   }
   if (!same(merged, remote)) await sync.pushProfiles(code, merged)
+}
+
+/** Custom lists sync in their own blob too (see lib/sync.ts); nothing is uploaded until a list exists */
+async function syncCustomLists(code: string) {
+  const remote = await sync.pullLists(code)
+  // read after the download: a list saved meanwhile is part of the merge, not overwritten by it
+  const s = get()
+  if (!remote && !s.customLists.length) return
+  const local: sync.ListsDoc = { v: 1, lists: s.customLists, meta: s.customMeta }
+  const merged = sync.mergeLists(local, remote)
+  persist('customMeta', merged.meta)
+  if (JSON.stringify(local.lists) !== JSON.stringify(merged.lists)) persist('customLists', merged.lists)
+  if (JSON.stringify(merged) !== JSON.stringify(remote)) await sync.pushLists(code, merged)
 }
 
 /** PC only: share M3U files added from disk with the TV/web (unchanged files are skipped) */

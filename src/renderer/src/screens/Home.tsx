@@ -11,7 +11,7 @@ import { forYouScore, newestScore, topMany, topRatedScore } from '../lib/recomme
 import { softSpring } from '../lib/motion'
 import { hasNew, markSeen, seenOf } from '../lib/seen'
 import { useGenreRows, useRecommended } from '../lib/tmdb'
-import { api, localPosterOf, openDetail, openSourceSheet, playChannel, playDownload, playMovie, removeHistory, resume, resumable, setGroup, setTab, toggleWatchlist, useApp, useIndex } from '../store'
+import { api, listsOf, localPosterOf, openDetail, openSourceSheet, playChannel, playDownload, playMovie, removeHistory, resume, resumable, setGroup, setTab, toggleWatchlist, useApp, useIndex } from '../store'
 import type { Channel, Item, Movie, Show } from '../../../shared/types'
 import { RECENT } from './Browse'
 import { startPairing } from './Settings'
@@ -49,6 +49,8 @@ export default function Home() {
   const loading = useApp((s) => s.loading)
   const favorites = useApp((s) => s.favorites)
   const watchlist = useApp((s) => s.watchlist)
+  const customLists = useApp((s) => s.customLists)
+  const profile = useApp((s) => s.activeProfile)
   const history = useApp((s) => s.history)
   const epg = useApp((s) => s.epg)
   const downloads = useApp((s) => s.downloads)
@@ -203,6 +205,7 @@ export default function Home() {
         {recommended.length > 0 && <Row title="Recommended for You">{recommended.map(titleCard)}</Row>}
         {rows && rows.forYou.length > 0 && <Row title={recommended.length ? "More Like Your Taste" : "For You"}>{rows.forYou.map(titleCard)}</Row>}
         {watchlist.length > 0 && <Row title="My Watchlist" count={watchlist.length}>{watchlist.slice(0, 40).map((it) => <PosterCard key={it.id} name={it.name} poster={it.poster} rating={it.rating} onClick={() => openDetail(it)} onRemove={() => toggleWatchlist(it)} />)}</Row>}
+        {listsOf(customLists, profile).filter((l) => l.items.length).map((l) => <Row key={l.id} title={l.name} count={l.items.length}>{l.items.slice(0, 40).map(titleCard)}</Row>)}
         {rows && rows.newMovies.length > 0 && <Row title="Newest Movies" onSeeAll={seeAll('movies', RECENT)}>{rows.newMovies.map(titleCard)}</Row>}
         {rows && rows.newSeries.length > 0 && <Row title="Newest Series" onSeeAll={seeAll('series', RECENT)}>{rows.newSeries.map(titleCard)}</Row>}
         {rows?.last && rows.similar.length > 0 && <Row title={`Because you watched ${cleanName(rows.last.name)}`}>{rows.similar.map(titleCard)}</Row>}

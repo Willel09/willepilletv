@@ -235,6 +235,18 @@ export interface StoreShape {
   profileMeta: SyncMeta
   /** Profile in use on this device (not synced) */
   activeProfile: string
+  /** The user's own named lists of films and series, of every profile (synced in their own blob, see lib/sync.ts) */
+  customLists: CustomList[]
+  /** Sync change-tracking for customLists: "lists:<id>" */
+  customMeta: SyncMeta
+}
+
+export interface CustomList {
+  id: string
+  /** profile it belongs to ('main' = the first profile) */
+  profile: string
+  name: string
+  items: (Movie | Show)[]
 }
 
 export interface Profile {
@@ -301,7 +313,9 @@ export const STORE_DEFAULTS: StoreShape = {
   profiles: [],
   profileData: {},
   profileMeta: { at: {}, tomb: {} },
-  activeProfile: 'main'
+  activeProfile: 'main',
+  customLists: [],
+  customMeta: { at: {}, tomb: {} }
 }
 
 /** The bridge exposed on window.api by the preload script */

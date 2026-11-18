@@ -1,10 +1,11 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { Check, ChevronLeft, Clapperboard, Download, EyeOff, ExternalLink, Heart, Play, Plus, RotateCcw, Star } from 'lucide-react'
+import { Check, ChevronLeft, Clapperboard, Download, EyeOff, ExternalLink, Heart, ListPlus, Play, Plus, RotateCcw, Star } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { DownloadRequest, Episode, MediaInfo, Movie, Show } from '../../../shared/types'
 import { PosterCard } from '../components/Cards'
 import { DownloadSheet, type Choice } from '../components/DownloadSheet'
 import { Img } from '../components/Img'
+import { ListSheet } from '../components/ListSheet'
 import { Row } from '../components/Row'
 import { Button, IconButton, Spinner } from '../components/ui'
 import { artUrl, cleanName, duration } from '../lib/format'
@@ -12,7 +13,7 @@ import { sheetSpring, softSpring, spring } from '../lib/motion'
 import { useRatings } from '../lib/ratings'
 import { markSeen } from '../lib/seen'
 import { useSimilar, useTrailer } from '../lib/tmdb'
-import { api, closeDetail, setTab, startDownloads, historyFor, historyOfTitle, inWatchlist, index, isFavorite, openDetail, openPerson, playEpisode, playMovie, removeHistory, resumable, urlOf, setAmbient, toast, toggleFavorite, toggleWatchlist, useApp } from '../store'
+import { api, closeDetail, listsOf, setTab, startDownloads, historyFor, historyOfTitle, inWatchlist, index, isFavorite, openDetail, openPerson, playEpisode, playMovie, removeHistory, resumable, urlOf, setAmbient, toast, toggleFavorite, toggleWatchlist, useApp } from '../store'
 
 function Score({ label, short, value, className, title }: { label: string; short?: string; value: string; className: string; title?: string }) {
   return (
@@ -117,6 +118,10 @@ export default function Detail({ item }: { item: Movie | Show }) {
   const [ver, setVer] = useState(0)
   useApp((s) => s.favorites)
   useApp((s) => s.watchlist)
+  const customLists = useApp((s) => s.customLists)
+  const profile = useApp((s) => s.activeProfile)
+  const inLists = listsOf(customLists, profile).filter((l) => l.items.some((x) => x.id === item.id)).length
+  const [listSheet, setListSheet] = useState(false)
   const history = useApp((s) => s.history)
   const dl = useApp((s) => (api.downloads && item.kind === 'movie' ? s.downloads?.items.find((d) => d.id === item.id) : undefined))
   const [sheet, setSheet] = useState<Choice[] | null>(null)
@@ -291,6 +296,9 @@ export default function Detail({ item }: { item: Movie | Show }) {
               <Button size="lg" icon={inWatchlist(item.id) ? <Check className="size-5" /> : <Plus className="size-5" />} onClick={() => toggleWatchlist(item)}>
                 {inWatchlist(item.id) ? 'In Watchlist' : 'Watchlist'}
               </Button>
+              <Button size="lg" icon={inLists ? <Check className="size-5" /> : <ListPlus className="size-5" />} onClick={() => setListSheet(true)}>
+                {inLists ? `In ${inLists} ${inLists === 1 ? 'list' : 'lists'}` : 'Save to list'}
+              </Button>
               <IconButton label={fav ? 'Remove from Favorites' : 'Add to Favorites'} className="size-13" onClick={() => toggleFavorite(item)}>
                 <Heart className={`size-5 ${fav ? 'fill-rose-400 text-rose-400' : ''}`} />
               </IconButton>
@@ -374,6 +382,7 @@ export default function Detail({ item }: { item: Movie | Show }) {
         </div>
       )}
       <AnimatePresence>
+        {listSheet && <ListSheet item={item} onClose={() => setListSheet(false)} />}
         {sheet && <DownloadSheet title={cleanName(item.name)} choices={sheet} selected={Math.min(ver, sheet.length - 1)} onPick={(i) => sheetPick.current(i)} onClose={() => setSheet(null)} />}
       </AnimatePresence>
     </motion.div>

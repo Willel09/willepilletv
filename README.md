@@ -102,7 +102,7 @@ You need **Node.js 22 LTS** from <https://nodejs.org>.
 
 *Settings → Sync & Devices* keeps these in sync between your PC, TV and the web app:
 
-- watchlist, favorites, watch history and resume positions;
+- watchlist, your own lists, favorites, watch history and resume positions;
 - sources (Xtream logins and playlists), so only one device needs typing. **M3U files added from the PC's disk are shared too:** Lumen for Windows uploads the file (compressed and encrypted, up to ~70 MB) so the TV and phone can load it. Edits to the file reach other devices on their next refresh;
 - theme, accent, artwork glow, extra guide URL, hidden categories, stream format and autoplay.
 
@@ -128,6 +128,7 @@ You need **Node.js 22 LTS** from <https://nodejs.org>.
 
 - **Sources:** M3U/M3U8 by URL or local file (Windows; shared with your TV through Sync), Xtream Codes (Live, Movies, Series), and XMLTV guides (`.xml` / `.xml.gz`, found automatically from Xtream or the M3U `url-tvg` header).
 - **Home:** an auto-rotating hero, then curated rows: Continue Watching, **Recommended for You** (TMDB key) and **For You** (from the categories you watch and save), My Watchlist, **Newest Movies**, **Newest Series**, **Because you watched …**, **Live Now** (channels on air, favorites first), **Top Rated**, Favorites and Recently Watched Channels. Categories live under Movies / Series / Live TV.
+- **Your own lists:** on a film or series page, **Save to list** puts it in a list of your own ("Weekend movies", "Kids"...), or starts a new one. Each list shows as its own row on Home and as a category under Movies and Series; delete one in Settings → Data. Lists belong to the profile, sync between devices (if two devices add to the same list within a few seconds, only one add is kept) and are separate from the Watchlist.
 - **Watchlist:** add movies and series from the hero (＋) or the detail page; remove them with the **✕ Remove** button on each card. Clicking a card opens its detail page. It also appears as a category under Movies and Series, and syncs between devices.
 - **Live TV:** a filterable category sidebar, a virtualised channel list with now/next, an info panel with the upcoming schedule, and a full **TV guide grid**.
 - **One title, many copies:** when a provider lists the same film or series several times ("SC-[4K-Q] - Kubo", "Kubo (2016) [1080p]", once per category or language), Lumen shows it once. The detail page lists every copy under **Versions** so you choose which to play (for series: whose seasons and episodes). Copies are matched by the TMDB id when the provider sends it (that also joins translated titles like "Ali G: Who Iz I?" and "Ali G : J'suis qui ?"), otherwise by the title without provider tags, quality words, brackets and year; same-title films from different years stay separate.

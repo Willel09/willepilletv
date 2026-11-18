@@ -1,4 +1,4 @@
-import { BookmarkCheck, Clapperboard, Heart, History, Library, Search, X } from 'lucide-react'
+import { BookmarkCheck, Clapperboard, Heart, History, Library, List, Search, X } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import type { Movie, Show } from '../../../shared/types'
 import { PosterCard } from '../components/Cards'
@@ -6,11 +6,12 @@ import { CategorySidebar } from '../components/CategorySidebar'
 import { PosterGrid } from '../components/PosterGrid'
 import { Empty, Segmented } from '../components/ui'
 import { matchScore, words } from '../lib/search'
-import { openDetail, setGroup, toggleWatchlist, useApp, useIndex } from '../store'
+import { listsOf, openDetail, setGroup, toggleWatchlist, useApp, useIndex } from '../store'
 import { ALL, FAV } from './Live'
 
 export const RECENT = '__recent'
 const WATCH = '__watch'
+const LIST = '__list:'
 type Sort = 'added' | 'az' | 'rating'
 
 /** Movies and Series share one browse screen: category sidebar + sortable virtual poster grid */
@@ -19,6 +20,8 @@ export default function Browse({ kind }: { kind: 'movies' | 'series' }) {
   const favs = useApp((s) => s.favorites)
   const watchlist = useApp((s) => s.watchlist)
   const history = useApp((s) => s.history)
+  const customLists = useApp((s) => s.customLists)
+  const profile = useApp((s) => s.activeProfile)
   const [hideSeen, setHideSeen] = useState(false)
   const group = useApp((s) => s.group[kind]) ?? ALL
   const [sort, setSort] = useState<Sort>('added')
@@ -33,9 +36,10 @@ export default function Browse({ kind }: { kind: 'movies' | 'series' }) {
       { key: RECENT, label: 'Recently Added', count: Math.min(200, all.length), icon: <History className="size-4" /> },
       { key: WATCH, label: 'Watchlist', count: watchlist.filter((f) => f.kind === itemKind).length, icon: <BookmarkCheck className="size-4" /> },
       { key: FAV, label: 'Favorites', count: favs.filter((f) => f.kind === itemKind).length, icon: <Heart className="size-4" /> },
+      ...listsOf(customLists, profile).map((l) => ({ key: LIST + l.id, label: l.name, count: l.items.filter((f) => f.kind === itemKind).length, icon: <List className="size-4" /> })),
       ...groups.map((g) => ({ key: g.name, label: g.name, count: g.items.length }))
     ],
-    [all, groups, favs, watchlist, kind, itemKind]
+    [all, groups, favs, watchlist, customLists, profile, kind, itemKind]
   )
 
   const items = useMemo(() => {
@@ -44,6 +48,7 @@ export default function Browse({ kind }: { kind: 'movies' | 'series' }) {
     else if (group === RECENT) list = [...all].sort((a, b) => (b.added ?? 0) - (a.added ?? 0)).slice(0, 200)
     else if (group === FAV) list = favs.filter((f): f is Movie | Show => f.kind === itemKind)
     else if (group === WATCH) list = watchlist.filter((f) => f.kind === itemKind)
+    else if (group.startsWith(LIST)) list = customLists.find((l) => l.id === group.slice(LIST.length))?.items.filter((f) => f.kind === itemKind) ?? []
     else list = groups.find((g) => g.name === group)?.items ?? []
     const terms = words(q).split(' ').filter(Boolean)
     if (hideSeen && kind === 'movies') {
@@ -55,7 +60,7 @@ export default function Browse({ kind }: { kind: 'movies' | 'series' }) {
     if (group === RECENT || sort === 'added') return group === RECENT ? list : [...list].sort((a, b) => (b.added ?? 0) - (a.added ?? 0))
     if (sort === 'az') return [...list].sort((a, b) => a.name.localeCompare(b.name))
     return [...list].sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))
-  }, [all, groups, favs, watchlist, group, sort, itemKind, q, idx, hideSeen, history, kind])
+  }, [all, groups, favs, watchlist, customLists, group, sort, itemKind, q, idx, hideSeen, history, kind])
 
   if (!all.length)
     return (

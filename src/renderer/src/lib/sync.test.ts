@@ -125,3 +125,23 @@ test("favorites keep this device's order; ones added elsewhere go first", () => 
   const remote = doc({ favorites: [movie('n'), movie('c')], meta: { at: { 'favorites:n': 5, 'favorites:c': 99 }, tomb: {} } })
   assert.deepEqual(merge(local, remote).favorites.map((f) => f.id), ['n', 'a', 'b', 'c'])
 })
+
+test('custom lists: lists from two devices both survive, the newer edit of one list wins, a delete beats an older copy', async () => {
+  const { mergeLists } = await import('./sync.ts')
+  const now = Date.now()
+  const list = (id: string, name: string, ids: string[]) => ({ id, profile: 'main', name, items: ids.map(movie) })
+  const a = { v: 1 as const, lists: [list('l1', 'Weekend', ['x']), list('l2', 'Kids', ['k'])], meta: { at: { 'lists:l1': now - 10, 'lists:l2': now - 10 }, tomb: {} } }
+  // the other device added y to Weekend (newer) and made a third list
+  const b = { v: 1 as const, lists: [list('l1', 'Weekend', ['y', 'x']), list('l3', 'Horror', ['h'])], meta: { at: { 'lists:l1': now, 'lists:l3': now }, tomb: {} } }
+  const m = mergeLists(a, b)
+  assert.deepEqual(m.lists.map((l) => l.id).sort(), ['l1', 'l2', 'l3'])
+  assert.deepEqual(m.lists.find((l) => l.id === 'l1')!.items.map((x) => x.id), ['y', 'x'])
+  assert.equal(m.meta.at['lists:l3'], now)
+  // deleting Kids removes it everywhere; an older copy elsewhere does not bring it back
+  const del = { v: 1 as const, lists: m.lists.filter((l) => l.id !== 'l2'), meta: { at: { ...m.meta.at }, tomb: { 'lists:l2': now + 5 } } }
+  delete del.meta.at['lists:l2']
+  assert.deepEqual(mergeLists(del, m).lists.map((l) => l.id).sort(), ['l1', 'l3'])
+  assert.deepEqual(mergeLists(m, del).lists.map((l) => l.id).sort(), ['l1', 'l3'])
+  // nothing remote: local as is
+  assert.equal(mergeLists(a, null), a)
+})

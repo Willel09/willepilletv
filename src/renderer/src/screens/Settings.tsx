@@ -10,7 +10,7 @@ import { newPairCode, newSyncCode, receivePairing, sendPairing, supported as syn
 import { THEMES } from '../lib/themes'
 import { TvInstallSheet } from './TvInstall'
 import { Avatar } from '../components/Avatar'
-import { api, clearCollection, currentProfile, openProfilePicker, openSourceSheet, refreshEpg, refreshLibrary, saveSources, setSyncCode, setTab, syncNow, toast, updateSettings, useApp } from '../store'
+import { api, clearCollection, currentProfile, deleteList, listsOf, openProfilePicker, openSourceSheet, refreshEpg, refreshLibrary, saveSources, setSyncCode, setTab, syncNow, toast, updateSettings, useApp } from '../store'
 
 const ACCENTS = ['#0a84ff', '#5e5ce6', '#bf5af2', '#ff375f', '#ff9f0a', '#30d158', '#64d2ff']
 const desktop = api.device === 'desktop'
@@ -295,6 +295,8 @@ const KEYS_TV: [string, string][] = [
 
 export default function Settings() {
   const s = useApp((x) => x.settings)
+  const customLists = useApp((x) => x.customLists)
+  const activeProfile = useApp((x) => x.activeProfile)
   const sources = useApp((x) => x.sources)
   const library = useApp((x) => x.library)
   const epg = useApp((x) => x.epg)
@@ -491,6 +493,11 @@ export default function Settings() {
           {(['watchlist', 'favorites', 'history'] as const).map((k) => (
             <Line key={k} label={{ watchlist: 'Watchlist', favorites: 'Favorites', history: 'Watch history' }[k]} hint={k === 'history' ? 'Continue Watching and resume positions' : undefined}>
               <Button variant="danger" onClick={() => confirm(`Clear your ${k === 'history' ? 'watch history' : k}? This also clears it on synced devices.`) && clearCollection(k)}>Clear</Button>
+            </Line>
+          ))}
+          {listsOf(customLists, activeProfile).map((l) => (
+            <Line key={l.id} label={l.name} hint={`Your list · ${l.items.length} ${l.items.length === 1 ? 'title' : 'titles'}`}>
+              <Button variant="danger" onClick={() => confirm(`Delete the list “${l.name}”? This also deletes it on synced devices.`) && deleteList(l.id)}>Delete</Button>
             </Line>
           ))}
         </Card>
