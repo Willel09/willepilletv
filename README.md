@@ -1,4 +1,4 @@
-# Lumen — a premium IPTV player for Windows, Samsung TV and the web
+# Lumen — a premium IPTV player for Windows, Mac, Samsung TV and the web
 
 Lumen is an IPTV **player**. It ships with no channels: you add your own M3U playlist, Xtream Codes login and (optionally) an XMLTV guide. The look takes inspiration from Apple's "Liquid Glass", the Apple TV app and Netflix. It does not use any of their logos or trademarks.
 
@@ -6,6 +6,7 @@ Lumen is an IPTV **player**. It ships with no channels: you add your own M3U pla
 | --- | --- | --- |
 | **Windows** | Electron app (`Lumen-Setup-x.y.z.exe`) | Downloads new versions in the background, then offers **Restart to update** |
 | **Samsung TV** (Tizen 6.0+, 2021 models and newer, e.g. QN90A) | `Lumen.wgt`, installed from Lumen for Windows (*Settings → Samsung TV*) | Loads the newest version from GitHub Pages every time it starts. No reinstall needed |
+| **Mac** (macOS 26+) | Native SwiftUI app in [`macos/`](macos/README.md), built with Xcode. Widgets, Shortcuts, menu bar | Build from source |
 | **Web / phone** | <https://willel09.github.io/willepilletv/> | Always the latest |
 
 **Stack:** Electron · React 19 · TypeScript · Vite · Tailwind CSS 4 · Framer Motion · hls.js · mpegts.js · electron-store · electron-updater · Supabase (sync)
