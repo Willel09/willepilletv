@@ -1,5 +1,6 @@
 import SwiftUI
 
+#if os(macOS)
 struct LiveView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openWindow) private var openWindow
@@ -26,6 +27,8 @@ struct LiveView: View {
             }
             .frame(width: 230)
             Divider()
+            VStack(spacing: 0) {
+            SearchField(text: $filter, prompt: "Filter channels").padding(10)
             List(channels, selection: $selected) { c in
                 ChannelRow(channel: c)
                     .tag(c.id)
@@ -35,12 +38,14 @@ struct LiveView: View {
                     .itemContextMenu(.live(c))
             }
             .listStyle(.inset)
+            .scrollContentBackground(.hidden)
             .frame(minWidth: 340)
             .overlay {
                 if channels.isEmpty {
                     EmptyState(symbol: group == "__fav__" ? "heart" : "tv", title: group == "__fav__" ? "No favorites yet" : "No channels",
                                message: group == "__fav__" ? "Right-click a channel, or press ♥ in its info panel, to add it here." : "Try another category.")
                 }
+            }
             }
             Divider()
             if let id = selected, case .live(let c) = model.item(id) {
@@ -50,8 +55,6 @@ struct LiveView: View {
                 Text("Select a channel").foregroundStyle(.secondary).frame(width: 340).frame(maxHeight: .infinity)
             }
         }
-        .navigationTitle("Live TV")
-        .searchable(text: $filter, placement: .toolbar, prompt: "Filter channels")
         .onAppear { if model.favoriteChannels.isEmpty && group == "__fav__" { group = "__all__" } }
         .onKeyPress(.return) { if let id = selected, case .live(let c) = model.item(id) { play(c); return .handled }; return .ignored }
     }
@@ -72,6 +75,7 @@ struct LiveView: View {
         if let r = model.request(for: .live(c)) { model.play(openWindow, r) }
     }
 }
+#endif
 
 struct ChannelRow: View {
     @Environment(AppModel.self) private var model
@@ -105,6 +109,7 @@ struct ChannelRow: View {
     }
 }
 
+#if os(macOS)
 struct ChannelInfoPanel: View {
     @Environment(AppModel.self) private var model
     let channel: Channel
@@ -122,11 +127,11 @@ struct ChannelInfoPanel: View {
                 Text(channel.group).foregroundStyle(.secondary)
                 HStack {
                     Button(action: play) { Label("Watch", systemImage: "play.fill").frame(maxWidth: .infinity) }
-                        .buttonStyle(.glassProminent).controlSize(.large)
+                        .buttonStyle(LumenButtonStyle(prominent: true)).controlSize(.large)
                     Button { model.toggleFavorite(channel.id) } label: {
                         Image(systemName: model.isFavorite(channel.id) ? "heart.fill" : "heart")
                     }
-                    .buttonStyle(.glass).controlSize(.large)
+                    .buttonStyle(LumenButtonStyle()).controlSize(.large)
                     .foregroundStyle(model.isFavorite(channel.id) ? .pink : .primary)
                 }
                 if schedule.isEmpty {
@@ -182,7 +187,7 @@ struct GuideView: View {
                 Button("Now") { start = Calendar.current.dateInterval(of: .hour, for: .now)?.start ?? .now }
                 Button { start = start.addingTimeInterval(3600) } label: { Image(systemName: "chevron.right") }
             }
-            .buttonStyle(.glass)
+            .buttonStyle(LumenButtonStyle())
             .padding(14)
 
             if !model.hasGuide {
@@ -265,3 +270,4 @@ struct GuideView: View {
         }
     }
 }
+#endif

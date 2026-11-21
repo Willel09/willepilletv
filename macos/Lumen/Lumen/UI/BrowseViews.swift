@@ -19,21 +19,41 @@ struct BrowseView: View {
     private static let allKey = "__all__"
     private static let listKey = "__mylist__"
 
-    var body: some View {
+    @ViewBuilder private var layout: some View {
+        #if os(iOS)
+        VStack(spacing: 0) { phoneBar; gridScroll }
+        #else
         HStack(spacing: 0) {
             categoryList
                 .frame(width: 240)
             Divider()
             grid
         }
-        .navigationTitle(kind == .movie ? "Movies" : "Series")
-        .toolbar {
-            ToolbarItem {
+        #endif
+    }
+
+    #if os(iOS)
+    private var phoneBar: some View {
+        HStack(spacing: 8) {
+            SearchField(text: $filter, prompt: "Filter")
+            Menu {
+                Picker("Category", selection: Binding(get: { group ?? Self.allKey }, set: { group = $0 })) {
+                    Text("All").tag(Self.allKey)
+                    Text("My List").tag(Self.listKey)
+                    ForEach(groups, id: \.self) { Text($0).tag($0) }
+                }
+            } label: { Image(systemName: "line.3.horizontal.decrease.circle").font(.title3).frame(width: 36, height: 34) }
+            Menu {
                 Picker("Sort", selection: $sort) { ForEach(SortOrder.allCases) { Text($0.rawValue).tag($0) } }
-                    .pickerStyle(.segmented)
-            }
+            } label: { Image(systemName: "arrow.up.arrow.down.circle").font(.title3).frame(width: 36, height: 34) }
         }
-        .searchable(text: $filter, placement: .toolbar, prompt: "Filter this category")
+        .padding(.horizontal, 12).padding(.vertical, 6)
+    }
+    #endif
+
+    var body: some View {
+        layout
+        .background(ThemeBackground())
         .task(id: "\(group ?? "")|\(sort.rawValue)|\(filter)|\(model.library.updatedAt.timeIntervalSince1970)") { await recompute() }
         .onAppear { if group == nil { group = initialGroup ?? Self.allKey } }
     }
@@ -59,24 +79,38 @@ struct BrowseView: View {
     }
 
     private var grid: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                Text(kind == .movie ? "Movies" : "Series").font(.system(size: 26, weight: .bold)).tracking(-0.8)
+                Spacer()
+                SearchField(text: $filter, prompt: "Filter this category").frame(width: 240)
+                Picker("Sort", selection: $sort) { ForEach(SortOrder.allCases) { Text($0.rawValue).tag($0) } }
+                    .pickerStyle(.segmented).labelsHidden().frame(width: 220)
+            }
+            .padding(.horizontal, 24).padding(.vertical, 12)
+            gridScroll
+        }
+    }
+
+    private var gridScroll: some View {
         ScrollView {
             if shown.isEmpty {
                 EmptyState(symbol: kind == .movie ? "film" : "tv", title: "Nothing here", message: filter.isEmpty ? "This category is empty." : "No titles match “\(filter)”.")
                     .frame(minHeight: 400)
             } else {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 150, maximum: 180), spacing: 20, alignment: .top)], spacing: 26) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: Platform.isPhone ? 104 : 150, maximum: Platform.isPhone ? 140 : 180), spacing: Platform.isPhone ? 12 : 20, alignment: .top)], spacing: Platform.isPhone ? 18 : 26) {
                     ForEach(shown) { item in
-                        PosterCard(item: item, width: 150)
+                        PosterCard(item: item, width: Platform.isPhone ? 104 : 150)
                             .onTapGesture { model.path.append(Route.detail(item)) }
                     }
                 }
-                .padding(24)
+                .padding(Platform.isPhone ? 12 : 24)
             }
         }
         .overlay(alignment: .bottomTrailing) {
             if !shown.isEmpty {
                 Text("\(shown.count.formatted()) titles").font(.caption).foregroundStyle(.secondary)
-                    .padding(.horizontal, 10).padding(.vertical, 5).glassEffect(.regular, in: Capsule()).padding(14)
+                    .padding(.horizontal, 10).padding(.vertical, 5).background(Color(white: 0.13, opacity: 0.92), in: Capsule()).padding(14)
             }
         }
     }
@@ -109,35 +143,12 @@ struct SearchView: View {
 
     var body: some View {
         @Bindable var model = model
-        ScrollView {
-            if model.searchQuery.isEmpty {
-                EmptyState(symbol: "magnifyingglass", title: "Search everything",
-                           message: "Channels, movies and series. Close spellings work too — “intersteller” finds Interstellar.")
-                    .frame(minHeight: 480)
-            } else if results.isEmpty && !searching {
-                EmptyState(symbol: "questionmark.circle", title: "No results", message: "Nothing matches “\(model.searchQuery)”.").frame(minHeight: 480)
-            } else {
-                VStack(alignment: .leading, spacing: 30) {
-                    let ch = results.compactMap { if case .live(let c) = $0 { c } else { nil } }
-                    let mv = results.filter { $0.kind == .movie }
-                    let sr = results.filter { $0.kind == .series }
-                    if !ch.isEmpty {
-                        Shelf(title: "Channels", symbol: "dot.radiowaves.left.and.right") {
-                            ForEach(ch) { c in ChannelTile(channel: c).onTapGesture { PlayAction(model: model, openWindow: openWindow)(.live(c)) } }
-                        }
-                    }
-                    if !mv.isEmpty {
-                        Shelf(title: "Movies", symbol: "film") { ForEach(mv) { i in PosterCard(item: i).onTapGesture { model.path.append(Route.detail(i)) } } }
-                    }
-                    if !sr.isEmpty {
-                        Shelf(title: "Series", symbol: "tv") { ForEach(sr) { i in PosterCard(item: i).onTapGesture { model.path.append(Route.detail(i)) } } }
-                    }
-                }
-                .padding(.vertical, 24)
-            }
+        VStack(spacing: 0) {
+            SearchField(text: $model.searchQuery, prompt: "Movies, series and channels", autofocus: !Platform.isPhone)
+                .frame(maxWidth: 560).padding(.vertical, 14).padding(.horizontal, Platform.isPhone ? 16 : 0)
+            resultsScroll
         }
-        .navigationTitle("Search")
-        .searchable(text: $model.searchQuery, placement: .toolbar, prompt: "Movies, series and channels")
+        .background(Theme.base)
         .task(id: model.searchQuery) {
             let q = model.searchQuery
             guard !q.isEmpty else { results = []; return }
@@ -152,6 +163,36 @@ struct SearchView: View {
         }
         .overlay { if searching { ProgressView().controlSize(.large) } }
     }
+
+    private var resultsScroll: some View {
+        ScrollView {
+            if model.searchQuery.isEmpty {
+                EmptyState(symbol: "magnifyingglass", title: "Search everything",
+                           message: "Channels, movies and series. Close spellings work too — “intersteller” finds Interstellar.")
+                    .frame(minHeight: 480)
+            } else if results.isEmpty && !searching {
+                EmptyState(symbol: "questionmark.circle", title: "No results", message: "Nothing matches “\(model.searchQuery)”.").frame(minHeight: 480)
+            } else {
+                VStack(alignment: .leading, spacing: 30) {
+                    let ch = results.compactMap { if case .live(let c) = $0 { c } else { nil } }
+                    let mv = results.filter { $0.kind == .movie }
+                    let sr = results.filter { $0.kind == .series }
+                    if !ch.isEmpty {
+                        Shelf(title: "Channels", symbol: "dot.radiowaves.left.and.right") {
+                            ForEach(ch) { c in ChannelTile(channel: c).tapOrEnter { PlayAction(model: model, openWindow: openWindow)(.live(c)) } }
+                        }
+                    }
+                    if !mv.isEmpty {
+                        Shelf(title: "Movies", symbol: "film") { ForEach(mv) { i in PosterCard(item: i).tapOrEnter { model.path.append(Route.detail(i)) } } }
+                    }
+                    if !sr.isEmpty {
+                        Shelf(title: "Series", symbol: "tv") { ForEach(sr) { i in PosterCard(item: i).tapOrEnter { model.path.append(Route.detail(i)) } } }
+                    }
+                }
+                .padding(.vertical, 24)
+            }
+        }
+    }
 }
 
 struct WatchlistView: View {
@@ -165,7 +206,7 @@ struct WatchlistView: View {
             } else {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 150, maximum: 180), spacing: 20, alignment: .top)], spacing: 26) {
                     ForEach(items) { item in
-                        PosterCard(item: item, width: 150).onTapGesture { model.path.append(Route.detail(item)) }
+                        PosterCard(item: item, width: 150).tapOrEnter { model.path.append(Route.detail(item)) }
                     }
                 }
                 .padding(24)

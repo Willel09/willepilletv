@@ -52,19 +52,19 @@ struct RandomView: View {
                     HStack(spacing: 12) {
                         if pick.kind != .series {
                             Button { PlayAction(model: model, openWindow: openWindow)(pick) } label: { Label("Play", systemImage: "play.fill") }
-                                .buttonStyle(.glassProminent)
+                                .buttonStyle(LumenButtonStyle(prominent: true))
                         }
                         if pick.kind != .live {
-                            Button("Details") { model.path.append(Route.detail(pick)) }.buttonStyle(.glass)
+                            Button("Details") { model.path.append(Route.detail(pick)) }.buttonStyle(LumenButtonStyle())
                         }
-                        Button { spin() } label: { Label("Spin Again", systemImage: "arrow.trianglehead.2.clockwise") }.buttonStyle(.glass)
+                        Button { spin() } label: { Label("Spin Again", systemImage: "arrow.trianglehead.2.clockwise") }.buttonStyle(LumenButtonStyle())
                     }
                     .controlSize(.extraLarge)
                 }
                 .transition(.scale(scale: 0.9).combined(with: .opacity))
             } else {
                 Button { spin() } label: { Label("Spin", systemImage: "dice.fill").font(.title3.weight(.semibold)).padding(.horizontal, 26).padding(.vertical, 6) }
-                    .buttonStyle(.glassProminent).controlSize(.extraLarge)
+                    .buttonStyle(LumenButtonStyle(prominent: true)).controlSize(.extraLarge)
                     .disabled(spinning || !model.hasContent)
                     .keyboardShortcut(.space, modifiers: [])
             }
@@ -99,21 +99,30 @@ struct RandomView: View {
 struct OnboardingView: View {
     @Environment(AppModel.self) private var model
     @State private var adding: SourceKind?
+    @State private var linking = false
+
+    @ViewBuilder private var choices: some View {
+        choice(.xtream, symbol: "server.rack", text: "Server, username and password from your provider")
+        choice(.m3u, symbol: "list.bullet.rectangle", text: Platform.isPhone ? "A playlist URL or an .m3u file" : "A playlist URL or an .m3u file on this Mac")
+    }
 
     var body: some View {
         VStack(spacing: 22) {
             Image(systemName: "sparkles.tv.fill").font(.system(size: 64)).foregroundStyle(model.accent.gradient)
                 .symbolEffect(.bounce, options: .nonRepeating)
-            Text("Welcome to Lumen").font(.system(size: 38, weight: .bold))
+            Text("Welcome to Lumen").font(.system(size: Platform.isPhone ? 30 : 38, weight: .bold))
             Text("Lumen is an IPTV player. It ships with no channels — bring your own M3U playlist or Xtream Codes login, and optionally an XMLTV guide.")
-                .font(.title3).foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: 560)
-            HStack(spacing: 18) {
-                choice(.xtream, symbol: "server.rack", text: "Server, username and password from your provider")
-                choice(.m3u, symbol: "list.bullet.rectangle", text: "A playlist URL or an .m3u file on this Mac")
+                .font(Platform.isPhone ? .callout : .title3).foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: 560)
+            ViewThatFits {
+                HStack(spacing: 18) { choices }
+                VStack(spacing: 14) { choices }
             }
             .padding(.top, 10)
+            Button { linking = true } label: { Label("Already use Lumen on another device? Link it", systemImage: "link") }
+                .buttonStyle(.plain).foregroundStyle(.secondary).font(.callout)
         }
-        .padding(50)
+        .padding(Platform.isPhone ? 20 : 50)
+        .sheet(isPresented: $linking) { LinkDeviceSheet(mode: .receive) }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background { AmbientBackground(artwork: nil) }
         .sheet(item: $adding) { SourceEditor(source: Source(name: $0 == .m3u ? "My Playlist" : "My Provider", kind: $0)) }
@@ -126,7 +135,7 @@ struct OnboardingView: View {
                 Text(kind.label).font(.headline)
                 Text(text).font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
             }
-            .frame(width: 220, height: 160)
+            .frame(maxWidth: Platform.isPhone ? .infinity : 220).frame(width: Platform.isPhone ? nil : 220, height: 160)
             .glassPanel(cornerRadius: 22)
         }
         .buttonStyle(.plain)
@@ -246,11 +255,11 @@ struct SourceEditor: View {
                 }
                 Spacer()
                 Button("Cancel", role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction)
-                Button("Save & Load") { save() }.keyboardShortcut(.defaultAction).buttonStyle(.glassProminent).disabled(!valid)
+                Button("Save & Load") { save() }.keyboardShortcut(.defaultAction).buttonStyle(LumenButtonStyle(prominent: true)).disabled(!valid)
             }
             .padding(20)
         }
-        .frame(width: 520)
+        .frame(maxWidth: 520)
         .fileImporter(isPresented: $importing, allowedContentTypes: [UTType(filenameExtension: "m3u") ?? .plainText, UTType(filenameExtension: "m3u8") ?? .plainText, .plainText]) { r in
             if case .success(let url) = r { source.url = url.absoluteString; if source.name == "My Playlist" { source.name = url.deletingPathExtension().lastPathComponent } }
         }
@@ -283,62 +292,4 @@ struct SourceEditor: View {
 }
 
 // MARK: - Settings window (⌘,)
-
-struct SettingsView: View {
-    @Environment(AppModel.self) private var model
-    var body: some View {
-        @Bindable var model = model
-        TabView {
-            Form {
-                Picker("Artwork glow", selection: $model.settings.ambient) {
-                    Text("Strong").tag(AppSettings.Ambient.strong); Text("Subtle").tag(AppSettings.Ambient.subtle); Text("Off").tag(AppSettings.Ambient.off)
-                }
-                ColorPicker("Accent colour", selection: Binding(get: { model.accent }, set: { model.settings.accentHex = $0.hexString }))
-                HStack {
-                    ForEach(["#98A2B3", "#0A84FF", "#FF375F", "#30D158", "#FF9F0A", "#BF5AF2", "#64D2FF"], id: \.self) { hex in
-                        Circle().fill(Color(hex: hex) ?? .gray).frame(width: 20, height: 20)
-                            .overlay(Circle().strokeBorder(.white, lineWidth: model.settings.accentHex == hex ? 2 : 0))
-                            .onTapGesture { model.settings.accentHex = hex }
-                    }
-                }
-                Toggle("Show Lumen in the menu bar", isOn: $model.settings.showMenuBarExtra)
-            }
-            .formStyle(.grouped)
-            .tabItem { Label("Appearance", systemImage: "paintbrush") }
-
-            Form {
-                Picker("Live stream format", selection: $model.settings.liveFormat) {
-                    Text("HLS (.m3u8) — recommended on Mac").tag(AppSettings.LiveFormat.m3u8)
-                    Text("MPEG-TS (.ts)").tag(AppSettings.LiveFormat.ts)
-                }
-                Toggle("Play the next episode automatically", isOn: $model.settings.autoplayNext)
-                Picker("External player", selection: $model.settings.externalPlayer) {
-                    Text("IINA").tag("IINA"); Text("VLC").tag("VLC"); Text("Infuse").tag("Infuse")
-                }
-                Text("Used for formats macOS can't play itself, such as MKV with AC3 audio or raw MPEG-TS.").font(.caption).foregroundStyle(.secondary)
-            }
-            .formStyle(.grouped)
-            .tabItem { Label("Playback", systemImage: "play.rectangle") }
-
-            Form {
-                Stepper("Refresh the library every \(model.settings.refreshHours) h", value: $model.settings.refreshHours, in: 1...72)
-                TextField("User-Agent", text: $model.settings.userAgent, prompt: Text("Lumen/1.0 (Macintosh)"))
-                Section("Data") {
-                    Button("Clear Watch History", role: .destructive) { model.user.history.removeAll(); model.publishWidgets() }
-                    Button("Clear My List", role: .destructive) { model.user.watchlist.removeAll(); model.publishWidgets() }
-                }
-            }
-            .formStyle(.grouped)
-            .tabItem { Label("Advanced", systemImage: "gearshape.2") }
-        }
-        .frame(width: 520, height: 380)
-    }
-}
-
-extension Color {
-    var hexString: String {
-        let c = NSColor(self).usingColorSpace(.sRGB) ?? .gray
-        return String(format: "#%02X%02X%02X", Int(c.redComponent * 255), Int(c.greenComponent * 255), Int(c.blueComponent * 255))
-    }
-}
 

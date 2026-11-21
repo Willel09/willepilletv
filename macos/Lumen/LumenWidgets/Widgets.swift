@@ -1,7 +1,6 @@
 import WidgetKit
 import SwiftUI
 import AppIntents
-import AppKit
 
 // MARK: - Timeline
 
@@ -37,9 +36,9 @@ struct SnapshotProvider: TimelineProvider {
 
 // MARK: - Shared pieces
 
-private func thumb(_ name: String?) -> NSImage? {
+private func thumb(_ name: String?) -> PlatformImage? {
     guard let name else { return nil }
-    return NSImage(contentsOf: Shared.thumbsDirectory.appendingPathComponent(name))
+    return PlatformImage(contentsOfFile: Shared.thumbsDirectory.appendingPathComponent(name).path)
 }
 
 private struct Thumb: View {
@@ -48,7 +47,7 @@ private struct Thumb: View {
     var symbol = "film"
     var body: some View {
         if let img = thumb(name) {
-            Image(nsImage: img).resizable().aspectRatio(contentMode: fit ? .fit : .fill)
+            Image(platformImage: img).resizable().aspectRatio(contentMode: fit ? .fit : .fill)
         } else {
             ZStack {
                 LinearGradient(colors: [.white.opacity(0.12), .white.opacity(0.03)], startPoint: .topLeading, endPoint: .bottomTrailing)
@@ -100,13 +99,18 @@ private struct Empty: View {
 // MARK: - Continue Watching
 
 struct ContinueWatchingWidget: Widget {
+    #if os(iOS)
+    static let families: [WidgetFamily] = [.systemSmall, .systemMedium, .systemLarge, .accessoryRectangular, .accessoryCircular, .accessoryInline]
+    #else
+    static let families: [WidgetFamily] = [.systemSmall, .systemMedium, .systemLarge]
+    #endif
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: Shared.widgetKindContinue, provider: SnapshotProvider()) { e in
             ContinueWatchingView(entry: e).containerBackground(.black.gradient, for: .widget)
         }
         .configurationDisplayName("Continue Watching")
         .description("Pick up the film or episode you were watching.")
-        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
+        .supportedFamilies(Self.families)
     }
 }
 
@@ -115,6 +119,14 @@ struct ContinueWatchingView: View {
     let entry: SnapshotEntry
 
     var body: some View {
+        #if os(iOS)
+        if family.isAccessory { LockContinue(items: entry.snapshot.continueWatching, family: family) } else { content }
+        #else
+        content
+        #endif
+    }
+
+    @ViewBuilder private var content: some View {
         let items = entry.snapshot.continueWatching
         if items.isEmpty {
             Empty(symbol: "play.circle", text: "Start a film or series in Lumen and it shows up here.")
@@ -178,7 +190,7 @@ struct LiveNowWidget: Widget {
         }
         .configurationDisplayName("Live Now")
         .description("What's on your favorite channels right now.")
-        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
+        .supportedFamilies(ContinueWatchingWidget.families)
     }
 }
 
@@ -187,6 +199,14 @@ struct LiveNowView: View {
     let entry: SnapshotEntry
 
     var body: some View {
+        #if os(iOS)
+        if family.isAccessory { LockLive(chans: entry.snapshot.liveNow, family: family) } else { content }
+        #else
+        content
+        #endif
+    }
+
+    @ViewBuilder private var content: some View {
         let chans = entry.snapshot.liveNow
         if chans.isEmpty {
             Empty(symbol: "heart", text: "Add favorite channels in Lumen to see what's on.")
@@ -314,6 +334,59 @@ struct LibraryStatsView: View {
     }
 }
 
+// MARK: - Lock Screen
+
+extension WidgetFamily {
+    var isAccessory: Bool {
+        #if os(iOS)
+        self == .accessoryRectangular || self == .accessoryCircular || self == .accessoryInline
+        #else
+        false
+        #endif
+    }
+}
+
+#if os(iOS)
+struct LockContinue: View {
+    let items: [WidgetItem]
+    let family: WidgetFamily
+    var body: some View {
+        if let i = items.first {
+            switch family {
+            case .accessoryInline: Text("▶︎ \(i.title)")
+            case .accessoryCircular:
+                Gauge(value: i.progress ?? 0) { Image(systemName: "play.fill") }.gaugeStyle(.accessoryCircularCapacity)
+            default:
+                VStack(alignment: .leading, spacing: 2) {
+                    Label("Continue", systemImage: "play.fill").font(.caption2)
+                    Text(i.title).font(.headline).lineLimit(1)
+                    ProgressView(value: i.progress ?? 0)
+                }
+            }
+        } else { Label("Lumen", systemImage: "play.rectangle") }
+    }
+}
+
+struct LockLive: View {
+    let chans: [WidgetChannel]
+    let family: WidgetFamily
+    var body: some View {
+        if let c = chans.first {
+            switch family {
+            case .accessoryInline: Text("\(c.name): \(c.nowTitle ?? "On air")")
+            case .accessoryCircular: Image(systemName: "dot.radiowaves.left.and.right").font(.title2)
+            default:
+                VStack(alignment: .leading, spacing: 2) {
+                    Label(c.name, systemImage: "dot.radiowaves.left.and.right").font(.caption2)
+                    Text(c.nowTitle ?? "On air").font(.headline).lineLimit(1)
+                    if let n = c.nextTitle { Text("Next · \(n)").font(.caption2).lineLimit(1) }
+                }
+            }
+        } else { Label("Lumen", systemImage: "tv") }
+    }
+}
+#endif
+
 // MARK: - Control Center controls
 
 struct OpenLumenLinkIntent: AppIntent {
@@ -349,6 +422,39 @@ struct ContinueWatchingControl: ControlWidget {
         }
         .displayName("Lumen: Continue Watching")
         .description("Resumes what you were watching.")
+    }
+}
+
+struct SearchControl: ControlWidget {
+    var body: some ControlWidgetConfiguration {
+        StaticControlConfiguration(kind: "SearchControl") {
+            ControlWidgetButton(action: OpenLumenLinkIntent(.search(""))) { Label("Search", systemImage: "magnifyingglass") }
+        }
+        .displayName("Lumen: Search")
+        .description("Opens search.")
+    }
+}
+
+struct LiveChannelControl: ControlWidget {
+    var body: some ControlWidgetConfiguration {
+        StaticControlConfiguration(kind: "LiveChannelControl") {
+            let c = Shared.readSnapshot().liveNow.first
+            ControlWidgetButton(action: OpenLumenLinkIntent(c.map { .live($0.id) } ?? .home)) {
+                Label(c?.name ?? "Live TV", systemImage: "dot.radiowaves.left.and.right")
+            }
+        }
+        .displayName("Lumen: Favorite Channel")
+        .description("Tunes to your first favorite channel.")
+    }
+}
+
+struct OpenLumenControl: ControlWidget {
+    var body: some ControlWidgetConfiguration {
+        StaticControlConfiguration(kind: "OpenLumenControl") {
+            ControlWidgetButton(action: OpenLumenLinkIntent(.home)) { Label("Lumen", systemImage: "sparkles.tv") }
+        }
+        .displayName("Lumen")
+        .description("Opens Lumen.")
     }
 }
 
