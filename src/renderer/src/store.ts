@@ -524,7 +524,7 @@ export function syncNow(): Promise<void> {
       await syncProfiles(code)
       await syncCustomLists(code)
       persist('sync', { ...get().sync, lastSync: Date.now() })
-      set({ syncStatus: fileError ? { state: 'error', message: fileError } : { state: 'ok' } })
+      set({ syncStatus: fileError ? { state: 'error', message: fileError } : { state: 'ok', message: syncSummary() } })
       if (sourcesChanged) refreshLibrary()
     } catch (e) {
       set({ syncStatus: { state: 'error', message: (e as Error).message } })
@@ -556,6 +556,15 @@ async function syncProfiles(code: string) {
     persist('profileData', Object.fromEntries(Object.entries(lists).filter(([id]) => id !== 'main')))
   }
   if (!same(merged, remote)) await sync.pushProfiles(code, merged)
+}
+
+/** What this device holds after a sync (= what the server holds), so a device that "syncs but shows nothing" can be told why */
+function syncSummary() {
+  const s = get()
+  const m = s.lists.main ?? EMPTY_LISTS
+  const known = new Set(s.sources.map((x) => x.id))
+  const lost = [...m.favorites, ...m.watchlist].filter((x) => !known.has(x.sourceId)).length
+  return `${s.sources.length} sources · ${m.favorites.length} favorites · ${m.watchlist.length} watchlist · ${m.history.length} history · ${s.customLists.length} lists` + (lost ? ` · ${lost} saved titles belong to a source this device doesn't have` : '')
 }
 
 /** Custom lists sync in their own blob too (see lib/sync.ts); nothing is uploaded until a list exists */

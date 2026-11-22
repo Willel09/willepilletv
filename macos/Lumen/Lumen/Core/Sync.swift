@@ -328,7 +328,8 @@ final class SyncEngine {
                   times: Dictionary(uniqueKeysWithValues: hist.compactMap { h in (h["id"] as? String).map { ($0, (h["updatedAt"] as? Double) ?? 0) } }))
             let prefs = prefsJSON(model.settings)
             mainDoc.prefs = prefs
-            if prefsText(prefs) != file.lastPrefs { mainDoc.meta.at["prefs"] = Date().timeIntervalSince1970 * 1000 }
+            // not on the very first run after linking: this Mac's defaults must not overwrite the settings of the device it links to
+            if !file.lastPrefs.isEmpty, prefsText(prefs) != file.lastPrefs { mainDoc.meta.at["prefs"] = Date().timeIntervalSince1970 * 1000 }
 
             // pull + merge + push main (retry if another device wrote in between)
             let box = SyncCrypto.derive(code, purpose: "sync")
@@ -375,6 +376,11 @@ final class SyncEngine {
             applyAll(model: model, main: merged, profiles: mergedP.profiles, profileLists: mergedP.lists, lists: mergedLists.lists)
             model.lastSync = .now
             model.syncStatus = nil
+            let known = Set((merged.colls["sources"] ?? []).compactMap { $0["id"] as? String })
+            let saved = (merged.colls["favorites"] ?? []) + (merged.colls["watchlist"] ?? [])
+            let lost = saved.filter { !known.contains($0["sourceId"] as? String ?? "") }.count
+            let counts = "\(known.count) sources, \((merged.colls["favorites"] ?? []).count) favorites, \((merged.colls["watchlist"] ?? []).count) watchlist, \((merged.colls["history"] ?? []).count) history, \(mergedLists.lists.count) lists"
+            model.syncInfo = "On the server: " + counts + (lost > 0 ? ". \(lost) saved titles belong to a source this Mac doesn't have." : "")
             model.saveSyncState()
         } catch {
             model.syncStatus = error.localizedDescription
@@ -509,7 +515,7 @@ final class SyncEngine {
         }
         // never wipe the local list because entries failed to decode
         let incoming = main.colls["sources"] ?? []
-        if srcs.count == incoming.count, srcs != model.sources { model.applyingSync = true; model.sources = srcs; model.applyingSync = false; if !srcs.isEmpty { Task { await model.refresh() } } }
+        if srcs.count == incoming.count, srcs != model.sources { model.applyingSync = true; model.sources = srcs; model.applyingSync = false; if !srcs.isEmpty { Task { await model.refreshAfterSync() } } }
         // prefs
         var st = model.settings
         applyPrefs(main.prefs, to: &st)

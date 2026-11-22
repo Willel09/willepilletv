@@ -173,6 +173,7 @@ struct SettingsView: View {
                             Button("Stop syncing", role: .destructive) { model.disconnectSync() }.buttonStyle(LumenButtonStyle())
                         }
                         Text("To link a TV or another computer, open Lumen on it, choose “Already use Lumen on another device? Link it”, and type the code it shows here.").font(.caption).foregroundStyle(.secondary)
+                        if let info = model.syncInfo { Text(info).font(.caption).foregroundStyle(.secondary) }
                     }
                     Divider().opacity(0.3)
                     HStack {

@@ -70,6 +70,8 @@ final class AppModel {
     var showPlayer = false
     var screensaverOn = false
     var syncStatus: String?
+    /// what the server holds after the last sync, shown in Settings
+    var syncInfo: String?
     var syncing = false
     @ObservationIgnored var applyingSync = false
     var syncCode: String = "" { didSet {
@@ -222,6 +224,12 @@ final class AppModel {
 
     /// Stops a running library refresh; the library you had stays as it was.
     func cancelRefresh() { refreshTask?.cancel() }
+
+    /// New sources arrived by sync while a refresh was still running: wait for it, then load again with them.
+    func refreshAfterSync() async {
+        while isRefreshing { try? await Task.sleep(for: .milliseconds(400)) }
+        await refresh()
+    }
 
     func refresh() async {
         guard !isRefreshing else { return }

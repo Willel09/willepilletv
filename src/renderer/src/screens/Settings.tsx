@@ -229,7 +229,7 @@ function SyncCard() {
     <>
       <Line
         label={status.state === 'error' ? 'Sync problem' : 'Sync is on'}
-        hint={status.state === 'error' ? status.message : status.state === 'syncing' ? 'Syncing…' : cfg.lastSync ? `Last synced ${ago(cfg.lastSync)}` : 'Not synced yet'}
+        hint={status.state === 'error' ? status.message : status.state === 'syncing' ? 'Syncing…' : cfg.lastSync ? `Last synced ${ago(cfg.lastSync)}${status.message ? ` · ${status.message}` : ''}` : 'Not synced yet'}
       >
         <div className="flex gap-2">
           <Button icon={<RefreshCw className={`size-4 ${status.state === 'syncing' ? 'animate-spin' : ''}`} />} onClick={() => syncNow()}>Sync now</Button>
