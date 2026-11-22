@@ -16,6 +16,22 @@ struct RandomView: View {
 
     var body: some View {
         VStack(spacing: 28) {
+            VStack(spacing: 10) {
+                Text("Feeling lucky?").font(.system(size: 42, weight: .heavy)).tracking(-1.6)
+                Text("Pick what you're in the mood for and let Lumen choose.").font(.system(size: 15)).foregroundStyle(.white.opacity(0.55))
+            }
+            .padding(.top, 26)
+            #if os(macOS)
+            HStack(spacing: 12) {
+                GlideSegmented(options: [(MediaKind.movie, "Movie"), (.series, "Series"), (.live, "Channel")], value: $kind).fixedSize()
+                if kind != .live {
+                    GlideSegmented(options: [(false, "Anything"), (true, "Rated 7+")], value: $highRated).fixedSize()
+                        .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                }
+            }
+            .animation(.snappy, value: kind)
+            .onChange(of: kind) { pick = nil; reel = filler(14); offset = CGFloat(reel.count / 2) * (cardW + gap) }
+            #else
             HStack(spacing: 14) {
                 Picker("Kind", selection: $kind) {
                     Text("Movie").tag(MediaKind.movie)
@@ -25,7 +41,7 @@ struct RandomView: View {
                 .pickerStyle(.segmented).frame(width: 280)
                 Toggle("Rated 7+", isOn: $highRated).toggleStyle(.switch).disabled(kind == .live)
             }
-            .padding(.top, 30)
+            #endif
 
             GeometryReader { g in
                 HStack(spacing: gap) {
@@ -33,7 +49,9 @@ struct RandomView: View {
                         Artwork(source: item.artwork, contentMode: kind == .live ? .fit : .fill, placeholder: kind == .live ? "tv" : "film")
                             .frame(width: cardW, height: cardW * 1.5)
                             .background(.white.opacity(0.05))
-                            .clipShape(.rect(cornerRadius: 16))
+                            .clipShape(.rect(cornerRadius: 20, style: .continuous))
+                            .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(.white.opacity(!spinning && i == reel.count - 3 && pick != nil ? 0.6 : 0.08), lineWidth: 1.5))
+                            .shadow(color: !spinning && i == reel.count - 3 && pick != nil ? model.accent.opacity(0.55) : .black.opacity(0.3), radius: !spinning && i == reel.count - 3 ? 30 : 10, y: 8)
                             .scaleEffect(!spinning && i == reel.count - 3 ? 1.12 : 0.92)
                             .opacity(!spinning && pick != nil && i != reel.count - 3 ? 0.35 : 1)
                     }
@@ -45,35 +63,57 @@ struct RandomView: View {
             .mask(LinearGradient(colors: [.clear, .black, .black, .clear], startPoint: .leading, endPoint: .trailing))
 
             if let pick, !spinning {
-                VStack(spacing: 10) {
-                    Text("Tonight's pick").font(.caption.weight(.heavy)).tracking(1.4).foregroundStyle(model.accent)
-                    Text(SearchKit.cleanTitle(pick.name)).font(.largeTitle.weight(.bold)).multilineTextAlignment(.center)
-                    HStack { if let y = pick.year { Tag(text: y) }; if let r = pick.rating { RatingBadge(rating: r) }; Tag(text: pick.group) }
+                VStack(spacing: 12) {
+                    Text(SearchKit.cleanTitle(pick.name)).font(.system(size: 36, weight: .heavy)).tracking(-1.2).multilineTextAlignment(.center).lineLimit(2)
+                        .frame(maxWidth: 760)
+                    HStack(spacing: 12) {
+                        if let y = pick.year { Text(y) }
+                        if let r = pick.rating, r > 0 { HStack(spacing: 4) { Image(systemName: "star.fill").foregroundStyle(.yellow).font(.system(size: 12)); Text(r, format: .number.precision(.fractionLength(1))) } }
+                        Text(pick.group).lineLimit(1).foregroundStyle(.white.opacity(0.5))
+                    }
+                    .font(.system(size: 15, weight: .medium)).foregroundStyle(.white.opacity(0.65))
                     HStack(spacing: 12) {
                         if pick.kind != .series {
-                            Button { PlayAction(model: model, openWindow: openWindow)(pick) } label: { Label("Play", systemImage: "play.fill") }
-                                .buttonStyle(.glassProminent)
+                            Button { PlayAction(model: model, openWindow: openWindow)(pick) } label: { Label(pick.kind == .live ? "Watch" : "Play", systemImage: "play.fill") }
+                                .buttonStyle(BigButtonStyle(prominent: true))
                         }
                         if pick.kind != .live {
-                            Button("Details") { model.path.append(Route.detail(pick)) }.buttonStyle(.glass)
+                            Button("Details") { model.path.append(Route.detail(pick)) }.buttonStyle(BigButtonStyle(prominent: pick.kind == .series))
                         }
-                        Button { spin() } label: { Label("Spin Again", systemImage: "arrow.trianglehead.2.clockwise") }.buttonStyle(.glass)
+                        Button { spin() } label: { Label("Spin again", systemImage: "arrow.counterclockwise") }.buttonStyle(BigButtonStyle())
+                            .keyboardShortcut(.space, modifiers: [])
                     }
-                    .controlSize(.extraLarge)
+                    .padding(.top, 8)
                 }
                 .transition(.scale(scale: 0.9).combined(with: .opacity))
             } else {
-                Button { spin() } label: { Label("Spin", systemImage: "dice.fill").font(.title3.weight(.semibold)).padding(.horizontal, 26).padding(.vertical, 6) }
-                    .buttonStyle(.glassProminent).controlSize(.extraLarge)
-                    .disabled(spinning || !model.hasContent)
-                    .keyboardShortcut(.space, modifiers: [])
+                VStack(spacing: 14) {
+                    Button { spin() } label: { Label(spinning ? "Spinning…" : "Spin", systemImage: "dice.fill").font(.system(size: 17, weight: .bold)).padding(.horizontal, 18) }
+                        .buttonStyle(BigButtonStyle(prominent: true))
+                        .disabled(spinning || filler(1).isEmpty)
+                        .keyboardShortcut(.space, modifiers: [])
+                    if filler(1).isEmpty {
+                        Text("There are no \(kind == .live ? "channels" : kind == .movie ? "movies" : "series") in your library yet.")
+                            .font(.system(size: 14)).foregroundStyle(.white.opacity(0.5))
+                    }
+                }
             }
             Spacer()
         }
         .frame(maxWidth: .infinity)
-        .background { AmbientBackground(artwork: spinning ? nil : pick?.artwork) }
+        .background {
+            ZStack {
+                ThemeBackground()
+                if let pick, !spinning {
+                    Artwork(source: pick.artwork, size: "w342").blur(radius: 90).saturation(1.6).opacity(0.35)
+                        .frame(width: 700, height: 500).frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .transition(.opacity)
+                }
+            }
+            .animation(.easeInOut(duration: 0.8), value: spinning)
+        }
         .navigationTitle("Random")
-        .onAppear { if reel.isEmpty { reel = filler(14) } }
+        .task(id: model.movies.count + model.series.count + model.channels.count) { if reel.count < 3 { reel = filler(14); offset = CGFloat(reel.count / 2) * (cardW + gap) } }
     }
 
     private func filler(_ n: Int) -> [Item] { (0..<n).compactMap { _ in model.randomPick(kind: kind, minRating: highRated ? 7 : 0) } }
@@ -99,21 +139,30 @@ struct RandomView: View {
 struct OnboardingView: View {
     @Environment(AppModel.self) private var model
     @State private var adding: SourceKind?
+    @State private var linking = false
+
+    @ViewBuilder private var choices: some View {
+        choice(.xtream, symbol: "server.rack", text: "Server, username and password from your provider")
+        choice(.m3u, symbol: "list.bullet.rectangle", text: Platform.isPhone ? "A playlist URL or an .m3u file" : "A playlist URL or an .m3u file on this Mac")
+    }
 
     var body: some View {
         VStack(spacing: 22) {
             Image(systemName: "sparkles.tv.fill").font(.system(size: 64)).foregroundStyle(model.accent.gradient)
                 .symbolEffect(.bounce, options: .nonRepeating)
-            Text("Welcome to Lumen").font(.system(size: 38, weight: .bold))
+            Text("Welcome to Lumen").font(.system(size: Platform.isPhone ? 30 : 38, weight: .bold))
             Text("Lumen is an IPTV player. It ships with no channels — bring your own M3U playlist or Xtream Codes login, and optionally an XMLTV guide.")
-                .font(.title3).foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: 560)
-            HStack(spacing: 18) {
-                choice(.xtream, symbol: "server.rack", text: "Server, username and password from your provider")
-                choice(.m3u, symbol: "list.bullet.rectangle", text: "A playlist URL or an .m3u file on this Mac")
+                .font(Platform.isPhone ? .callout : .title3).foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: 560)
+            ViewThatFits {
+                HStack(spacing: 18) { choices }
+                VStack(spacing: 14) { choices }
             }
             .padding(.top, 10)
+            Button { linking = true } label: { Label("Already use Lumen on another device? Link it", systemImage: "link") }
+                .buttonStyle(.plain).foregroundStyle(.secondary).font(.callout)
         }
-        .padding(50)
+        .padding(Platform.isPhone ? 20 : 50)
+        .sheet(isPresented: $linking) { LinkDeviceSheet(mode: .receive) }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background { AmbientBackground(artwork: nil) }
         .sheet(item: $adding) { SourceEditor(source: Source(name: $0 == .m3u ? "My Playlist" : "My Provider", kind: $0)) }
@@ -126,7 +175,7 @@ struct OnboardingView: View {
                 Text(kind.label).font(.headline)
                 Text(text).font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
             }
-            .frame(width: 220, height: 160)
+            .frame(maxWidth: Platform.isPhone ? .infinity : 220).frame(width: Platform.isPhone ? nil : 220, height: 160)
             .glassPanel(cornerRadius: 22)
         }
         .buttonStyle(.plain)
@@ -201,7 +250,7 @@ struct SourcesView: View {
                 Text("\(model.channels.count.formatted()) channels · \(model.movies.count.formatted()) movies · \(model.series.count.formatted()) series")
                     .foregroundStyle(.secondary)
                 Toggle("Remove BS (hide Arabic and Indian channels, movies and series)", isOn: $model.settings.removeBs)
-                TextField("Hidden categories (comma separated)", text: $model.settings.hiddenGroups)
+                TextField("Hide categories containing (adult, xxx, 24/7)", text: $model.settings.hiddenGroups)
             }
         }
         .formStyle(.grouped)
@@ -246,11 +295,11 @@ struct SourceEditor: View {
                 }
                 Spacer()
                 Button("Cancel", role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction)
-                Button("Save & Load") { save() }.keyboardShortcut(.defaultAction).buttonStyle(.glassProminent).disabled(!valid)
+                Button("Save & Load") { save() }.keyboardShortcut(.defaultAction).buttonStyle(LumenButtonStyle(prominent: true)).disabled(!valid)
             }
             .padding(20)
         }
-        .frame(width: 520)
+        .frame(maxWidth: 520)
         .fileImporter(isPresented: $importing, allowedContentTypes: [UTType(filenameExtension: "m3u") ?? .plainText, UTType(filenameExtension: "m3u8") ?? .plainText, .plainText]) { r in
             if case .success(let url) = r { source.url = url.absoluteString; if source.name == "My Playlist" { source.name = url.deletingPathExtension().lastPathComponent } }
         }
@@ -283,62 +332,4 @@ struct SourceEditor: View {
 }
 
 // MARK: - Settings window (⌘,)
-
-struct SettingsView: View {
-    @Environment(AppModel.self) private var model
-    var body: some View {
-        @Bindable var model = model
-        TabView {
-            Form {
-                Picker("Artwork glow", selection: $model.settings.ambient) {
-                    Text("Strong").tag(AppSettings.Ambient.strong); Text("Subtle").tag(AppSettings.Ambient.subtle); Text("Off").tag(AppSettings.Ambient.off)
-                }
-                ColorPicker("Accent colour", selection: Binding(get: { model.accent }, set: { model.settings.accentHex = $0.hexString }))
-                HStack {
-                    ForEach(["#98A2B3", "#0A84FF", "#FF375F", "#30D158", "#FF9F0A", "#BF5AF2", "#64D2FF"], id: \.self) { hex in
-                        Circle().fill(Color(hex: hex) ?? .gray).frame(width: 20, height: 20)
-                            .overlay(Circle().strokeBorder(.white, lineWidth: model.settings.accentHex == hex ? 2 : 0))
-                            .onTapGesture { model.settings.accentHex = hex }
-                    }
-                }
-                Toggle("Show Lumen in the menu bar", isOn: $model.settings.showMenuBarExtra)
-            }
-            .formStyle(.grouped)
-            .tabItem { Label("Appearance", systemImage: "paintbrush") }
-
-            Form {
-                Picker("Live stream format", selection: $model.settings.liveFormat) {
-                    Text("HLS (.m3u8) — recommended on Mac").tag(AppSettings.LiveFormat.m3u8)
-                    Text("MPEG-TS (.ts)").tag(AppSettings.LiveFormat.ts)
-                }
-                Toggle("Play the next episode automatically", isOn: $model.settings.autoplayNext)
-                Picker("External player", selection: $model.settings.externalPlayer) {
-                    Text("IINA").tag("IINA"); Text("VLC").tag("VLC"); Text("Infuse").tag("Infuse")
-                }
-                Text("Used for formats macOS can't play itself, such as MKV with AC3 audio or raw MPEG-TS.").font(.caption).foregroundStyle(.secondary)
-            }
-            .formStyle(.grouped)
-            .tabItem { Label("Playback", systemImage: "play.rectangle") }
-
-            Form {
-                Stepper("Refresh the library every \(model.settings.refreshHours) h", value: $model.settings.refreshHours, in: 1...72)
-                TextField("User-Agent", text: $model.settings.userAgent, prompt: Text("Lumen/1.0 (Macintosh)"))
-                Section("Data") {
-                    Button("Clear Watch History", role: .destructive) { model.user.history.removeAll(); model.publishWidgets() }
-                    Button("Clear My List", role: .destructive) { model.user.watchlist.removeAll(); model.publishWidgets() }
-                }
-            }
-            .formStyle(.grouped)
-            .tabItem { Label("Advanced", systemImage: "gearshape.2") }
-        }
-        .frame(width: 520, height: 380)
-    }
-}
-
-extension Color {
-    var hexString: String {
-        let c = NSColor(self).usingColorSpace(.sRGB) ?? .gray
-        return String(format: "#%02X%02X%02X", Int(c.redComponent * 255), Int(c.greenComponent * 255), Int(c.blueComponent * 255))
-    }
-}
 

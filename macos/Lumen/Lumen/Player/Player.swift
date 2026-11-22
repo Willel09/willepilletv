@@ -8,7 +8,12 @@ extension AppModel {
     /// Play in the single player window (opens it, or swaps what it plays).
     func play(_ open: OpenWindowAction, _ req: PlaybackRequest) {
         nowPlaying = req
+        #if os(macOS)
+        UISound.play(.start)
         open(id: "player")
+        #else
+        showPlayer = true
+        #endif
     }
 }
 
@@ -31,6 +36,11 @@ final class PlayerModel {
 
     init() {
         player.allowsExternalPlayback = true
+        #if os(iOS)
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback, policy: .longFormVideo)
+        try? AVAudioSession.sharedInstance().setActive(true)
+        player.audiovisualBackgroundPlaybackPolicy = .continuesIfPossible
+        #endif
         timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 1, preferredTimescale: 2), queue: .main) { [weak self] t in
             MainActor.assumeIsolated { self?.tick(t.seconds) }
         }
@@ -53,7 +63,7 @@ final class PlayerModel {
         upNext = nil
         lastSaved = 0
         guard let url = URL(string: req.url) else { error = "This stream has no valid address."; return }
-        let ua = model.settings.userAgent.isEmpty ? "Lumen/1.0 (Macintosh)" : model.settings.userAgent
+        let ua = model.settings.userAgent.isEmpty ? Net.defaultUA : model.settings.userAgent
         let asset = AVURLAsset(url: url, options: ["AVURLAssetHTTPHeaderFieldsKey": ["User-Agent": ua]])
         let item = AVPlayerItem(asset: asset)
         item.preferredForwardBufferDuration = req.kind == "live" ? 4 : 0
@@ -178,6 +188,7 @@ final class PlayerModel {
     }
 }
 
+#if os(macOS)
 // MARK: - AVPlayerView bridge
 
 struct VideoSurface: NSViewRepresentable {
@@ -216,6 +227,8 @@ struct PlayerWindow: View {
     @State private var hideTask: Task<Void, Never>?
     @State private var window: NSWindow?
     @State private var keepOnTop = false
+    @State private var mini = false
+    @State private var savedFrame: NSRect?
     @FocusState private var focused: Bool
 
     var body: some View {
@@ -232,7 +245,7 @@ struct PlayerWindow: View {
                     .padding(24).glassPanel(cornerRadius: 24)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing).padding(40)
             }
-            VStack { topBar.opacity(showChrome ? 1 : 0); Spacer() }
+            VStack { (mini ? AnyView(miniBar) : AnyView(topBar)).opacity(showChrome ? 1 : 0); Spacer() }
         }
         .environment(\.colorScheme, .dark)
         .background(WindowReader { w in
@@ -241,7 +254,7 @@ struct PlayerWindow: View {
             w.titlebarAppearsTransparent = true
             w.isMovableByWindowBackground = true
         })
-        .frame(minWidth: 480, minHeight: 270)
+        .frame(minWidth: mini ? 300 : 480, minHeight: mini ? 170 : 270)
         .onContinuousHover { phase in
             if case .active = phase { poke() }
         }
@@ -261,6 +274,38 @@ struct PlayerWindow: View {
             model.activePlayer = nil
             model.nowPlaying = nil
         }
+    }
+
+    /// A small always-on-top player in the corner while you browse.
+    func setMini(_ on: Bool) {
+        guard let w = window, on != mini else { return }
+        if on {
+            savedFrame = w.frame
+            let vf = (w.screen ?? NSScreen.main)?.visibleFrame ?? w.frame
+            w.setFrame(NSRect(x: vf.maxX - 420, y: vf.minY + 24, width: 400, height: 225), display: true, animate: true)
+            w.level = .floating
+            w.collectionBehavior.insert(.canJoinAllSpaces)
+        } else {
+            if let f = savedFrame { w.setFrame(f, display: true, animate: true) }
+            w.level = keepOnTop ? .floating : .normal
+            w.collectionBehavior.remove(.canJoinAllSpaces)
+        }
+        mini = on
+        if on { NSApp.windows.first { $0.identifier?.rawValue.contains("main") == true }?.makeKeyAndOrderFront(nil) }
+    }
+
+    private var miniBar: some View {
+        HStack(spacing: 8) {
+            Text(pm.request?.title ?? "").font(.caption.weight(.semibold)).lineLimit(1)
+            Spacer()
+            Button { pm.isPlaying ? pm.player.pause() : pm.player.play() } label: { Image(systemName: pm.isPlaying ? "pause.fill" : "play.fill").frame(width: 22, height: 22) }.buttonStyle(.plain)
+            Button { setMini(false) } label: { Image(systemName: "arrow.up.left.and.arrow.down.right").frame(width: 22, height: 22) }.buttonStyle(.plain).help("Back to the full player")
+            Button { window?.close() } label: { Image(systemName: "xmark").frame(width: 22, height: 22) }.buttonStyle(.plain).help("Close")
+        }
+        .padding(.horizontal, 10).padding(.vertical, 6)
+        .background(Color(white: 0.12, opacity: 0.9), in: .rect(cornerRadius: 12))
+        .padding(8).padding(.top, 14)
+        .allowsHitTesting(showChrome)
     }
 
     private func poke() {
@@ -288,7 +333,7 @@ struct PlayerWindow: View {
                 if let s = liveSubtitle ?? pm.request?.subtitle { Text(s).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
             }
             Spacer()
-            GlassEffectContainer(spacing: 8) {
+            Group {
                 HStack(spacing: 8) {
                     if isLive {
                         chromeButton("chevron.up", help: "Previous channel (↑)") { pm.zap(-1) }
@@ -305,18 +350,19 @@ struct PlayerWindow: View {
                             ForEach([15, 30, 60, 90], id: \.self) { m in Button("\(m) minutes") { pm.sleepAt = .now.addingTimeInterval(Double(m) * 60); model.toast = "Pausing in \(m) min" } }
                             if pm.sleepAt != nil { Button("Turn Off") { pm.sleepAt = nil } }
                         }
+                        Button("Mini Player", systemImage: "rectangle.inset.bottomright.filled") { setMini(true) }
                         Toggle("Keep on Top", isOn: Binding(get: { keepOnTop }, set: { keepOnTop = $0; window?.level = $0 ? .floating : .normal }))
                         if let u = pm.request?.url {
                             Button("Open in \(model.settings.externalPlayer)") { pm.player.pause(); model.openExternally(u) }
                             Button("Copy Stream URL") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(u, forType: .string) }
                         }
                     } label: { Image(systemName: "ellipsis").frame(width: 30, height: 30) }
-                    .menuStyle(.button).menuIndicator(.hidden).buttonStyle(.glass).fixedSize()
+                    .menuStyle(.button).menuIndicator(.hidden).buttonStyle(LumenButtonStyle()).fixedSize()
                 }
             }
         }
         .padding(.horizontal, 18).padding(.vertical, 12)
-        .glassEffect(.regular, in: .rect(cornerRadius: 22))
+        .background(Color(white: 0.13, opacity: 0.92), in: .rect(cornerRadius: 22))
         .padding(.horizontal, 16).padding(.top, 34)
         .allowsHitTesting(showChrome)
     }
@@ -328,7 +374,7 @@ struct PlayerWindow: View {
 
     private func chromeButton(_ symbol: String, help: String, action: @escaping () -> Void) -> some View {
         Button(action: action) { Image(systemName: symbol).frame(width: 30, height: 30) }
-            .buttonStyle(.glass).help(help)
+            .buttonStyle(LumenButtonStyle()).help(help)
     }
 
     private func errorCard(_ e: String) -> some View {
@@ -337,9 +383,9 @@ struct PlayerWindow: View {
             Text("Can't play this").font(.title2.weight(.bold))
             Text(e).multilineTextAlignment(.center).foregroundStyle(.secondary).frame(maxWidth: 420)
             HStack {
-                Button("Try Again") { if let r = pm.request { pm.load(r) } }.buttonStyle(.glass)
+                Button("Try Again") { if let r = pm.request { pm.load(r) } }.buttonStyle(LumenButtonStyle())
                 if let u = pm.request?.url {
-                    Button("Open in \(model.settings.externalPlayer)") { model.openExternally(u) }.buttonStyle(.glassProminent)
+                    Button("Open in \(model.settings.externalPlayer)") { model.openExternally(u) }.buttonStyle(LumenButtonStyle(prominent: true))
                 }
             }
             .controlSize(.large)
@@ -353,8 +399,8 @@ struct PlayerWindow: View {
             Text("UP NEXT IN \(pm.upNextCountdown)").font(.caption.weight(.heavy)).tracking(1.2).foregroundStyle(model.accent)
             Text(next.subtitle ?? next.title).font(.headline).lineLimit(2)
             HStack {
-                Button("Play Now") { pm.load(next) }.buttonStyle(.glassProminent)
-                Button("Cancel") { pm.upNext = nil }.buttonStyle(.glass)
+                Button("Play Now") { pm.load(next) }.buttonStyle(LumenButtonStyle(prominent: true))
+                Button("Cancel") { pm.upNext = nil }.buttonStyle(LumenButtonStyle())
             }
         }
         .padding(20)
@@ -378,6 +424,7 @@ struct PlayerWindow: View {
         default: break
         }
         if press.characters == "f" { window?.toggleFullScreen(nil); return .handled }
+        if press.characters == "m" { setMini(!mini); return .handled }
         if isLive, let d = press.characters.first, d.isNumber {
             pm.channelEntry += String(d)
             let entry = pm.channelEntry
@@ -390,3 +437,4 @@ struct PlayerWindow: View {
         return .ignored
     }
 }
+#endif

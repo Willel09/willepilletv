@@ -20,6 +20,22 @@ nonisolated struct Source: Codable, Hashable, Identifiable, Sendable {
     var enabled: Bool = true
 }
 
+extension Source {
+    /// Tolerant: sources from other devices (and from sync) don't carry the Mac-only `enabled` flag.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? c.decode(String.self, forKey: .id)) ?? UUID().uuidString
+        name = (try? c.decode(String.self, forKey: .name)) ?? "Source"
+        kind = try c.decode(SourceKind.self, forKey: .kind)
+        url = try? c.decodeIfPresent(String.self, forKey: .url)
+        server = try? c.decodeIfPresent(String.self, forKey: .server)
+        username = try? c.decodeIfPresent(String.self, forKey: .username)
+        password = try? c.decodeIfPresent(String.self, forKey: .password)
+        epgUrl = try? c.decodeIfPresent(String.self, forKey: .epgUrl)
+        enabled = (try? c.decode(Bool.self, forKey: .enabled)) ?? true
+    }
+}
+
 nonisolated struct Channel: Codable, Hashable, Identifiable, Sendable {
     var id: String
     var sourceId: String
@@ -212,6 +228,8 @@ nonisolated struct HistoryEntry: Codable, Hashable, Identifiable, Sendable {
     var position: Double = 0
     var duration: Double = 0
     var watchedAt: Date = .now
+    /// the stream address, kept so other devices (and offline downloads) can play it
+    var url: String?
 
     var progress: Double { duration > 0 ? min(1, position / duration) : 0 }
     var isFinished: Bool { duration > 0 && position / duration > 0.92 }
@@ -234,6 +252,16 @@ nonisolated struct AppSettings: Codable, Hashable, Sendable {
     var externalPlayer: String = "IINA"
     var screensaverMins: Int = 5
     var showMenuBarExtra: Bool = true
+    var theme: String = "graphite"
+    /// empty = the theme's own accent
+    var accentOverride: String = ""
+    /// empty = widgets follow the app's accent
+    var widgetAccent: String = ""
+    var tmdbKey: String = ""
+    var omdbKey: String = ""
+    var downloadLimitGb: Int = 20
+    var deleteWatched: Bool = false
+    var miniPlayerOnClose: Bool = false
 
     init() {}
     init(from decoder: Decoder) throws {
@@ -253,6 +281,14 @@ nonisolated struct AppSettings: Codable, Hashable, Sendable {
         externalPlayer = (try? c.decode(String.self, forKey: .externalPlayer)) ?? d.externalPlayer
         screensaverMins = (try? c.decode(Int.self, forKey: .screensaverMins)) ?? d.screensaverMins
         showMenuBarExtra = (try? c.decode(Bool.self, forKey: .showMenuBarExtra)) ?? d.showMenuBarExtra
+        theme = (try? c.decode(String.self, forKey: .theme)) ?? d.theme
+        accentOverride = (try? c.decode(String.self, forKey: .accentOverride)) ?? d.accentOverride
+        widgetAccent = (try? c.decode(String.self, forKey: .widgetAccent)) ?? d.widgetAccent
+        tmdbKey = (try? c.decode(String.self, forKey: .tmdbKey)) ?? d.tmdbKey
+        omdbKey = (try? c.decode(String.self, forKey: .omdbKey)) ?? d.omdbKey
+        downloadLimitGb = (try? c.decode(Int.self, forKey: .downloadLimitGb)) ?? d.downloadLimitGb
+        deleteWatched = (try? c.decode(Bool.self, forKey: .deleteWatched)) ?? d.deleteWatched
+        miniPlayerOnClose = (try? c.decode(Bool.self, forKey: .miniPlayerOnClose)) ?? d.miniPlayerOnClose
     }
     static let defaults = AppSettings()
 }
@@ -261,8 +297,40 @@ nonisolated struct UserData: Codable, Sendable {
     var favorites: [String] = []
     var watchlist: [String] = []
     var history: [HistoryEntry] = []
-    var lists: [String: [String]] = [:]
+    var lists: [CustomList] = []
     var settings = AppSettings()
+
+    init() {}
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        favorites = (try? c.decode([String].self, forKey: .favorites)) ?? []
+        watchlist = (try? c.decode([String].self, forKey: .watchlist)) ?? []
+        history = (try? c.decode([HistoryEntry].self, forKey: .history)) ?? []
+        lists = (try? c.decode([CustomList].self, forKey: .lists)) ?? []
+        settings = (try? c.decode(AppSettings.self, forKey: .settings)) ?? AppSettings()
+    }
+}
+
+/// A named list of films and series ("Friday night"), per profile.
+nonisolated struct CustomList: Codable, Hashable, Identifiable, Sendable {
+    var id: String = UUID().uuidString
+    var name: String
+    var items: [String] = []
+}
+
+nonisolated struct Profile: Codable, Hashable, Identifiable, Sendable {
+    var id: String
+    var name: String
+    var avatar: String
+    static let main = Profile(id: "main", name: "Me", avatar: "kitty")
+}
+
+/// What belongs to one person: their lists and history.
+nonisolated struct ProfileLists: Codable, Sendable {
+    var favorites: [String] = []
+    var watchlist: [String] = []
+    var history: [HistoryEntry] = []
+    var lists: [CustomList] = []
 }
 
 /// What the player window is asked to play.
@@ -278,6 +346,8 @@ nonisolated struct PlaybackRequest: Codable, Hashable, Sendable {
     /// series context for Up Next
     var showId: String?
     var episodeId: String?
+    /// set when playing a downloaded file
+    var localFile: String?
 }
 
 extension String {

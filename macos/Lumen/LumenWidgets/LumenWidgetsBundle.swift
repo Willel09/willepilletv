@@ -10,5 +10,8 @@ struct LumenWidgetsBundle: WidgetBundle {
         LibraryStatsWidget()
         SurpriseMeControl()
         ContinueWatchingControl()
+        SearchControl()
+        LiveChannelControl()
+        OpenLumenControl()
     }
 }

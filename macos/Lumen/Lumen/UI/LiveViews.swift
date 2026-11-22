@@ -1,77 +1,85 @@
 import SwiftUI
 
+#if os(macOS)
 struct LiveView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openWindow) private var openWindow
     @State private var group: String = "__fav__"
     @State private var selected: Channel.ID?
     @State private var filter = ""
-    @State private var groupFilter = ""
+    @State private var shown: [Channel] = []
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private struct ListKey: Hashable { let group: String, filter: String, total: Int, favs: Int, recents: Int }
 
     var body: some View {
         HStack(spacing: 0) {
-            VStack(spacing: 0) {
-                TextField("Find a category", text: $groupFilter).textFieldStyle(.roundedBorder).padding(10)
-                List(selection: Binding(get: { group }, set: { group = $0 ?? "__all__" })) {
-                    Label("Favorites", systemImage: "heart.fill").tag("__fav__")
-                    Label("Recently Watched", systemImage: "clock").tag("__recent__")
-                    Label("All Channels", systemImage: "square.grid.2x2").tag("__all__")
-                    Section("Categories") {
-                        ForEach(model.liveGroups.filter { groupFilter.isEmpty || $0.localizedCaseInsensitiveContains(groupFilter) }, id: \.self) {
-                            Text($0).lineLimit(1).tag($0)
-                        }
-                    }
-                }
-                .listStyle(.sidebar)
-            }
-            .frame(width: 230)
-            Divider()
-            List(channels, selection: $selected) { c in
-                ChannelRow(channel: c)
-                    .tag(c.id)
-                    .contentShape(.rect)
-                    .onTapGesture(count: 2) { play(c) }
-                    .onTapGesture { selected = c.id }
-                    .itemContextMenu(.live(c))
-            }
-            .listStyle(.inset)
-            .frame(minWidth: 340)
-            .overlay {
-                if channels.isEmpty {
-                    EmptyState(symbol: group == "__fav__" ? "heart" : "tv", title: group == "__fav__" ? "No favorites yet" : "No channels",
-                               message: group == "__fav__" ? "Right-click a channel, or press ♥ in its info panel, to add it here." : "Try another category.")
+            LiveSidebar(group: $group)
+                .frame(width: 268)
+                .padding(.leading, 14).padding(.bottom, 14).padding(.trailing, 6)
+            LiveChannelList(title: groupTitle, channels: shown, filter: $filter, selected: $selected,
+                            emptySymbol: group == "__fav__" ? "heart" : "tv",
+                            emptyTitle: group == "__fav__" ? "No favorites yet" : "No channels",
+                            emptyMessage: group == "__fav__" ? "Right-click a channel, or press the heart in its panel, to add it here." : "Try another category or clear the filter.",
+                            play: play)
+                .frame(minWidth: 360)
+                .padding(.bottom, 14).padding(.horizontal, 6)
+            ZStack {
+                if let id = selected, case .live(let c) = model.item(id) {
+                    LiveInfoPanel(channel: c) { play(c) }
+                        .id(c.id)
+                        .transition(reduceMotion ? .opacity : .asymmetric(insertion: .opacity.combined(with: .offset(x: 18)).combined(with: .scale(scale: 0.98)),
+                                                                          removal: .opacity))
+                } else {
+                    LiveInfoEmpty().transition(.opacity)
                 }
             }
-            Divider()
-            if let id = selected, case .live(let c) = model.item(id) {
-                ChannelInfoPanel(channel: c) { play(c) }
-                    .frame(width: 340)
-            } else {
-                Text("Select a channel").foregroundStyle(.secondary).frame(width: 340).frame(maxHeight: .infinity)
-            }
+            .frame(width: 330)
+            .padding(.bottom, 14).padding(.leading, 6).padding(.trailing, 14)
+            .animation(reduceMotion ? .easeOut(duration: 0.12) : .spring(response: 0.38, dampingFraction: 0.86), value: selected)
         }
-        .navigationTitle("Live TV")
-        .searchable(text: $filter, placement: .toolbar, prompt: "Filter channels")
         .onAppear { if model.favoriteChannels.isEmpty && group == "__fav__" { group = "__all__" } }
+        .task(id: ListKey(group: group, filter: filter, total: model.channels.count, favs: model.favoriteChannels.count, recents: model.recentChannels.count)) {
+            await refreshList()
+        }
+        .task { if UserDefaults.standard.bool(forKey: "selectFirst") { for _ in 0..<60 { if let f = shown.first { selected = f.id; break }; try? await Task.sleep(for: .milliseconds(250)) } } }
         .onKeyPress(.return) { if let id = selected, case .live(let c) = model.item(id) { play(c); return .handled }; return .ignored }
     }
 
-    private var channels: [Channel] {
-        var list: [Channel]
+    private var groupTitle: String {
         switch group {
-        case "__fav__": list = model.favoriteChannels
-        case "__recent__": list = model.recentChannels
-        case "__all__": list = model.channels
-        default: list = model.channels.filter { $0.group == group }
+        case "__fav__": "Favorites"
+        case "__recent__": "Recently Watched"
+        case "__all__": "All Channels"
+        default: group
         }
-        if !filter.isEmpty { list = list.filter { $0.name.localizedCaseInsensitiveContains(filter) || ($0.num.map(String.init) == filter) } }
-        return list
+    }
+
+    /// Rebuilds the visible list only when its inputs change, and filters text off the main thread after a short pause while typing.
+    private func refreshList() async {
+        let base: [Channel]
+        switch group {
+        case "__fav__": base = model.favoriteChannels
+        case "__recent__": base = model.recentChannels
+        case "__all__": base = model.channels
+        default: let g = group; base = model.channels.filter { $0.group == g }
+        }
+        let q = filter.trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty else { shown = base; return }
+        try? await Task.sleep(for: .milliseconds(120))
+        guard !Task.isCancelled else { return }
+        let result = await Task.detached(priority: .userInitiated) {
+            base.filter { $0.name.localizedCaseInsensitiveContains(q) || ($0.num.map(String.init) == q) }
+        }.value
+        guard !Task.isCancelled else { return }
+        shown = result
     }
 
     private func play(_ c: Channel) {
         if let r = model.request(for: .live(c)) { model.play(openWindow, r) }
     }
 }
+#endif
 
 struct ChannelRow: View {
     @Environment(AppModel.self) private var model
@@ -105,6 +113,7 @@ struct ChannelRow: View {
     }
 }
 
+#if os(macOS)
 struct ChannelInfoPanel: View {
     @Environment(AppModel.self) private var model
     let channel: Channel
@@ -122,11 +131,11 @@ struct ChannelInfoPanel: View {
                 Text(channel.group).foregroundStyle(.secondary)
                 HStack {
                     Button(action: play) { Label("Watch", systemImage: "play.fill").frame(maxWidth: .infinity) }
-                        .buttonStyle(.glassProminent).controlSize(.large)
+                        .buttonStyle(LumenButtonStyle(prominent: true)).controlSize(.large)
                     Button { model.toggleFavorite(channel.id) } label: {
                         Image(systemName: model.isFavorite(channel.id) ? "heart.fill" : "heart")
                     }
-                    .buttonStyle(.glass).controlSize(.large)
+                    .buttonStyle(LumenButtonStyle()).controlSize(.large)
                     .foregroundStyle(model.isFavorite(channel.id) ? .pink : .primary)
                 }
                 if schedule.isEmpty {
@@ -182,7 +191,7 @@ struct GuideView: View {
                 Button("Now") { start = Calendar.current.dateInterval(of: .hour, for: .now)?.start ?? .now }
                 Button { start = start.addingTimeInterval(3600) } label: { Image(systemName: "chevron.right") }
             }
-            .buttonStyle(.glass)
+            .buttonStyle(LumenButtonStyle())
             .padding(14)
 
             if !model.hasGuide {
@@ -265,3 +274,4 @@ struct GuideView: View {
         }
     }
 }
+#endif

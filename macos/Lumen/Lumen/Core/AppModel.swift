@@ -2,11 +2,15 @@
 // One instance, shared by every window, the menu bar extra and the App Intents.
 import Foundation
 import SwiftUI
+#if os(macOS)
 import AppKit
+#else
+import UIKit
+#endif
 import WidgetKit
 
 enum SidebarItem: String, Hashable, CaseIterable, Identifiable {
-    case home, search, live, guide, movies, series, watchlist, random, sources
+    case home, search, live, guide, movies, series, watchlist, random, sources, downloads, settings
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -19,6 +23,8 @@ enum SidebarItem: String, Hashable, CaseIterable, Identifiable {
         case .watchlist: "My List"
         case .random: "Random"
         case .sources: "Sources"
+        case .downloads: "Downloads"
+        case .settings: "Settings"
         }
     }
     var symbol: String {
@@ -32,6 +38,8 @@ enum SidebarItem: String, Hashable, CaseIterable, Identifiable {
         case .watchlist: "bookmark.fill"
         case .random: "dice.fill"
         case .sources: "externaldrive.connected.to.line.below.fill"
+        case .downloads: "arrow.down.circle.fill"
+        case .settings: "gearshape.fill"
         }
     }
 }
@@ -39,7 +47,11 @@ enum SidebarItem: String, Hashable, CaseIterable, Identifiable {
 enum Route: Hashable {
     case detail(Item)
     case category(MediaKind, String)
+    case person(String, PersonRole)
+    case page(SidebarItem)
 }
+
+enum PersonRole: String, Hashable { case actor, director }
 
 @Observable
 final class AppModel {
@@ -49,6 +61,28 @@ final class AppModel {
     var sources: [Source] = [] { didSet { saveSources() } }
     var user = UserData() { didSet { scheduleSaveUser() } }
     private(set) var library = Library()
+    // Profiles: the active person's lists live in `user`; everyone else's are stashed here.
+    var profiles: [Profile] = [.main] { didSet { saveProfiles() } }
+    var activeProfile: String = "main" { didSet { saveProfiles() } }
+    @ObservationIgnored var stash: [String: ProfileLists] = [:]
+    var pickingProfile = false
+    /// iOS: the full-screen player is up
+    var showPlayer = false
+    var screensaverOn = false
+    var syncStatus: String?
+    var syncing = false
+    @ObservationIgnored var applyingSync = false
+    var syncCode: String = "" { didSet {
+        guard loaded else { return }
+        // a different code is a different library: forget what the old one knew, or its leftovers read as deletions
+        if oldValue != syncCode { sync.reset() }
+        saveSyncState()
+    } }
+    var lastSync: Date?
+    /// bumped when downloads change so views refresh
+    let downloads = DownloadManager()
+    let tmdb = TMDBModel()
+    let sync = SyncEngine()
 
     // MARK: Derived (rebuilt when the library or filters change)
     private(set) var channels: [Channel] = []
@@ -85,28 +119,48 @@ final class AppModel {
         set {
             let filtersChanged = newValue.hiddenGroups != user.settings.hiddenGroups || newValue.removeBs != user.settings.removeBs
             user.settings = newValue
+            downloads.configure(limitGb: newValue.downloadLimitGb, userAgent: newValue.userAgent)
             if filtersChanged { rebuild() }
         }
     }
-    var accent: Color { Color(hex: settings.accentHex) ?? .accentColor }
+    var theme: LumenTheme { LumenTheme.named(settings.theme) }
+    var accentHex: String { settings.accentOverride.isEmpty ? theme.accent : settings.accentOverride }
+    var accent: Color { Color(hex: accentHex) ?? .accentColor }
+    var currentProfile: Profile { profiles.first { $0.id == activeProfile } ?? profiles.first ?? .main }
 
     // MARK: Files
     private let dir: URL = {
-        let d = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Lumen", isDirectory: true)
+        // developer hook: LUMEN_DATA_DIR runs the app against a scratch folder instead of the real data
+        let d = ProcessInfo.processInfo.environment["LUMEN_DATA_DIR"].map { URL(fileURLWithPath: $0, isDirectory: true) }
+            ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Lumen", isDirectory: true)
         try? FileManager.default.createDirectory(at: d, withIntermediateDirectories: true)
         return d
     }()
     private var sourcesURL: URL { dir.appendingPathComponent("sources.json") }
     private var userURL: URL { dir.appendingPathComponent("user.json") }
     private var libraryURL: URL { dir.appendingPathComponent("library.json") }
+    private var profilesURL: URL { dir.appendingPathComponent("profiles.json") }
+    private var syncURL: URL { dir.appendingPathComponent("sync.json") }
+    var supportDir: URL { dir }
     private var epgURL: URL { dir.appendingPathComponent("epg.json") }
-    private var loaded = false
+    var loaded = false
 
     private init() {
         if let d = try? Data(contentsOf: sourcesURL), let s = try? JSONDecoder().decode([Source].self, from: d) { sources = s }
         if let d = try? Data(contentsOf: userURL), let u = try? JSONDecoder().decode(UserData.self, from: d) { user = u }
+        if let d = try? Data(contentsOf: profilesURL), let f = try? JSONDecoder().decode(ProfilesFile.self, from: d) {
+            profiles = f.profiles.isEmpty ? [.main] : f.profiles
+            activeProfile = profiles.contains { $0.id == f.active } ? f.active : (profiles.first?.id ?? "main")
+            stash = f.stash
+        }
+        if let d = try? Data(contentsOf: syncURL), let f = try? JSONDecoder().decode(SyncFile.self, from: d) {
+            syncCode = f.code; lastSync = f.lastSync
+            sync.restore(f)
+        }
         loaded = true
+        pickingProfile = profiles.count > 1
         Task { await loadCache() }
+        Task { await startBackground() }
     }
 
     private func loadCache() async {
@@ -128,11 +182,32 @@ final class AppModel {
         guard loaded, let d = try? JSONEncoder().encode(sources) else { return }
         try? d.write(to: sourcesURL, options: [.atomic])
         try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: sourcesURL.path)
+        // playlists follow you to your other devices
+        if !applyingSync { scheduleSync() }
     }
 
+    private func saveProfiles() {
+        guard loaded else { return }
+        let f = ProfilesFile(profiles: profiles, active: activeProfile, stash: stash)
+        if let d = try? JSONEncoder().encode(f) { try? d.write(to: profilesURL, options: .atomic) }
+    }
+    func saveSyncState() {
+        guard loaded else { return }
+        let f = sync.snapshot(code: syncCode, lastSync: lastSync)
+        if let d = try? JSONEncoder().encode(f) {
+            try? d.write(to: syncURL, options: .atomic)
+            try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: syncURL.path)
+        }
+    }
+
+    @ObservationIgnored var syncTask: Task<Void, Never>?
+    @ObservationIgnored var lastSyncRun = Date.distantPast
+    @ObservationIgnored var forYouTask: Task<Void, Never>?
+    var forYou: [Item] = []
     private var saveTask: Task<Void, Never>?
     private func scheduleSaveUser() {
         guard loaded else { return }
+        if !applyingSync { scheduleSync() }
         saveTask?.cancel()
         saveTask = Task {
             try? await Task.sleep(for: .milliseconds(400))
@@ -143,7 +218,20 @@ final class AppModel {
 
     // MARK: Refresh
 
+    @ObservationIgnored private var refreshTask: Task<Void, Never>?
+
+    /// Stops a running library refresh; the library you had stays as it was.
+    func cancelRefresh() { refreshTask?.cancel() }
+
     func refresh() async {
+        guard !isRefreshing else { return }
+        let t = Task { await performRefresh() }
+        refreshTask = t
+        await t.value
+        refreshTask = nil
+    }
+
+    private func performRefresh() async {
         guard !isRefreshing else { return }
         isRefreshing = true
         defer { isRefreshing = false; progressMessage = nil }
@@ -151,6 +239,7 @@ final class AppModel {
         var next = Library()
         var errors: [String] = []
         for src in sources where src.enabled {
+            if Task.isCancelled { break }
             do {
                 switch src.kind {
                 case .m3u:
@@ -177,6 +266,7 @@ final class AppModel {
                 next.series += library.series.filter { $0.sourceId == src.id }
             }
         }
+        if Task.isCancelled { toast = "Refresh cancelled"; return }
         next.errors = errors
         next.updatedAt = .now
         library = next
@@ -221,7 +311,8 @@ final class AppModel {
     // MARK: Derived lists
 
     private func hidden(_ name: String, _ group: String, hiddenSet: Set<String>) -> Bool {
-        if hiddenSet.contains(group.lowercased()) { return true }
+        // like Windows: a category is hidden when it contains any of the words
+        if !hiddenSet.isEmpty { let g = group.lowercased(); if hiddenSet.contains(where: { g.contains($0) }) { return true } }
         if settings.removeBs && SearchKit.isBs(name: name, group: group) { return true }
         return false
     }
@@ -246,6 +337,7 @@ final class AppModel {
         for s in series { map[s.id] = .series(s) }
         byId = map
         rebuildShelves()
+        refreshHomeRows()
     }
 
     func item(_ id: String) -> Item? { byId[id] }
@@ -327,10 +419,12 @@ final class AppModel {
     func record(_ req: PlaybackRequest, position: Double, duration: Double) {
         var h = HistoryEntry(id: req.historyId, kind: req.kind, itemId: req.itemId, name: req.title, subtitle: req.subtitle,
                              artwork: req.artwork, position: position, duration: duration.isFinite ? duration : 0, watchedAt: .now)
+        h.url = req.localFile == nil ? req.url : nil
         if req.kind == "live" { h.position = 0; h.duration = 0 }
         user.history.removeAll { $0.id == h.id }
         user.history.insert(h, at: 0)
         if user.history.count > 300 { user.history.removeLast(user.history.count - 300) }
+        if settings.deleteWatched, h.isFinished, downloads.record(h.id) != nil { downloads.remove(h.id); toast = "Removed the finished download" }
     }
 
     // MARK: Details
@@ -377,9 +471,12 @@ final class AppModel {
             let now = nowNext(for: c).now?.title
             return PlaybackRequest(historyId: c.id, kind: "live", itemId: c.id, title: c.name, subtitle: now ?? c.group, url: u, artwork: c.logo)
         case .movie(let m):
-            guard let u = streamURL(for: m) else { return nil }
+            let local = downloads.localURL(for: m.id)
+            guard let u = local?.absoluteString ?? streamURL(for: m) else { return nil }
             let start = resume ? (history(for: m.id).map { $0.isFinished ? 0 : $0.position } ?? 0) : 0
-            return PlaybackRequest(historyId: m.id, kind: "movie", itemId: m.id, title: SearchKit.cleanTitle(m.name), subtitle: m.year, url: u, artwork: m.poster, startAt: start)
+            var r = PlaybackRequest(historyId: m.id, kind: "movie", itemId: m.id, title: SearchKit.cleanTitle(m.name), subtitle: m.year, url: u, artwork: m.poster, startAt: start)
+            r.localFile = local?.path
+            return r
         case .series:
             return nil
         }
@@ -388,9 +485,12 @@ final class AppModel {
     func request(for e: Episode, in show: Show, resume: Bool = true) -> PlaybackRequest {
         let hid = "\(show.id)|\(e.id)"
         let start = resume ? (history(for: hid).map { $0.isFinished ? 0 : $0.position } ?? 0) : 0
-        return PlaybackRequest(historyId: hid, kind: "episode", itemId: show.id, title: SearchKit.cleanTitle(show.name),
-                               subtitle: "S\(e.season) · E\(e.episode) — \(e.title)", url: e.url, artwork: show.poster, startAt: start,
+        let local = downloads.localURL(for: hid)
+        var r = PlaybackRequest(historyId: hid, kind: "episode", itemId: show.id, title: SearchKit.cleanTitle(show.name),
+                               subtitle: "S\(e.season) · E\(e.episode) — \(e.title)", url: local?.absoluteString ?? e.url, artwork: show.poster, startAt: start,
                                showId: show.id, episodeId: e.id)
+        r.localFile = local?.path
+        return r
     }
 
     /// The episode after the one in `req`, for Up Next.
@@ -426,6 +526,7 @@ final class AppModel {
     func openExternally(_ url: String) {
         guard let u = URL(string: url) else { return }
         let name = settings.externalPlayer
+        #if os(macOS)
         let ws = NSWorkspace.shared
         if let app = ["IINA": "com.colliderli.iina", "VLC": "org.videolan.vlc", "Infuse": "com.firecore.infuse"][name],
            let appURL = ws.urlForApplication(withBundleIdentifier: app) {
@@ -433,6 +534,14 @@ final class AppModel {
         } else {
             toast = "\(name) isn't installed. Get IINA or VLC to play this format."
         }
+        #else
+        let enc = url.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? url
+        let scheme: String? = ["VLC": "vlc-x-callback://x-callback-url/stream?url=\(enc)", "Infuse": "infuse://x-callback-url/play?url=\(enc)",
+                               "IINA": nil][name] ?? nil
+        if let scheme, let link = URL(string: scheme) {
+            UIApplication.shared.open(link) { ok in if !ok { Task { @MainActor in AppModel.shared.toast = "\(name) isn't installed." } } }
+        } else { toast = "Choose VLC or Infuse as the external player in Settings." }
+        #endif
     }
 
     // MARK: Deep links
@@ -466,6 +575,18 @@ final class AppModel {
 
     // MARK: Widgets
 
+    /// The colour widgets use: the user's pick, else the app's accent.
+    var widgetAccentHex: String { settings.widgetAccent.isEmpty ? accentHex : settings.widgetAccent }
+    /// Backdrop blobs: the theme's own, or two shades of a custom colour.
+    var widgetGlowHex: [String] {
+        func hex(_ r: Double, _ g: Double, _ b: Double) -> String { String(format: "#%02X%02X%02X", Int(max(0, min(255, r))), Int(max(0, min(255, g))), Int(max(0, min(255, b)))) }
+        if settings.widgetAccent.isEmpty { return [theme.glow1, theme.glow2].map { hex($0.0, $0.1, $0.2) } }
+        var s = settings.widgetAccent; if s.hasPrefix("#") { s.removeFirst() }
+        guard s.count == 6, let v = UInt32(s, radix: 16) else { return [] }
+        let r = Double((v >> 16) & 0xff), g = Double((v >> 8) & 0xff), b = Double(v & 0xff)
+        return [hex(r * 0.7, g * 0.7, b * 0.7), hex(b * 0.5, r * 0.45, g * 0.6)]
+    }
+
     private var widgetTask: Task<Void, Never>?
     func publishWidgets() {
         widgetTask?.cancel()
@@ -490,7 +611,8 @@ final class AppModel {
                 if picks.count == 6 { break }
             }
             let snap = WidgetSnapshot(continueWatching: cont, liveNow: live, picks: picks, movieCount: movies.count, seriesCount: series.count,
-                                      channelCount: channels.count, watchlistCount: user.watchlist.count, updatedAt: .now)
+                                      channelCount: channels.count, watchlistCount: user.watchlist.count, updatedAt: .now,
+                                      accentHex: widgetAccentHex, glowHex: widgetGlowHex)
             var art: [(String, String)] = continueWatching.prefix(6).compactMap { h in h.artwork.map { (h.itemId, $0) } }
             art += favs.compactMap { c in c.logo.map { (c.id, $0) } }
             art += picks.compactMap { p in item(p.id)?.artwork.map { (p.id, $0) } }
@@ -520,19 +642,8 @@ nonisolated enum ThumbWriter {
                    let d = attrs[.modificationDate] as? Date, d.timeIntervalSinceNow > -7 * 86400 { continue }
                 guard let url = art.artURL(size: "w342") else { continue }
                 g.addTask {
-                    guard let data = try? await Net.data(url.absoluteString, ua: ua), let img = NSImage(data: data) else { return }
-                    let maxSide: CGFloat = 360
-                    let s = img.size
-                    let scale = min(1, maxSide / max(s.width, s.height, 1))
-                    let size = NSSize(width: max(1, s.width * scale), height: max(1, s.height * scale))
-                    guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(size.width), pixelsHigh: Int(size.height),
-                                                     bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
-                                                     colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0) else { return }
-                    NSGraphicsContext.saveGraphicsState()
-                    NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
-                    img.draw(in: NSRect(origin: .zero, size: size))
-                    NSGraphicsContext.restoreGraphicsState()
-                    if let jpg = rep.representation(using: .jpeg, properties: [.compressionFactor: 0.82]) { try? jpg.write(to: dest, options: .atomic) }
+                    guard let data = try? await Net.data(url.absoluteString, ua: ua), let jpg = Platform.thumbnailJPEG(data, maxSide: 360) else { return }
+                    try? jpg.write(to: dest, options: .atomic)
                 }
             }
         }

@@ -1,8 +1,9 @@
-# Lumen for Mac
+# Lumen for Mac, iPhone and iPad
 
 A native SwiftUI version of [Lumen](https://github.com/Willel09/willepilletv) for macOS 26+, with Liquid Glass design.
 
-Open `Lumen/Lumen.xcodeproj` in Xcode and press **Run** (⌘R).
+Open `Lumen/Lumen.xcodeproj` in Xcode and press **Run** (⌘R). Pick an iPhone simulator as the destination to run the phone app
+(see [TESTFLIGHT.md](TESTFLIGHT.md) for putting it on your phone).
 
 ## What's in it
 

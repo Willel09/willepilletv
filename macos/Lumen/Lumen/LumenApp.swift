@@ -2,6 +2,7 @@ import SwiftUI
 import AppIntents
 import AVFoundation
 
+#if os(macOS)
 @main
 struct LumenApp: App {
     @State private var model = AppModel.shared
@@ -13,7 +14,7 @@ struct LumenApp: App {
     }
 
     var body: some Scene {
-        WindowGroup("Lumen", id: "main") {
+        Window("Lumen", id: "main") {
             RootView()
                 .environment(model)
                 .frame(minWidth: 1000, minHeight: 640)
@@ -25,7 +26,6 @@ struct LumenApp: App {
                 }
         }
         .defaultSize(width: 1360, height: 860)
-        .windowToolbarStyle(.unified)
         .commands { LumenCommands(model: model) }
 
         Window("Player", id: "player") {
@@ -42,7 +42,7 @@ struct LumenApp: App {
             SettingsView().environment(model).tint(model.accent)
         }
 
-        MenuBarExtra("Lumen", systemImage: "sparkles.tv", isInserted: Binding(get: { model.settings.showMenuBarExtra }, set: { model.settings.showMenuBarExtra = $0 })) {
+        MenuBarExtra("Lumen", systemImage: "sparkles.tv", isInserted: Binding(get: { model.settings.showMenuBarExtra }, set: { if model.settings.showMenuBarExtra != $0 { model.settings.showMenuBarExtra = $0 } })) {
             MenuBarContent().environment(model)
         }
         .menuBarExtraStyle(.window)
@@ -54,12 +54,22 @@ struct LumenCommands: Commands {
     @Environment(\.openWindow) private var openWindow
 
     var body: some Commands {
+        CommandGroup(after: .appInfo) {
+            Button("Check for Updates…") { model.selection = .settings; model.path = NavigationPath(); Task { await Updater.shared.check() } }
+        }
         CommandGroup(after: .newItem) {
+            Button("Play Link from Clipboard") {
+                if let t = NSPasteboard.general.string(forType: .string), !model.playPasted(t, openWindow: openWindow) { model.toast = "The clipboard doesn't hold a stream link." }
+            }
+            .keyboardShortcut("v", modifiers: [.command, .shift])
+            Button("Sync Now") { Task { await model.syncNow() } }.keyboardShortcut("s", modifiers: [.command, .option])
+            Button("Who's Watching…") { model.pickingProfile = true }.keyboardShortcut("u", modifiers: [.command, .shift])
+            Divider()
             Button("Reload Library") { Task { await model.refresh() } }.keyboardShortcut("r")
             Button("Reload TV Guide") { Task { await model.refreshGuide() } }.keyboardShortcut("r", modifiers: [.command, .shift])
         }
         CommandMenu("Go") {
-            ForEach(Array(SidebarItem.allCases.enumerated()), id: \.element) { i, s in
+            ForEach(Array([SidebarItem.home, .live, .guide, .movies, .series, .watchlist, .random, .downloads, .settings].enumerated()), id: \.element) { i, s in
                 Button(s.title) { model.selection = s; model.path = NavigationPath() }
                     .keyboardShortcut(KeyEquivalent(Character("\(i + 1)")), modifiers: .command)
             }
@@ -161,3 +171,27 @@ struct MenuBarContent: View {
         .buttonStyle(.plain)
     }
 }
+#else
+@main
+struct LumenPhoneApp: App {
+    @State private var model = AppModel.shared
+
+    init() {
+        URLCache.shared = URLCache(memoryCapacity: 64 << 20, diskCapacity: 600 << 20)
+        LumenShortcuts.updateAppShortcutParameters()
+    }
+
+    var body: some Scene {
+        WindowGroup {
+            PhoneRoot()
+                .environment(model)
+                .tint(model.accent)
+                .preferredColorScheme(.dark)
+                .onOpenURL { url in
+                    guard let link = DeepLink(url: url) else { return }
+                    if let r = model.handle(link) { model.pendingPlay = r }
+                }
+        }
+    }
+}
+#endif

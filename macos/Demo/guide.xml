@@ -3,124 +3,124 @@
 <channel id="bipbop"><display-name>bipbop</display-name></channel>
 <channel id="advanced"><display-name>advanced</display-name></channel>
 <channel id="mux"><display-name>mux</display-name></channel>
-<programme start="20261121080000 +0000" stop="20261121083000 +0000" channel="bipbop"><title>Morning Test Pattern</title><desc>Demo programme 1 on bipbop.</desc></programme>
-<programme start="20261121083000 +0000" stop="20261121093000 +0000" channel="bipbop"><title>BipBop Live</title><desc>Demo programme 2 on bipbop.</desc></programme>
-<programme start="20261121093000 +0000" stop="20261121101500 +0000" channel="bipbop"><title>Colour Bars Special</title><desc>Demo programme 3 on bipbop.</desc></programme>
-<programme start="20261121101500 +0000" stop="20261121114500 +0000" channel="bipbop"><title>Late Night Loop</title><desc>Demo programme 4 on bipbop.</desc></programme>
-<programme start="20261121114500 +0000" stop="20261121121500 +0000" channel="bipbop"><title>Morning Test Pattern</title><desc>Demo programme 5 on bipbop.</desc></programme>
-<programme start="20261121121500 +0000" stop="20261121131500 +0000" channel="bipbop"><title>BipBop Live</title><desc>Demo programme 6 on bipbop.</desc></programme>
-<programme start="20261121131500 +0000" stop="20261121140000 +0000" channel="bipbop"><title>Colour Bars Special</title><desc>Demo programme 7 on bipbop.</desc></programme>
-<programme start="20261121140000 +0000" stop="20261121153000 +0000" channel="bipbop"><title>Late Night Loop</title><desc>Demo programme 8 on bipbop.</desc></programme>
-<programme start="20261121153000 +0000" stop="20261121160000 +0000" channel="bipbop"><title>Morning Test Pattern</title><desc>Demo programme 9 on bipbop.</desc></programme>
-<programme start="20261121160000 +0000" stop="20261121170000 +0000" channel="bipbop"><title>BipBop Live</title><desc>Demo programme 10 on bipbop.</desc></programme>
-<programme start="20261121170000 +0000" stop="20261121174500 +0000" channel="bipbop"><title>Colour Bars Special</title><desc>Demo programme 11 on bipbop.</desc></programme>
-<programme start="20261121174500 +0000" stop="20261121191500 +0000" channel="bipbop"><title>Late Night Loop</title><desc>Demo programme 12 on bipbop.</desc></programme>
-<programme start="20261121191500 +0000" stop="20261121194500 +0000" channel="bipbop"><title>Morning Test Pattern</title><desc>Demo programme 13 on bipbop.</desc></programme>
-<programme start="20261121194500 +0000" stop="20261121204500 +0000" channel="bipbop"><title>BipBop Live</title><desc>Demo programme 14 on bipbop.</desc></programme>
-<programme start="20261121204500 +0000" stop="20261121213000 +0000" channel="bipbop"><title>Colour Bars Special</title><desc>Demo programme 15 on bipbop.</desc></programme>
-<programme start="20261121213000 +0000" stop="20261121230000 +0000" channel="bipbop"><title>Late Night Loop</title><desc>Demo programme 16 on bipbop.</desc></programme>
-<programme start="20261121230000 +0000" stop="20261121233000 +0000" channel="bipbop"><title>Morning Test Pattern</title><desc>Demo programme 17 on bipbop.</desc></programme>
-<programme start="20261121233000 +0000" stop="20261122003000 +0000" channel="bipbop"><title>BipBop Live</title><desc>Demo programme 18 on bipbop.</desc></programme>
-<programme start="20261122003000 +0000" stop="20261122011500 +0000" channel="bipbop"><title>Colour Bars Special</title><desc>Demo programme 19 on bipbop.</desc></programme>
-<programme start="20261122011500 +0000" stop="20261122024500 +0000" channel="bipbop"><title>Late Night Loop</title><desc>Demo programme 20 on bipbop.</desc></programme>
-<programme start="20261122024500 +0000" stop="20261122031500 +0000" channel="bipbop"><title>Morning Test Pattern</title><desc>Demo programme 21 on bipbop.</desc></programme>
-<programme start="20261122031500 +0000" stop="20261122041500 +0000" channel="bipbop"><title>BipBop Live</title><desc>Demo programme 22 on bipbop.</desc></programme>
-<programme start="20261122041500 +0000" stop="20261122050000 +0000" channel="bipbop"><title>Colour Bars Special</title><desc>Demo programme 23 on bipbop.</desc></programme>
-<programme start="20261122050000 +0000" stop="20261122063000 +0000" channel="bipbop"><title>Late Night Loop</title><desc>Demo programme 24 on bipbop.</desc></programme>
-<programme start="20261122063000 +0000" stop="20261122070000 +0000" channel="bipbop"><title>Morning Test Pattern</title><desc>Demo programme 25 on bipbop.</desc></programme>
-<programme start="20261122070000 +0000" stop="20261122080000 +0000" channel="bipbop"><title>BipBop Live</title><desc>Demo programme 26 on bipbop.</desc></programme>
-<programme start="20261122080000 +0000" stop="20261122084500 +0000" channel="bipbop"><title>Colour Bars Special</title><desc>Demo programme 27 on bipbop.</desc></programme>
-<programme start="20261122084500 +0000" stop="20261122101500 +0000" channel="bipbop"><title>Late Night Loop</title><desc>Demo programme 28 on bipbop.</desc></programme>
-<programme start="20261122101500 +0000" stop="20261122104500 +0000" channel="bipbop"><title>Morning Test Pattern</title><desc>Demo programme 29 on bipbop.</desc></programme>
-<programme start="20261122104500 +0000" stop="20261122114500 +0000" channel="bipbop"><title>BipBop Live</title><desc>Demo programme 30 on bipbop.</desc></programme>
-<programme start="20261122114500 +0000" stop="20261122123000 +0000" channel="bipbop"><title>Colour Bars Special</title><desc>Demo programme 31 on bipbop.</desc></programme>
-<programme start="20261122123000 +0000" stop="20261122140000 +0000" channel="bipbop"><title>Late Night Loop</title><desc>Demo programme 32 on bipbop.</desc></programme>
-<programme start="20261122140000 +0000" stop="20261122143000 +0000" channel="bipbop"><title>Morning Test Pattern</title><desc>Demo programme 33 on bipbop.</desc></programme>
-<programme start="20261122143000 +0000" stop="20261122153000 +0000" channel="bipbop"><title>BipBop Live</title><desc>Demo programme 34 on bipbop.</desc></programme>
-<programme start="20261122153000 +0000" stop="20261122161500 +0000" channel="bipbop"><title>Colour Bars Special</title><desc>Demo programme 35 on bipbop.</desc></programme>
-<programme start="20261122161500 +0000" stop="20261122174500 +0000" channel="bipbop"><title>Late Night Loop</title><desc>Demo programme 36 on bipbop.</desc></programme>
-<programme start="20261122174500 +0000" stop="20261122181500 +0000" channel="bipbop"><title>Morning Test Pattern</title><desc>Demo programme 37 on bipbop.</desc></programme>
-<programme start="20261122181500 +0000" stop="20261122191500 +0000" channel="bipbop"><title>BipBop Live</title><desc>Demo programme 38 on bipbop.</desc></programme>
-<programme start="20261122191500 +0000" stop="20261122200000 +0000" channel="bipbop"><title>Colour Bars Special</title><desc>Demo programme 39 on bipbop.</desc></programme>
-<programme start="20261122200000 +0000" stop="20261122213000 +0000" channel="bipbop"><title>Late Night Loop</title><desc>Demo programme 40 on bipbop.</desc></programme>
-<programme start="20261121080000 +0000" stop="20261121083000 +0000" channel="advanced"><title>Dolby Vision Showcase</title><desc>Demo programme 1 on advanced.</desc></programme>
-<programme start="20261121083000 +0000" stop="20261121093000 +0000" channel="advanced"><title>Atmos Hour</title><desc>Demo programme 2 on advanced.</desc></programme>
-<programme start="20261121093000 +0000" stop="20261121101500 +0000" channel="advanced"><title>HDR Nature</title><desc>Demo programme 3 on advanced.</desc></programme>
-<programme start="20261121101500 +0000" stop="20261121114500 +0000" channel="advanced"><title>Night Skies</title><desc>Demo programme 4 on advanced.</desc></programme>
-<programme start="20261121114500 +0000" stop="20261121121500 +0000" channel="advanced"><title>Dolby Vision Showcase</title><desc>Demo programme 5 on advanced.</desc></programme>
-<programme start="20261121121500 +0000" stop="20261121131500 +0000" channel="advanced"><title>Atmos Hour</title><desc>Demo programme 6 on advanced.</desc></programme>
-<programme start="20261121131500 +0000" stop="20261121140000 +0000" channel="advanced"><title>HDR Nature</title><desc>Demo programme 7 on advanced.</desc></programme>
-<programme start="20261121140000 +0000" stop="20261121153000 +0000" channel="advanced"><title>Night Skies</title><desc>Demo programme 8 on advanced.</desc></programme>
-<programme start="20261121153000 +0000" stop="20261121160000 +0000" channel="advanced"><title>Dolby Vision Showcase</title><desc>Demo programme 9 on advanced.</desc></programme>
-<programme start="20261121160000 +0000" stop="20261121170000 +0000" channel="advanced"><title>Atmos Hour</title><desc>Demo programme 10 on advanced.</desc></programme>
-<programme start="20261121170000 +0000" stop="20261121174500 +0000" channel="advanced"><title>HDR Nature</title><desc>Demo programme 11 on advanced.</desc></programme>
-<programme start="20261121174500 +0000" stop="20261121191500 +0000" channel="advanced"><title>Night Skies</title><desc>Demo programme 12 on advanced.</desc></programme>
-<programme start="20261121191500 +0000" stop="20261121194500 +0000" channel="advanced"><title>Dolby Vision Showcase</title><desc>Demo programme 13 on advanced.</desc></programme>
-<programme start="20261121194500 +0000" stop="20261121204500 +0000" channel="advanced"><title>Atmos Hour</title><desc>Demo programme 14 on advanced.</desc></programme>
-<programme start="20261121204500 +0000" stop="20261121213000 +0000" channel="advanced"><title>HDR Nature</title><desc>Demo programme 15 on advanced.</desc></programme>
-<programme start="20261121213000 +0000" stop="20261121230000 +0000" channel="advanced"><title>Night Skies</title><desc>Demo programme 16 on advanced.</desc></programme>
-<programme start="20261121230000 +0000" stop="20261121233000 +0000" channel="advanced"><title>Dolby Vision Showcase</title><desc>Demo programme 17 on advanced.</desc></programme>
-<programme start="20261121233000 +0000" stop="20261122003000 +0000" channel="advanced"><title>Atmos Hour</title><desc>Demo programme 18 on advanced.</desc></programme>
-<programme start="20261122003000 +0000" stop="20261122011500 +0000" channel="advanced"><title>HDR Nature</title><desc>Demo programme 19 on advanced.</desc></programme>
-<programme start="20261122011500 +0000" stop="20261122024500 +0000" channel="advanced"><title>Night Skies</title><desc>Demo programme 20 on advanced.</desc></programme>
-<programme start="20261122024500 +0000" stop="20261122031500 +0000" channel="advanced"><title>Dolby Vision Showcase</title><desc>Demo programme 21 on advanced.</desc></programme>
-<programme start="20261122031500 +0000" stop="20261122041500 +0000" channel="advanced"><title>Atmos Hour</title><desc>Demo programme 22 on advanced.</desc></programme>
-<programme start="20261122041500 +0000" stop="20261122050000 +0000" channel="advanced"><title>HDR Nature</title><desc>Demo programme 23 on advanced.</desc></programme>
-<programme start="20261122050000 +0000" stop="20261122063000 +0000" channel="advanced"><title>Night Skies</title><desc>Demo programme 24 on advanced.</desc></programme>
-<programme start="20261122063000 +0000" stop="20261122070000 +0000" channel="advanced"><title>Dolby Vision Showcase</title><desc>Demo programme 25 on advanced.</desc></programme>
-<programme start="20261122070000 +0000" stop="20261122080000 +0000" channel="advanced"><title>Atmos Hour</title><desc>Demo programme 26 on advanced.</desc></programme>
-<programme start="20261122080000 +0000" stop="20261122084500 +0000" channel="advanced"><title>HDR Nature</title><desc>Demo programme 27 on advanced.</desc></programme>
-<programme start="20261122084500 +0000" stop="20261122101500 +0000" channel="advanced"><title>Night Skies</title><desc>Demo programme 28 on advanced.</desc></programme>
-<programme start="20261122101500 +0000" stop="20261122104500 +0000" channel="advanced"><title>Dolby Vision Showcase</title><desc>Demo programme 29 on advanced.</desc></programme>
-<programme start="20261122104500 +0000" stop="20261122114500 +0000" channel="advanced"><title>Atmos Hour</title><desc>Demo programme 30 on advanced.</desc></programme>
-<programme start="20261122114500 +0000" stop="20261122123000 +0000" channel="advanced"><title>HDR Nature</title><desc>Demo programme 31 on advanced.</desc></programme>
-<programme start="20261122123000 +0000" stop="20261122140000 +0000" channel="advanced"><title>Night Skies</title><desc>Demo programme 32 on advanced.</desc></programme>
-<programme start="20261122140000 +0000" stop="20261122143000 +0000" channel="advanced"><title>Dolby Vision Showcase</title><desc>Demo programme 33 on advanced.</desc></programme>
-<programme start="20261122143000 +0000" stop="20261122153000 +0000" channel="advanced"><title>Atmos Hour</title><desc>Demo programme 34 on advanced.</desc></programme>
-<programme start="20261122153000 +0000" stop="20261122161500 +0000" channel="advanced"><title>HDR Nature</title><desc>Demo programme 35 on advanced.</desc></programme>
-<programme start="20261122161500 +0000" stop="20261122174500 +0000" channel="advanced"><title>Night Skies</title><desc>Demo programme 36 on advanced.</desc></programme>
-<programme start="20261122174500 +0000" stop="20261122181500 +0000" channel="advanced"><title>Dolby Vision Showcase</title><desc>Demo programme 37 on advanced.</desc></programme>
-<programme start="20261122181500 +0000" stop="20261122191500 +0000" channel="advanced"><title>Atmos Hour</title><desc>Demo programme 38 on advanced.</desc></programme>
-<programme start="20261122191500 +0000" stop="20261122200000 +0000" channel="advanced"><title>HDR Nature</title><desc>Demo programme 39 on advanced.</desc></programme>
-<programme start="20261122200000 +0000" stop="20261122213000 +0000" channel="advanced"><title>Night Skies</title><desc>Demo programme 40 on advanced.</desc></programme>
-<programme start="20261121080000 +0000" stop="20261121083000 +0000" channel="mux"><title>Bunny Marathon</title><desc>Demo programme 1 on mux.</desc></programme>
-<programme start="20261121083000 +0000" stop="20261121093000 +0000" channel="mux"><title>Mux Weekly</title><desc>Demo programme 2 on mux.</desc></programme>
-<programme start="20261121093000 +0000" stop="20261121101500 +0000" channel="mux"><title>Stream Tech Talk</title><desc>Demo programme 3 on mux.</desc></programme>
-<programme start="20261121101500 +0000" stop="20261121114500 +0000" channel="mux"><title>Encore</title><desc>Demo programme 4 on mux.</desc></programme>
-<programme start="20261121114500 +0000" stop="20261121121500 +0000" channel="mux"><title>Bunny Marathon</title><desc>Demo programme 5 on mux.</desc></programme>
-<programme start="20261121121500 +0000" stop="20261121131500 +0000" channel="mux"><title>Mux Weekly</title><desc>Demo programme 6 on mux.</desc></programme>
-<programme start="20261121131500 +0000" stop="20261121140000 +0000" channel="mux"><title>Stream Tech Talk</title><desc>Demo programme 7 on mux.</desc></programme>
-<programme start="20261121140000 +0000" stop="20261121153000 +0000" channel="mux"><title>Encore</title><desc>Demo programme 8 on mux.</desc></programme>
-<programme start="20261121153000 +0000" stop="20261121160000 +0000" channel="mux"><title>Bunny Marathon</title><desc>Demo programme 9 on mux.</desc></programme>
-<programme start="20261121160000 +0000" stop="20261121170000 +0000" channel="mux"><title>Mux Weekly</title><desc>Demo programme 10 on mux.</desc></programme>
-<programme start="20261121170000 +0000" stop="20261121174500 +0000" channel="mux"><title>Stream Tech Talk</title><desc>Demo programme 11 on mux.</desc></programme>
-<programme start="20261121174500 +0000" stop="20261121191500 +0000" channel="mux"><title>Encore</title><desc>Demo programme 12 on mux.</desc></programme>
-<programme start="20261121191500 +0000" stop="20261121194500 +0000" channel="mux"><title>Bunny Marathon</title><desc>Demo programme 13 on mux.</desc></programme>
-<programme start="20261121194500 +0000" stop="20261121204500 +0000" channel="mux"><title>Mux Weekly</title><desc>Demo programme 14 on mux.</desc></programme>
-<programme start="20261121204500 +0000" stop="20261121213000 +0000" channel="mux"><title>Stream Tech Talk</title><desc>Demo programme 15 on mux.</desc></programme>
-<programme start="20261121213000 +0000" stop="20261121230000 +0000" channel="mux"><title>Encore</title><desc>Demo programme 16 on mux.</desc></programme>
-<programme start="20261121230000 +0000" stop="20261121233000 +0000" channel="mux"><title>Bunny Marathon</title><desc>Demo programme 17 on mux.</desc></programme>
-<programme start="20261121233000 +0000" stop="20261122003000 +0000" channel="mux"><title>Mux Weekly</title><desc>Demo programme 18 on mux.</desc></programme>
-<programme start="20261122003000 +0000" stop="20261122011500 +0000" channel="mux"><title>Stream Tech Talk</title><desc>Demo programme 19 on mux.</desc></programme>
-<programme start="20261122011500 +0000" stop="20261122024500 +0000" channel="mux"><title>Encore</title><desc>Demo programme 20 on mux.</desc></programme>
-<programme start="20261122024500 +0000" stop="20261122031500 +0000" channel="mux"><title>Bunny Marathon</title><desc>Demo programme 21 on mux.</desc></programme>
-<programme start="20261122031500 +0000" stop="20261122041500 +0000" channel="mux"><title>Mux Weekly</title><desc>Demo programme 22 on mux.</desc></programme>
-<programme start="20261122041500 +0000" stop="20261122050000 +0000" channel="mux"><title>Stream Tech Talk</title><desc>Demo programme 23 on mux.</desc></programme>
-<programme start="20261122050000 +0000" stop="20261122063000 +0000" channel="mux"><title>Encore</title><desc>Demo programme 24 on mux.</desc></programme>
-<programme start="20261122063000 +0000" stop="20261122070000 +0000" channel="mux"><title>Bunny Marathon</title><desc>Demo programme 25 on mux.</desc></programme>
-<programme start="20261122070000 +0000" stop="20261122080000 +0000" channel="mux"><title>Mux Weekly</title><desc>Demo programme 26 on mux.</desc></programme>
-<programme start="20261122080000 +0000" stop="20261122084500 +0000" channel="mux"><title>Stream Tech Talk</title><desc>Demo programme 27 on mux.</desc></programme>
-<programme start="20261122084500 +0000" stop="20261122101500 +0000" channel="mux"><title>Encore</title><desc>Demo programme 28 on mux.</desc></programme>
-<programme start="20261122101500 +0000" stop="20261122104500 +0000" channel="mux"><title>Bunny Marathon</title><desc>Demo programme 29 on mux.</desc></programme>
-<programme start="20261122104500 +0000" stop="20261122114500 +0000" channel="mux"><title>Mux Weekly</title><desc>Demo programme 30 on mux.</desc></programme>
-<programme start="20261122114500 +0000" stop="20261122123000 +0000" channel="mux"><title>Stream Tech Talk</title><desc>Demo programme 31 on mux.</desc></programme>
-<programme start="20261122123000 +0000" stop="20261122140000 +0000" channel="mux"><title>Encore</title><desc>Demo programme 32 on mux.</desc></programme>
-<programme start="20261122140000 +0000" stop="20261122143000 +0000" channel="mux"><title>Bunny Marathon</title><desc>Demo programme 33 on mux.</desc></programme>
-<programme start="20261122143000 +0000" stop="20261122153000 +0000" channel="mux"><title>Mux Weekly</title><desc>Demo programme 34 on mux.</desc></programme>
-<programme start="20261122153000 +0000" stop="20261122161500 +0000" channel="mux"><title>Stream Tech Talk</title><desc>Demo programme 35 on mux.</desc></programme>
-<programme start="20261122161500 +0000" stop="20261122174500 +0000" channel="mux"><title>Encore</title><desc>Demo programme 36 on mux.</desc></programme>
-<programme start="20261122174500 +0000" stop="20261122181500 +0000" channel="mux"><title>Bunny Marathon</title><desc>Demo programme 37 on mux.</desc></programme>
-<programme start="20261122181500 +0000" stop="20261122191500 +0000" channel="mux"><title>Mux Weekly</title><desc>Demo programme 38 on mux.</desc></programme>
-<programme start="20261122191500 +0000" stop="20261122200000 +0000" channel="mux"><title>Stream Tech Talk</title><desc>Demo programme 39 on mux.</desc></programme>
-<programme start="20261122200000 +0000" stop="20261122213000 +0000" channel="mux"><title>Encore</title><desc>Demo programme 40 on mux.</desc></programme>
+<programme start="20261121070000 +0000" stop="20261121073000 +0000" channel="bipbop"><title>Morning Test Pattern</title><desc>Demo programme 1 on bipbop.</desc></programme>
+<programme start="20261121073000 +0000" stop="20261121083000 +0000" channel="bipbop"><title>BipBop Live</title><desc>Demo programme 2 on bipbop.</desc></programme>
+<programme start="20261121083000 +0000" stop="20261121091500 +0000" channel="bipbop"><title>Colour Bars Special</title><desc>Demo programme 3 on bipbop.</desc></programme>
+<programme start="20261121091500 +0000" stop="20261121104500 +0000" channel="bipbop"><title>Late Night Loop</title><desc>Demo programme 4 on bipbop.</desc></programme>
+<programme start="20261121104500 +0000" stop="20261121111500 +0000" channel="bipbop"><title>Morning Test Pattern</title><desc>Demo programme 5 on bipbop.</desc></programme>
+<programme start="20261121111500 +0000" stop="20261121121500 +0000" channel="bipbop"><title>BipBop Live</title><desc>Demo programme 6 on bipbop.</desc></programme>
+<programme start="20261121121500 +0000" stop="20261121130000 +0000" channel="bipbop"><title>Colour Bars Special</title><desc>Demo programme 7 on bipbop.</desc></programme>
+<programme start="20261121130000 +0000" stop="20261121143000 +0000" channel="bipbop"><title>Late Night Loop</title><desc>Demo programme 8 on bipbop.</desc></programme>
+<programme start="20261121143000 +0000" stop="20261121150000 +0000" channel="bipbop"><title>Morning Test Pattern</title><desc>Demo programme 9 on bipbop.</desc></programme>
+<programme start="20261121150000 +0000" stop="20261121160000 +0000" channel="bipbop"><title>BipBop Live</title><desc>Demo programme 10 on bipbop.</desc></programme>
+<programme start="20261121160000 +0000" stop="20261121164500 +0000" channel="bipbop"><title>Colour Bars Special</title><desc>Demo programme 11 on bipbop.</desc></programme>
+<programme start="20261121164500 +0000" stop="20261121181500 +0000" channel="bipbop"><title>Late Night Loop</title><desc>Demo programme 12 on bipbop.</desc></programme>
+<programme start="20261121181500 +0000" stop="20261121184500 +0000" channel="bipbop"><title>Morning Test Pattern</title><desc>Demo programme 13 on bipbop.</desc></programme>
+<programme start="20261121184500 +0000" stop="20261121194500 +0000" channel="bipbop"><title>BipBop Live</title><desc>Demo programme 14 on bipbop.</desc></programme>
+<programme start="20261121194500 +0000" stop="20261121203000 +0000" channel="bipbop"><title>Colour Bars Special</title><desc>Demo programme 15 on bipbop.</desc></programme>
+<programme start="20261121203000 +0000" stop="20261121220000 +0000" channel="bipbop"><title>Late Night Loop</title><desc>Demo programme 16 on bipbop.</desc></programme>
+<programme start="20261121220000 +0000" stop="20261121223000 +0000" channel="bipbop"><title>Morning Test Pattern</title><desc>Demo programme 17 on bipbop.</desc></programme>
+<programme start="20261121223000 +0000" stop="20261121233000 +0000" channel="bipbop"><title>BipBop Live</title><desc>Demo programme 18 on bipbop.</desc></programme>
+<programme start="20261121233000 +0000" stop="20261122001500 +0000" channel="bipbop"><title>Colour Bars Special</title><desc>Demo programme 19 on bipbop.</desc></programme>
+<programme start="20261122001500 +0000" stop="20261122014500 +0000" channel="bipbop"><title>Late Night Loop</title><desc>Demo programme 20 on bipbop.</desc></programme>
+<programme start="20261122014500 +0000" stop="20261122021500 +0000" channel="bipbop"><title>Morning Test Pattern</title><desc>Demo programme 21 on bipbop.</desc></programme>
+<programme start="20261122021500 +0000" stop="20261122031500 +0000" channel="bipbop"><title>BipBop Live</title><desc>Demo programme 22 on bipbop.</desc></programme>
+<programme start="20261122031500 +0000" stop="20261122040000 +0000" channel="bipbop"><title>Colour Bars Special</title><desc>Demo programme 23 on bipbop.</desc></programme>
+<programme start="20261122040000 +0000" stop="20261122053000 +0000" channel="bipbop"><title>Late Night Loop</title><desc>Demo programme 24 on bipbop.</desc></programme>
+<programme start="20261122053000 +0000" stop="20261122060000 +0000" channel="bipbop"><title>Morning Test Pattern</title><desc>Demo programme 25 on bipbop.</desc></programme>
+<programme start="20261122060000 +0000" stop="20261122070000 +0000" channel="bipbop"><title>BipBop Live</title><desc>Demo programme 26 on bipbop.</desc></programme>
+<programme start="20261122070000 +0000" stop="20261122074500 +0000" channel="bipbop"><title>Colour Bars Special</title><desc>Demo programme 27 on bipbop.</desc></programme>
+<programme start="20261122074500 +0000" stop="20261122091500 +0000" channel="bipbop"><title>Late Night Loop</title><desc>Demo programme 28 on bipbop.</desc></programme>
+<programme start="20261122091500 +0000" stop="20261122094500 +0000" channel="bipbop"><title>Morning Test Pattern</title><desc>Demo programme 29 on bipbop.</desc></programme>
+<programme start="20261122094500 +0000" stop="20261122104500 +0000" channel="bipbop"><title>BipBop Live</title><desc>Demo programme 30 on bipbop.</desc></programme>
+<programme start="20261122104500 +0000" stop="20261122113000 +0000" channel="bipbop"><title>Colour Bars Special</title><desc>Demo programme 31 on bipbop.</desc></programme>
+<programme start="20261122113000 +0000" stop="20261122130000 +0000" channel="bipbop"><title>Late Night Loop</title><desc>Demo programme 32 on bipbop.</desc></programme>
+<programme start="20261122130000 +0000" stop="20261122133000 +0000" channel="bipbop"><title>Morning Test Pattern</title><desc>Demo programme 33 on bipbop.</desc></programme>
+<programme start="20261122133000 +0000" stop="20261122143000 +0000" channel="bipbop"><title>BipBop Live</title><desc>Demo programme 34 on bipbop.</desc></programme>
+<programme start="20261122143000 +0000" stop="20261122151500 +0000" channel="bipbop"><title>Colour Bars Special</title><desc>Demo programme 35 on bipbop.</desc></programme>
+<programme start="20261122151500 +0000" stop="20261122164500 +0000" channel="bipbop"><title>Late Night Loop</title><desc>Demo programme 36 on bipbop.</desc></programme>
+<programme start="20261122164500 +0000" stop="20261122171500 +0000" channel="bipbop"><title>Morning Test Pattern</title><desc>Demo programme 37 on bipbop.</desc></programme>
+<programme start="20261122171500 +0000" stop="20261122181500 +0000" channel="bipbop"><title>BipBop Live</title><desc>Demo programme 38 on bipbop.</desc></programme>
+<programme start="20261122181500 +0000" stop="20261122190000 +0000" channel="bipbop"><title>Colour Bars Special</title><desc>Demo programme 39 on bipbop.</desc></programme>
+<programme start="20261122190000 +0000" stop="20261122203000 +0000" channel="bipbop"><title>Late Night Loop</title><desc>Demo programme 40 on bipbop.</desc></programme>
+<programme start="20261121070000 +0000" stop="20261121073000 +0000" channel="advanced"><title>Dolby Vision Showcase</title><desc>Demo programme 1 on advanced.</desc></programme>
+<programme start="20261121073000 +0000" stop="20261121083000 +0000" channel="advanced"><title>Atmos Hour</title><desc>Demo programme 2 on advanced.</desc></programme>
+<programme start="20261121083000 +0000" stop="20261121091500 +0000" channel="advanced"><title>HDR Nature</title><desc>Demo programme 3 on advanced.</desc></programme>
+<programme start="20261121091500 +0000" stop="20261121104500 +0000" channel="advanced"><title>Night Skies</title><desc>Demo programme 4 on advanced.</desc></programme>
+<programme start="20261121104500 +0000" stop="20261121111500 +0000" channel="advanced"><title>Dolby Vision Showcase</title><desc>Demo programme 5 on advanced.</desc></programme>
+<programme start="20261121111500 +0000" stop="20261121121500 +0000" channel="advanced"><title>Atmos Hour</title><desc>Demo programme 6 on advanced.</desc></programme>
+<programme start="20261121121500 +0000" stop="20261121130000 +0000" channel="advanced"><title>HDR Nature</title><desc>Demo programme 7 on advanced.</desc></programme>
+<programme start="20261121130000 +0000" stop="20261121143000 +0000" channel="advanced"><title>Night Skies</title><desc>Demo programme 8 on advanced.</desc></programme>
+<programme start="20261121143000 +0000" stop="20261121150000 +0000" channel="advanced"><title>Dolby Vision Showcase</title><desc>Demo programme 9 on advanced.</desc></programme>
+<programme start="20261121150000 +0000" stop="20261121160000 +0000" channel="advanced"><title>Atmos Hour</title><desc>Demo programme 10 on advanced.</desc></programme>
+<programme start="20261121160000 +0000" stop="20261121164500 +0000" channel="advanced"><title>HDR Nature</title><desc>Demo programme 11 on advanced.</desc></programme>
+<programme start="20261121164500 +0000" stop="20261121181500 +0000" channel="advanced"><title>Night Skies</title><desc>Demo programme 12 on advanced.</desc></programme>
+<programme start="20261121181500 +0000" stop="20261121184500 +0000" channel="advanced"><title>Dolby Vision Showcase</title><desc>Demo programme 13 on advanced.</desc></programme>
+<programme start="20261121184500 +0000" stop="20261121194500 +0000" channel="advanced"><title>Atmos Hour</title><desc>Demo programme 14 on advanced.</desc></programme>
+<programme start="20261121194500 +0000" stop="20261121203000 +0000" channel="advanced"><title>HDR Nature</title><desc>Demo programme 15 on advanced.</desc></programme>
+<programme start="20261121203000 +0000" stop="20261121220000 +0000" channel="advanced"><title>Night Skies</title><desc>Demo programme 16 on advanced.</desc></programme>
+<programme start="20261121220000 +0000" stop="20261121223000 +0000" channel="advanced"><title>Dolby Vision Showcase</title><desc>Demo programme 17 on advanced.</desc></programme>
+<programme start="20261121223000 +0000" stop="20261121233000 +0000" channel="advanced"><title>Atmos Hour</title><desc>Demo programme 18 on advanced.</desc></programme>
+<programme start="20261121233000 +0000" stop="20261122001500 +0000" channel="advanced"><title>HDR Nature</title><desc>Demo programme 19 on advanced.</desc></programme>
+<programme start="20261122001500 +0000" stop="20261122014500 +0000" channel="advanced"><title>Night Skies</title><desc>Demo programme 20 on advanced.</desc></programme>
+<programme start="20261122014500 +0000" stop="20261122021500 +0000" channel="advanced"><title>Dolby Vision Showcase</title><desc>Demo programme 21 on advanced.</desc></programme>
+<programme start="20261122021500 +0000" stop="20261122031500 +0000" channel="advanced"><title>Atmos Hour</title><desc>Demo programme 22 on advanced.</desc></programme>
+<programme start="20261122031500 +0000" stop="20261122040000 +0000" channel="advanced"><title>HDR Nature</title><desc>Demo programme 23 on advanced.</desc></programme>
+<programme start="20261122040000 +0000" stop="20261122053000 +0000" channel="advanced"><title>Night Skies</title><desc>Demo programme 24 on advanced.</desc></programme>
+<programme start="20261122053000 +0000" stop="20261122060000 +0000" channel="advanced"><title>Dolby Vision Showcase</title><desc>Demo programme 25 on advanced.</desc></programme>
+<programme start="20261122060000 +0000" stop="20261122070000 +0000" channel="advanced"><title>Atmos Hour</title><desc>Demo programme 26 on advanced.</desc></programme>
+<programme start="20261122070000 +0000" stop="20261122074500 +0000" channel="advanced"><title>HDR Nature</title><desc>Demo programme 27 on advanced.</desc></programme>
+<programme start="20261122074500 +0000" stop="20261122091500 +0000" channel="advanced"><title>Night Skies</title><desc>Demo programme 28 on advanced.</desc></programme>
+<programme start="20261122091500 +0000" stop="20261122094500 +0000" channel="advanced"><title>Dolby Vision Showcase</title><desc>Demo programme 29 on advanced.</desc></programme>
+<programme start="20261122094500 +0000" stop="20261122104500 +0000" channel="advanced"><title>Atmos Hour</title><desc>Demo programme 30 on advanced.</desc></programme>
+<programme start="20261122104500 +0000" stop="20261122113000 +0000" channel="advanced"><title>HDR Nature</title><desc>Demo programme 31 on advanced.</desc></programme>
+<programme start="20261122113000 +0000" stop="20261122130000 +0000" channel="advanced"><title>Night Skies</title><desc>Demo programme 32 on advanced.</desc></programme>
+<programme start="20261122130000 +0000" stop="20261122133000 +0000" channel="advanced"><title>Dolby Vision Showcase</title><desc>Demo programme 33 on advanced.</desc></programme>
+<programme start="20261122133000 +0000" stop="20261122143000 +0000" channel="advanced"><title>Atmos Hour</title><desc>Demo programme 34 on advanced.</desc></programme>
+<programme start="20261122143000 +0000" stop="20261122151500 +0000" channel="advanced"><title>HDR Nature</title><desc>Demo programme 35 on advanced.</desc></programme>
+<programme start="20261122151500 +0000" stop="20261122164500 +0000" channel="advanced"><title>Night Skies</title><desc>Demo programme 36 on advanced.</desc></programme>
+<programme start="20261122164500 +0000" stop="20261122171500 +0000" channel="advanced"><title>Dolby Vision Showcase</title><desc>Demo programme 37 on advanced.</desc></programme>
+<programme start="20261122171500 +0000" stop="20261122181500 +0000" channel="advanced"><title>Atmos Hour</title><desc>Demo programme 38 on advanced.</desc></programme>
+<programme start="20261122181500 +0000" stop="20261122190000 +0000" channel="advanced"><title>HDR Nature</title><desc>Demo programme 39 on advanced.</desc></programme>
+<programme start="20261122190000 +0000" stop="20261122203000 +0000" channel="advanced"><title>Night Skies</title><desc>Demo programme 40 on advanced.</desc></programme>
+<programme start="20261121070000 +0000" stop="20261121073000 +0000" channel="mux"><title>Bunny Marathon</title><desc>Demo programme 1 on mux.</desc></programme>
+<programme start="20261121073000 +0000" stop="20261121083000 +0000" channel="mux"><title>Mux Weekly</title><desc>Demo programme 2 on mux.</desc></programme>
+<programme start="20261121083000 +0000" stop="20261121091500 +0000" channel="mux"><title>Stream Tech Talk</title><desc>Demo programme 3 on mux.</desc></programme>
+<programme start="20261121091500 +0000" stop="20261121104500 +0000" channel="mux"><title>Encore</title><desc>Demo programme 4 on mux.</desc></programme>
+<programme start="20261121104500 +0000" stop="20261121111500 +0000" channel="mux"><title>Bunny Marathon</title><desc>Demo programme 5 on mux.</desc></programme>
+<programme start="20261121111500 +0000" stop="20261121121500 +0000" channel="mux"><title>Mux Weekly</title><desc>Demo programme 6 on mux.</desc></programme>
+<programme start="20261121121500 +0000" stop="20261121130000 +0000" channel="mux"><title>Stream Tech Talk</title><desc>Demo programme 7 on mux.</desc></programme>
+<programme start="20261121130000 +0000" stop="20261121143000 +0000" channel="mux"><title>Encore</title><desc>Demo programme 8 on mux.</desc></programme>
+<programme start="20261121143000 +0000" stop="20261121150000 +0000" channel="mux"><title>Bunny Marathon</title><desc>Demo programme 9 on mux.</desc></programme>
+<programme start="20261121150000 +0000" stop="20261121160000 +0000" channel="mux"><title>Mux Weekly</title><desc>Demo programme 10 on mux.</desc></programme>
+<programme start="20261121160000 +0000" stop="20261121164500 +0000" channel="mux"><title>Stream Tech Talk</title><desc>Demo programme 11 on mux.</desc></programme>
+<programme start="20261121164500 +0000" stop="20261121181500 +0000" channel="mux"><title>Encore</title><desc>Demo programme 12 on mux.</desc></programme>
+<programme start="20261121181500 +0000" stop="20261121184500 +0000" channel="mux"><title>Bunny Marathon</title><desc>Demo programme 13 on mux.</desc></programme>
+<programme start="20261121184500 +0000" stop="20261121194500 +0000" channel="mux"><title>Mux Weekly</title><desc>Demo programme 14 on mux.</desc></programme>
+<programme start="20261121194500 +0000" stop="20261121203000 +0000" channel="mux"><title>Stream Tech Talk</title><desc>Demo programme 15 on mux.</desc></programme>
+<programme start="20261121203000 +0000" stop="20261121220000 +0000" channel="mux"><title>Encore</title><desc>Demo programme 16 on mux.</desc></programme>
+<programme start="20261121220000 +0000" stop="20261121223000 +0000" channel="mux"><title>Bunny Marathon</title><desc>Demo programme 17 on mux.</desc></programme>
+<programme start="20261121223000 +0000" stop="20261121233000 +0000" channel="mux"><title>Mux Weekly</title><desc>Demo programme 18 on mux.</desc></programme>
+<programme start="20261121233000 +0000" stop="20261122001500 +0000" channel="mux"><title>Stream Tech Talk</title><desc>Demo programme 19 on mux.</desc></programme>
+<programme start="20261122001500 +0000" stop="20261122014500 +0000" channel="mux"><title>Encore</title><desc>Demo programme 20 on mux.</desc></programme>
+<programme start="20261122014500 +0000" stop="20261122021500 +0000" channel="mux"><title>Bunny Marathon</title><desc>Demo programme 21 on mux.</desc></programme>
+<programme start="20261122021500 +0000" stop="20261122031500 +0000" channel="mux"><title>Mux Weekly</title><desc>Demo programme 22 on mux.</desc></programme>
+<programme start="20261122031500 +0000" stop="20261122040000 +0000" channel="mux"><title>Stream Tech Talk</title><desc>Demo programme 23 on mux.</desc></programme>
+<programme start="20261122040000 +0000" stop="20261122053000 +0000" channel="mux"><title>Encore</title><desc>Demo programme 24 on mux.</desc></programme>
+<programme start="20261122053000 +0000" stop="20261122060000 +0000" channel="mux"><title>Bunny Marathon</title><desc>Demo programme 25 on mux.</desc></programme>
+<programme start="20261122060000 +0000" stop="20261122070000 +0000" channel="mux"><title>Mux Weekly</title><desc>Demo programme 26 on mux.</desc></programme>
+<programme start="20261122070000 +0000" stop="20261122074500 +0000" channel="mux"><title>Stream Tech Talk</title><desc>Demo programme 27 on mux.</desc></programme>
+<programme start="20261122074500 +0000" stop="20261122091500 +0000" channel="mux"><title>Encore</title><desc>Demo programme 28 on mux.</desc></programme>
+<programme start="20261122091500 +0000" stop="20261122094500 +0000" channel="mux"><title>Bunny Marathon</title><desc>Demo programme 29 on mux.</desc></programme>
+<programme start="20261122094500 +0000" stop="20261122104500 +0000" channel="mux"><title>Mux Weekly</title><desc>Demo programme 30 on mux.</desc></programme>
+<programme start="20261122104500 +0000" stop="20261122113000 +0000" channel="mux"><title>Stream Tech Talk</title><desc>Demo programme 31 on mux.</desc></programme>
+<programme start="20261122113000 +0000" stop="20261122130000 +0000" channel="mux"><title>Encore</title><desc>Demo programme 32 on mux.</desc></programme>
+<programme start="20261122130000 +0000" stop="20261122133000 +0000" channel="mux"><title>Bunny Marathon</title><desc>Demo programme 33 on mux.</desc></programme>
+<programme start="20261122133000 +0000" stop="20261122143000 +0000" channel="mux"><title>Mux Weekly</title><desc>Demo programme 34 on mux.</desc></programme>
+<programme start="20261122143000 +0000" stop="20261122151500 +0000" channel="mux"><title>Stream Tech Talk</title><desc>Demo programme 35 on mux.</desc></programme>
+<programme start="20261122151500 +0000" stop="20261122164500 +0000" channel="mux"><title>Encore</title><desc>Demo programme 36 on mux.</desc></programme>
+<programme start="20261122164500 +0000" stop="20261122171500 +0000" channel="mux"><title>Bunny Marathon</title><desc>Demo programme 37 on mux.</desc></programme>
+<programme start="20261122171500 +0000" stop="20261122181500 +0000" channel="mux"><title>Mux Weekly</title><desc>Demo programme 38 on mux.</desc></programme>
+<programme start="20261122181500 +0000" stop="20261122190000 +0000" channel="mux"><title>Stream Tech Talk</title><desc>Demo programme 39 on mux.</desc></programme>
+<programme start="20261122190000 +0000" stop="20261122203000 +0000" channel="mux"><title>Encore</title><desc>Demo programme 40 on mux.</desc></programme>
 </tv>

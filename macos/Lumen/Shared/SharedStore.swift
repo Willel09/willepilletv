@@ -1,7 +1,10 @@
 // Data shared between Lumen and its widgets: a small snapshot the app writes after every change,
 // plus the deep links the widgets open. Lives in the App Group container.
 import Foundation
+#if os(macOS)
 import Security
+#endif
+import SwiftUI
 
 nonisolated enum Shared {
     static let appGroup = "group.se.willepille.Lumen"
@@ -13,11 +16,15 @@ nonisolated enum Shared {
     static let widgetBundleId = "se.willepille.Lumen.LumenWidgets"
 
     /// True when this process was signed with the App Group (needs a development team in Xcode).
+    #if os(iOS)
+    static let hasAppGroup = true
+    #else
     static let hasAppGroup: Bool = {
         guard let task = SecTaskCreateFromSelf(nil),
               let value = SecTaskCopyValueForEntitlement(task, "com.apple.security.application-groups" as CFString, nil) as? [String] else { return false }
         return value.contains(appGroup)
     }()
+    #endif
 
     static var isWidget: Bool { Bundle.main.bundleIdentifier == widgetBundleId }
 
@@ -95,6 +102,9 @@ nonisolated struct WidgetSnapshot: Codable, Sendable {
     var channelCount: Int
     var watchlistCount: Int
     var updatedAt: Date
+    /// App accent and theme glow so widgets match the app's look
+    var accentHex: String? = nil
+    var glowHex: [String]? = nil
 
     static let empty = WidgetSnapshot(continueWatching: [], liveNow: [], picks: [], movieCount: 0, seriesCount: 0,
                                       channelCount: 0, watchlistCount: 0, updatedAt: .distantPast)
@@ -138,3 +148,14 @@ nonisolated enum DeepLink: Hashable, Sendable {
         }
     }
 }
+
+
+#if os(macOS)
+import AppKit
+typealias PlatformImage = NSImage
+extension Image { init(platformImage: PlatformImage) { self.init(nsImage: platformImage) } }
+#else
+import UIKit
+typealias PlatformImage = UIImage
+extension Image { init(platformImage: PlatformImage) { self.init(uiImage: platformImage) } }
+#endif
