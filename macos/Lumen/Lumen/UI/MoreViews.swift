@@ -16,6 +16,22 @@ struct RandomView: View {
 
     var body: some View {
         VStack(spacing: 28) {
+            VStack(spacing: 10) {
+                Text("Feeling lucky?").font(.system(size: 42, weight: .heavy)).tracking(-1.6)
+                Text("Pick what you're in the mood for and let Lumen choose.").font(.system(size: 15)).foregroundStyle(.white.opacity(0.55))
+            }
+            .padding(.top, 26)
+            #if os(macOS)
+            HStack(spacing: 12) {
+                GlideSegmented(options: [(MediaKind.movie, "Movie"), (.series, "Series"), (.live, "Channel")], value: $kind).fixedSize()
+                if kind != .live {
+                    GlideSegmented(options: [(false, "Anything"), (true, "Rated 7+")], value: $highRated).fixedSize()
+                        .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                }
+            }
+            .animation(.snappy, value: kind)
+            .onChange(of: kind) { pick = nil; reel = filler(14); offset = CGFloat(reel.count / 2) * (cardW + gap) }
+            #else
             HStack(spacing: 14) {
                 Picker("Kind", selection: $kind) {
                     Text("Movie").tag(MediaKind.movie)
@@ -25,7 +41,7 @@ struct RandomView: View {
                 .pickerStyle(.segmented).frame(width: 280)
                 Toggle("Rated 7+", isOn: $highRated).toggleStyle(.switch).disabled(kind == .live)
             }
-            .padding(.top, 30)
+            #endif
 
             GeometryReader { g in
                 HStack(spacing: gap) {
@@ -33,7 +49,9 @@ struct RandomView: View {
                         Artwork(source: item.artwork, contentMode: kind == .live ? .fit : .fill, placeholder: kind == .live ? "tv" : "film")
                             .frame(width: cardW, height: cardW * 1.5)
                             .background(.white.opacity(0.05))
-                            .clipShape(.rect(cornerRadius: 16))
+                            .clipShape(.rect(cornerRadius: 20, style: .continuous))
+                            .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(.white.opacity(!spinning && i == reel.count - 3 && pick != nil ? 0.6 : 0.08), lineWidth: 1.5))
+                            .shadow(color: !spinning && i == reel.count - 3 && pick != nil ? model.accent.opacity(0.55) : .black.opacity(0.3), radius: !spinning && i == reel.count - 3 ? 30 : 10, y: 8)
                             .scaleEffect(!spinning && i == reel.count - 3 ? 1.12 : 0.92)
                             .opacity(!spinning && pick != nil && i != reel.count - 3 ? 0.35 : 1)
                     }
@@ -45,35 +63,57 @@ struct RandomView: View {
             .mask(LinearGradient(colors: [.clear, .black, .black, .clear], startPoint: .leading, endPoint: .trailing))
 
             if let pick, !spinning {
-                VStack(spacing: 10) {
-                    Text("Tonight's pick").font(.caption.weight(.heavy)).tracking(1.4).foregroundStyle(model.accent)
-                    Text(SearchKit.cleanTitle(pick.name)).font(.largeTitle.weight(.bold)).multilineTextAlignment(.center)
-                    HStack { if let y = pick.year { Tag(text: y) }; if let r = pick.rating { RatingBadge(rating: r) }; Tag(text: pick.group) }
+                VStack(spacing: 12) {
+                    Text(SearchKit.cleanTitle(pick.name)).font(.system(size: 36, weight: .heavy)).tracking(-1.2).multilineTextAlignment(.center).lineLimit(2)
+                        .frame(maxWidth: 760)
+                    HStack(spacing: 12) {
+                        if let y = pick.year { Text(y) }
+                        if let r = pick.rating, r > 0 { HStack(spacing: 4) { Image(systemName: "star.fill").foregroundStyle(.yellow).font(.system(size: 12)); Text(r, format: .number.precision(.fractionLength(1))) } }
+                        Text(pick.group).lineLimit(1).foregroundStyle(.white.opacity(0.5))
+                    }
+                    .font(.system(size: 15, weight: .medium)).foregroundStyle(.white.opacity(0.65))
                     HStack(spacing: 12) {
                         if pick.kind != .series {
-                            Button { PlayAction(model: model, openWindow: openWindow)(pick) } label: { Label("Play", systemImage: "play.fill") }
-                                .buttonStyle(LumenButtonStyle(prominent: true))
+                            Button { PlayAction(model: model, openWindow: openWindow)(pick) } label: { Label(pick.kind == .live ? "Watch" : "Play", systemImage: "play.fill") }
+                                .buttonStyle(BigButtonStyle(prominent: true))
                         }
                         if pick.kind != .live {
-                            Button("Details") { model.path.append(Route.detail(pick)) }.buttonStyle(LumenButtonStyle())
+                            Button("Details") { model.path.append(Route.detail(pick)) }.buttonStyle(BigButtonStyle(prominent: pick.kind == .series))
                         }
-                        Button { spin() } label: { Label("Spin Again", systemImage: "arrow.trianglehead.2.clockwise") }.buttonStyle(LumenButtonStyle())
+                        Button { spin() } label: { Label("Spin again", systemImage: "arrow.counterclockwise") }.buttonStyle(BigButtonStyle())
+                            .keyboardShortcut(.space, modifiers: [])
                     }
-                    .controlSize(.extraLarge)
+                    .padding(.top, 8)
                 }
                 .transition(.scale(scale: 0.9).combined(with: .opacity))
             } else {
-                Button { spin() } label: { Label("Spin", systemImage: "dice.fill").font(.title3.weight(.semibold)).padding(.horizontal, 26).padding(.vertical, 6) }
-                    .buttonStyle(LumenButtonStyle(prominent: true)).controlSize(.extraLarge)
-                    .disabled(spinning || !model.hasContent)
-                    .keyboardShortcut(.space, modifiers: [])
+                VStack(spacing: 14) {
+                    Button { spin() } label: { Label(spinning ? "Spinning…" : "Spin", systemImage: "dice.fill").font(.system(size: 17, weight: .bold)).padding(.horizontal, 18) }
+                        .buttonStyle(BigButtonStyle(prominent: true))
+                        .disabled(spinning || filler(1).isEmpty)
+                        .keyboardShortcut(.space, modifiers: [])
+                    if filler(1).isEmpty {
+                        Text("There are no \(kind == .live ? "channels" : kind == .movie ? "movies" : "series") in your library yet.")
+                            .font(.system(size: 14)).foregroundStyle(.white.opacity(0.5))
+                    }
+                }
             }
             Spacer()
         }
         .frame(maxWidth: .infinity)
-        .background { AmbientBackground(artwork: spinning ? nil : pick?.artwork) }
+        .background {
+            ZStack {
+                ThemeBackground()
+                if let pick, !spinning {
+                    Artwork(source: pick.artwork, size: "w342").blur(radius: 90).saturation(1.6).opacity(0.35)
+                        .frame(width: 700, height: 500).frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .transition(.opacity)
+                }
+            }
+            .animation(.easeInOut(duration: 0.8), value: spinning)
+        }
         .navigationTitle("Random")
-        .onAppear { if reel.isEmpty { reel = filler(14) } }
+        .task(id: model.movies.count + model.series.count + model.channels.count) { if reel.count < 3 { reel = filler(14); offset = CGFloat(reel.count / 2) * (cardW + gap) } }
     }
 
     private func filler(_ n: Int) -> [Item] { (0..<n).compactMap { _ in model.randomPick(kind: kind, minRating: highRated ? 7 : 0) } }
@@ -210,7 +250,7 @@ struct SourcesView: View {
                 Text("\(model.channels.count.formatted()) channels · \(model.movies.count.formatted()) movies · \(model.series.count.formatted()) series")
                     .foregroundStyle(.secondary)
                 Toggle("Remove BS (hide Arabic and Indian channels, movies and series)", isOn: $model.settings.removeBs)
-                TextField("Hidden categories (comma separated)", text: $model.settings.hiddenGroups)
+                TextField("Hide categories containing (adult, xxx, 24/7)", text: $model.settings.hiddenGroups)
             }
         }
         .formStyle(.grouped)

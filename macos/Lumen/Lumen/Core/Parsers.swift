@@ -20,18 +20,58 @@ nonisolated func cyrb53(_ str: String) -> String {
 // MARK: - Networking
 
 nonisolated enum Net {
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var sessions: [String: URLSession] = [:]
+
+    /// Same as the Windows app: providers tend to refuse clients they don't recognise.
+    static let defaultUA = "VLC/3.0.21 LibVLC/3.0.21"
+
+    /// One shared session per user agent, so connections are reused instead of a new pool for every request.
     static func session(userAgent: String) -> URLSession {
+        lock.lock(); defer { lock.unlock() }
+        if let s = sessions[userAgent] { return s }
         let cfg = URLSessionConfiguration.default
         cfg.timeoutIntervalForRequest = 60
         cfg.timeoutIntervalForResource = 600
-        cfg.httpAdditionalHeaders = ["User-Agent": userAgent.isEmpty ? "Lumen/1.0 (Macintosh)" : userAgent]
-        return URLSession(configuration: cfg)
+        cfg.httpAdditionalHeaders = ["User-Agent": userAgent.isEmpty ? Net.defaultUA : userAgent, "Accept": "*/*"]
+        cfg.waitsForConnectivity = false
+        let s = URLSession(configuration: cfg)
+        sessions[userAgent] = s
+        return s
+    }
+
+    /// One request with a readable error that names the server, like the Windows app.
+    private static func fetch(_ url: URL, ua: String) async throws -> (Data, URLResponse) {
+        do { return try await session(userAgent: ua).data(from: url) }
+        catch let e as URLError {
+            let host = url.host ?? url.absoluteString
+            let why: String? = switch e.code {
+            case .cannotFindHost, .dnsLookupFailed: "Server not found. Check the address for typos."
+            case .cannotConnectToHost: "The server refused the connection. Check the port."
+            case .networkConnectionLost, .timedOut: "The connection dropped or timed out. The server may be down."
+            case .notConnectedToInternet: "You appear to be offline."
+            case .secureConnectionFailed, .serverCertificateUntrusted, .serverCertificateHasBadDate, .serverCertificateHasUnknownRoot: "The server has an invalid security certificate."
+            default: nil
+            }
+            if e.code == .appTransportSecurityRequiresSecureConnection { throw e }
+            if let why { throw LumenError.message("\(why) (\(host)) [\(e.code.rawValue)]") }
+            throw e
+        }
     }
 
     static func data(_ urlString: String, ua: String) async throws -> Data {
         guard let url = URL(string: urlString.trimmingCharacters(in: .whitespaces)) else { throw LumenError.message("Invalid URL: \(urlString)") }
         if url.isFileURL { return try Data(contentsOf: url) }
-        let (data, resp) = try await session(userAgent: ua).data(from: url)
+        let data: Data, resp: URLResponse
+        do {
+            (data, resp) = try await fetch(url, ua: ua)
+        } catch let e as URLError where e.code == .appTransportSecurityRequiresSecureConnection && url.scheme == "http" {
+            // plain http was refused by the system: try the same address over https before giving up
+            var c = URLComponents(url: url, resolvingAgainstBaseURL: false)
+            c?.scheme = "https"
+            guard let secure = c?.url else { throw e }
+            (data, resp) = try await fetch(secure, ua: ua)
+        }
         if let http = resp as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             throw LumenError.message("The server answered \(http.statusCode).")
         }

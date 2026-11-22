@@ -9,6 +9,7 @@ extension AppModel {
     func play(_ open: OpenWindowAction, _ req: PlaybackRequest) {
         nowPlaying = req
         #if os(macOS)
+        UISound.play(.start)
         open(id: "player")
         #else
         showPlayer = true
@@ -62,7 +63,7 @@ final class PlayerModel {
         upNext = nil
         lastSaved = 0
         guard let url = URL(string: req.url) else { error = "This stream has no valid address."; return }
-        let ua = model.settings.userAgent.isEmpty ? "Lumen/1.0 (Macintosh)" : model.settings.userAgent
+        let ua = model.settings.userAgent.isEmpty ? Net.defaultUA : model.settings.userAgent
         let asset = AVURLAsset(url: url, options: ["AVURLAssetHTTPHeaderFieldsKey": ["User-Agent": ua]])
         let item = AVPlayerItem(asset: asset)
         item.preferredForwardBufferDuration = req.kind == "live" ? 4 : 0

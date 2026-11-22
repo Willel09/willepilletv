@@ -4,10 +4,12 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
     @State private var editing: ProfileEdit?
+    @AppStorage("uiSounds") private var uiSounds = true
     @State private var linkSheet: LinkMode?
     @State private var tvInstall = false
     @State private var enterCode = ""
     @State private var showCode = false
+    @State private var editingSource: Source?
 
     enum LinkMode: String, Identifiable { case send, receive; var id: String { rawValue } }
 
@@ -15,7 +17,50 @@ struct SettingsView: View {
         @Bindable var model = model
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                Text("Settings").font(.system(size: 30, weight: .bold)).tracking(-1).padding(.bottom, 4)
+                Text("Settings").font(.system(size: 34, weight: .bold)).tracking(-1.2).padding(.horizontal, 6).padding(.bottom, 6)
+
+                #if os(macOS)
+                card("Sources", symbol: "link", actions: {
+                    Button { Task { await model.refresh() } } label: { Label("Refresh", systemImage: "arrow.clockwise") }
+                        .buttonStyle(LumenButtonStyle()).disabled(model.isRefreshing || model.sources.isEmpty)
+                    Menu {
+                        Button("Xtream Codes account") { editingSource = Source(name: "My Provider", kind: .xtream) }
+                        Button("M3U playlist") { editingSource = Source(name: "My Playlist", kind: .m3u) }
+                    } label: { Label("Add", systemImage: "plus") }
+                        .menuStyle(.button).buttonStyle(LumenButtonStyle(prominent: true)).fixedSize()
+                }) {
+                    if model.sources.isEmpty {
+                        Text("Add an Xtream Codes account or an M3U playlist to fill your library.").font(.callout).foregroundStyle(.secondary)
+                    }
+                    ForEach(model.sources) { src in SourceRow(source: src) { editingSource = src } }
+                    if !model.sources.isEmpty {
+                        Divider().opacity(0.4)
+                        HStack(spacing: 6) {
+                            Text("\(model.channels.count.formatted()) channels · \(model.movies.count.formatted()) movies · \(model.series.count.formatted()) series")
+                            if model.library.updatedAt > .distantPast { Text("· updated \(model.library.updatedAt, format: .relative(presentation: .named))") }
+                        }
+                        .font(.system(size: 13)).foregroundStyle(.white.opacity(0.45))
+                    }
+                    ForEach(model.lastErrors, id: \.self) { Label($0, systemImage: "exclamationmark.triangle.fill").font(.callout).foregroundStyle(.orange) }
+                }
+
+                card("TV Guide", symbol: "list.bullet.rectangle") {
+                    settingRow("Use provider guides", "Load the XMLTV guide from each Xtream account automatically.") {
+                        Toggle("", isOn: $model.settings.autoProviderEpg).labelsHidden().toggleStyle(.switch)
+                    }
+                    settingRow("Extra XMLTV guide URL", ".xml or .xml.gz, used on top of the provider guides.") {
+                        TextField("https://…", text: $model.settings.epgUrl).textFieldStyle(.plain).font(.system(size: 13.5))
+                            .padding(.horizontal, 14).frame(width: 280, height: 36)
+                            .background(.black.opacity(0.28), in: Capsule())
+                            .overlay(Capsule().strokeBorder(.white.opacity(0.08), lineWidth: 1))
+                    }
+                    settingRow(model.epgLoading ? "Loading the guide…" : "Guide",
+                               model.epgUpdatedAt.map { "Updated \($0.formatted(.relative(presentation: .named)))" } ?? "Not loaded yet") {
+                        Button { Task { await model.refreshGuide() } } label: { Label("Reload", systemImage: "arrow.clockwise") }
+                            .buttonStyle(LumenButtonStyle()).disabled(model.epgLoading)
+                    }
+                }
+                #endif
 
                 card("Profiles", symbol: "person.2.fill", note: "Everyone gets their own list, favorites and history.") {
                     HStack(spacing: 18) {
@@ -61,12 +106,21 @@ struct SettingsView: View {
                         ForEach(LumenTheme.accents, id: \.self) { accentDot($0) }
                         ColorPicker("", selection: Binding(get: { model.accent }, set: { model.settings.accentOverride = $0.hexString }), supportsOpacity: false).labelsHidden()
                     }
+                    Divider().opacity(0.3)
+                    Text("Widget colour").font(.callout.weight(.semibold))
+                    HStack(spacing: 10) {
+                        widgetDot(nil)
+                        ForEach(LumenTheme.accents, id: \.self) { widgetDot($0) }
+                        ColorPicker("", selection: Binding(get: { Color(hex: model.widgetAccentHex) ?? model.accent }, set: { model.settings.widgetAccent = $0.hexString }), supportsOpacity: false).labelsHidden()
+                    }
+                    Text("Colours the widgets on your desktop. Pick the first dot to follow the app's accent.").font(.caption).foregroundStyle(.secondary)
                     Picker("Artwork glow", selection: $model.settings.ambient) {
                         Text("Strong").tag(AppSettings.Ambient.strong); Text("Subtle").tag(AppSettings.Ambient.subtle); Text("Off").tag(AppSettings.Ambient.off)
                     }.pickerStyle(.segmented).frame(maxWidth: 320)
                     Stepper(model.settings.screensaverMins == 0 ? "Screensaver: never" : "Screensaver after \(model.settings.screensaverMins) min idle", value: $model.settings.screensaverMins, in: 0...60)
                     #if os(macOS)
                     Toggle("Show Lumen in the menu bar", isOn: $model.settings.showMenuBarExtra)
+                    Toggle("Interface sounds (play, favorite, download done)", isOn: $uiSounds)
                     #endif
                 }
 
@@ -78,7 +132,7 @@ struct SettingsView: View {
                         Button { Task { await model.refresh() } } label: { Label("Reload library", systemImage: "arrow.clockwise") }.buttonStyle(LumenButtonStyle()).disabled(model.isRefreshing)
                     }
                     Toggle("Remove BS (hide Arabic and Indian channels, movies and series)", isOn: $model.settings.removeBs)
-                    TextField("Hidden categories (comma separated)", text: $model.settings.hiddenGroups).textFieldStyle(.roundedBorder)
+                    TextField("Hide categories containing (adult, xxx, 24/7)", text: $model.settings.hiddenGroups).textFieldStyle(.roundedBorder)
                     TextField("TV guide (XMLTV) URL", text: $model.settings.epgUrl).textFieldStyle(.roundedBorder)
                     Toggle("Find the guide from my providers automatically", isOn: $model.settings.autoProviderEpg)
                     Stepper("Refresh every \(model.settings.refreshHours) h", value: $model.settings.refreshHours, in: 1...72)
@@ -146,9 +200,15 @@ struct SettingsView: View {
                     Picker("External player", selection: $model.settings.externalPlayer) {
                         Text("IINA").tag("IINA"); Text("VLC").tag("VLC"); Text("Infuse").tag("Infuse")
                     }
-                    TextField("User-Agent", text: $model.settings.userAgent, prompt: Text("Lumen/1.0 (Macintosh)")).textFieldStyle(.roundedBorder)
+                    TextField("User-Agent", text: $model.settings.userAgent, prompt: Text(Net.defaultUA)).textFieldStyle(.roundedBorder)
                     Text("The external player is used for formats macOS can't play itself, such as MKV with AC3 audio or raw MPEG-TS. Tip: paste a stream link anywhere (⌘V) to play it.").font(.caption).foregroundStyle(.secondary)
                 }
+
+                #if os(macOS)
+                card("Updates", symbol: "arrow.down.app.fill", note: "Lumen updates itself: it downloads the newest Mac release from GitHub, swaps the app and restarts. No reinstall.") {
+                    UpdateRow()
+                }
+                #endif
 
                 card("Data", symbol: "trash") {
                     HStack {
@@ -163,7 +223,18 @@ struct SettingsView: View {
         .background(ThemeBackground())
         .sheet(item: $editing) { ProfileEditor(edit: $0) }
         .sheet(item: $linkSheet) { LinkDeviceSheet(mode: $0) }
+        .sheet(item: $editingSource) { SourceEditor(source: $0) }
         .sheet(isPresented: $tvInstall) { TvInstallSheet() }
+    }
+
+    private func widgetDot(_ hex: String?) -> some View {
+        let h = hex ?? model.accentHex
+        let selected = hex == nil ? model.settings.widgetAccent.isEmpty : model.settings.widgetAccent.caseInsensitiveCompare(h) == .orderedSame
+        return Circle().fill(Color(hex: h) ?? .gray).frame(width: 22, height: 22)
+            .overlay(Circle().strokeBorder(.white, lineWidth: selected ? 2.5 : 0))
+            .overlay { if hex == nil { Image(systemName: "link").font(.system(size: 9, weight: .bold)).foregroundStyle(.white) } }
+            .onTapGesture { model.settings.widgetAccent = hex ?? "" }
+            .help(hex == nil ? "Follow the app accent" : h)
     }
 
     private func accentDot(_ hex: String?) -> some View {
@@ -177,16 +248,103 @@ struct SettingsView: View {
     }
 
     private func card<C: View>(_ title: String, symbol: String, note: String? = nil, @ViewBuilder content: () -> C) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label(title, systemImage: symbol).font(.system(size: 17, weight: .bold))
-            if let note { Text(note).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
+        card(title, symbol: symbol, note: note, actions: { EmptyView() }, content: content)
+    }
+
+    /// Big top-lit card like the Windows app: title row with actions on the right, content below.
+    private func card<A: View, C: View>(_ title: String, symbol: String, note: String? = nil, @ViewBuilder actions: () -> A, @ViewBuilder content: () -> C) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .center, spacing: 10) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title).font(.system(size: 18, weight: .bold)).tracking(-0.3)
+                    if let note { Text(note).font(.system(size: 13)).foregroundStyle(.white.opacity(0.5)).fixedSize(horizontal: false, vertical: true) }
+                }
+                Spacer(minLength: 12)
+                HStack(spacing: 10) { actions() }
+                Image(systemName: symbol).font(.system(size: 17, weight: .medium)).foregroundStyle(.white.opacity(0.28))
+            }
             content()
         }
-        .padding(18).frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.card, in: RoundedRectangle(cornerRadius: 18))
-        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(.white.opacity(0.07)))
+        .padding(.horizontal, 28).padding(.vertical, 24).frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .fill(LinearGradient(colors: [.white.opacity(0.085), .white.opacity(0.035)], startPoint: .top, endPoint: .bottom))
+                .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    .strokeBorder(LinearGradient(colors: [.white.opacity(0.16), .white.opacity(0.04)], startPoint: .top, endPoint: .bottom), lineWidth: 1))
+                .shadow(color: .black.opacity(0.25), radius: 24, y: 12)
+        }
+    }
+
+    /// Title and explanation on the left, the control on the right.
+    private func settingRow<C: View>(_ title: String, _ subtitle: String? = nil, @ViewBuilder control: () -> C) -> some View {
+        HStack(alignment: .center, spacing: 16) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(.system(size: 15, weight: .semibold))
+                if let subtitle { Text(subtitle).font(.system(size: 13)).foregroundStyle(.white.opacity(0.48)).fixedSize(horizontal: false, vertical: true) }
+            }
+            Spacer(minLength: 12)
+            control()
+        }
+        .padding(.vertical, 4)
     }
 }
+
+#if os(macOS)
+/// A source in Settings: icon tile, name, account details, edit and remove buttons.
+struct SourceRow: View {
+    @Environment(AppModel.self) private var model
+    let source: Source
+    let edit: () -> Void
+    @State private var confirmDelete = false
+
+    var body: some View {
+        HStack(spacing: 16) {
+            RoundedRectangle(cornerRadius: 14, style: .continuous).fill(.white.opacity(0.08))
+                .frame(width: 48, height: 48)
+                .overlay(Image(systemName: source.kind == .xtream ? "link" : "list.bullet.rectangle").font(.system(size: 18, weight: .semibold)).foregroundStyle(.white.opacity(0.75)))
+                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(.white.opacity(0.08), lineWidth: 1))
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 8) {
+                    Text(source.name).font(.system(size: 16, weight: .semibold)).lineLimit(1)
+                    if !source.enabled { Text("Off").font(.system(size: 11, weight: .bold)).padding(.horizontal, 7).padding(.vertical, 2).background(.white.opacity(0.1), in: Capsule()) }
+                }
+                Text(details).font(.system(size: 13)).foregroundStyle(.white.opacity(0.5)).lineLimit(1)
+            }
+            Spacer(minLength: 12)
+            Toggle("", isOn: Binding(get: { source.enabled }, set: { v in
+                if let i = model.sources.firstIndex(where: { $0.id == source.id }) { model.sources[i].enabled = v }
+            })).labelsHidden().toggleStyle(.switch).help(source.enabled ? "Turn this source off" : "Turn this source on")
+            circleButton("pencil", label: "Edit", action: edit)
+            circleButton("trash", label: "Remove") { confirmDelete = true }
+        }
+        .padding(.vertical, 4)
+        .confirmationDialog("Remove \(source.name)?", isPresented: $confirmDelete) {
+            Button("Remove", role: .destructive) { withAnimation(.snappy) { model.sources.removeAll { $0.id == source.id } } }
+        } message: { Text("Its channels, movies and series leave your library. You can add it again later.") }
+    }
+
+    private var details: String {
+        var parts: [String] = [source.kind == .xtream ? "Xtream Codes" : "M3U playlist"]
+        if let acc = model.library.accounts[source.id] {
+            if let e = acc.expires { parts.append("Expires \(e.formatted(date: .numeric, time: .omitted))") }
+            if let m = acc.maxConnections { parts.append("\(m) connection\(m == 1 ? "" : "s")") }
+            if let st = acc.status, st != "Active" { parts.append(st) }
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    private func circleButton(_ symbol: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol).font(.system(size: 14, weight: .semibold)).frame(width: 40, height: 40)
+                .background(.white.opacity(0.08), in: Circle())
+                .overlay(Circle().strokeBorder(.white.opacity(0.1), lineWidth: 1))
+                .contentShape(Circle())
+        }
+        .buttonStyle(RailPressStyle())
+        .help(label).accessibilityLabel(label)
+    }
+}
+#endif
 
 // MARK: - Link a device
 
@@ -214,11 +372,39 @@ struct LinkDeviceSheet: View {
                 Text("On a device that already uses Lumen open Settings → Sync & devices → Link a device, then type this code there:").foregroundStyle(.secondary)
                 Text(pairCode).font(.system(size: 32, weight: .bold, design: .monospaced)).textSelection(.enabled).frame(maxWidth: .infinity)
                 HStack(spacing: 8) { if !done { ProgressView().controlSize(.small) }; Text(status ?? "Waiting for the other device…").foregroundStyle(done ? .green : .secondary) }
+                if !done {
+                    Divider().opacity(0.4)
+                    Text("Or type the sync code from your other device (Settings → Sync & devices):").foregroundStyle(.secondary)
+                    HStack {
+                        TextField("XXXXX-XXXXX-XXXXX-XXXXX-XXXXX", text: $code).textFieldStyle(.roundedBorder)
+                            .font(.system(.body, design: .monospaced)).onSubmit(useCode)
+                        Button { useCode() } label: { if busy { ProgressView().controlSize(.small) } else { Text("Use code") } }
+                            .buttonStyle(.borderedProminent).disabled(SyncCrypto.normalize(code).count < 20 || busy)
+                    }
+                }
                 HStack { Spacer(); Button(done ? "Done" : "Cancel") { dismiss() } }
             }
         }
         .padding(26).frame(maxWidth: 520)
         .task { if mode == .receive { await wait() } }
+    }
+
+    /// Link by typing the sync code straight in, instead of waiting for the other device.
+    private func useCode() {
+        guard !busy, SyncCrypto.normalize(code).count >= 20 else { return }
+        busy = true; status = "Linking…"; done = false
+        model.sync.reset()   // start from a clean slate: old bookkeeping must not read as deletions
+        model.syncCode = SyncCrypto.group(SyncCrypto.normalize(code))
+        Task {
+            await model.sync.run(model: model, manual: true)
+            busy = false
+            if let err = model.syncStatus {
+                status = err
+            } else {
+                done = true
+                status = model.sources.isEmpty ? "Linked. That code has no sources yet." : "Linked! Loading your library…"
+            }
+        }
     }
 
     private func send() {
@@ -241,6 +427,7 @@ struct LinkDeviceSheet: View {
             if let c = try? await SyncServer.receivePairing(pairCode: pairCode) {
                 model.syncCode = c; status = "Linked! Loading your library…"; done = true
                 await model.sync.run(model: model, manual: true)
+                if let err = model.syncStatus { status = err; done = false }
                 return
             }
             try? await Task.sleep(for: .seconds(3))
@@ -333,3 +520,33 @@ struct TvInstallSheet: View {
         .padding(.bottom, 18)
     }
 }
+
+#if os(macOS)
+struct UpdateRow: View {
+    private var u: Updater { Updater.shared }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
+                Text("Version \(u.currentVersion)").font(.callout.weight(.semibold))
+                Spacer()
+                switch u.state {
+                case .available:
+                    Button("Update and Restart") { Task { await u.install() } }.buttonStyle(LumenButtonStyle())
+                case .downloading, .installing, .checking:
+                    ProgressView().controlSize(.small)
+                default:
+                    Button("Check for Updates") { Task { await u.check() } }.buttonStyle(LumenButtonStyle())
+                }
+            }
+            switch u.state {
+            case .upToDate: Label("You're on the latest version.", systemImage: "checkmark.circle.fill").font(.caption).foregroundStyle(.secondary)
+            case .available(let v, _): Label("Version \(v) is available.", systemImage: "sparkles").font(.caption).foregroundStyle(.secondary)
+            case .downloading(let p): ProgressView(value: p).tint(.white)
+            case .installing: Text("Installing — Lumen will restart.").font(.caption).foregroundStyle(.secondary)
+            case .failed(let m): Text(m).font(.caption).foregroundStyle(.red)
+            default: EmptyView()
+            }
+        }
+    }
+}
+#endif

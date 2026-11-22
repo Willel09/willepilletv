@@ -26,7 +26,6 @@ struct LumenApp: App {
                 }
         }
         .defaultSize(width: 1360, height: 860)
-        .windowStyle(.hiddenTitleBar)
         .commands { LumenCommands(model: model) }
 
         Window("Player", id: "player") {
@@ -55,6 +54,9 @@ struct LumenCommands: Commands {
     @Environment(\.openWindow) private var openWindow
 
     var body: some Commands {
+        CommandGroup(after: .appInfo) {
+            Button("Check for Updates…") { model.selection = .settings; model.path = NavigationPath(); Task { await Updater.shared.check() } }
+        }
         CommandGroup(after: .newItem) {
             Button("Play Link from Clipboard") {
                 if let t = NSPasteboard.general.string(forType: .string), !model.playPasted(t, openWindow: openWindow) { model.toast = "The clipboard doesn't hold a stream link." }

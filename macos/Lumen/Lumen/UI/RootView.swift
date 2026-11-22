@@ -1,11 +1,35 @@
 import SwiftUI
 
 #if os(macOS)
+/// Close / minimise / zoom, drawn by us because the full-bleed window hides the system ones.
+struct TrafficLights: View {
+    @State private var hover = false
+    private func btn(_ color: Color, _ glyph: String, _ action: @escaping (NSWindow) -> Void) -> some View {
+        Button { if let w = NSApp.keyWindow ?? NSApp.windows.first(where: { $0.isVisible && $0.canBecomeMain }) { action(w) } } label: {
+            Circle().fill(color).frame(width: 13, height: 13)
+                .overlay { Image(systemName: glyph).font(.system(size: 7, weight: .heavy)).foregroundStyle(.black.opacity(0.6)).opacity(hover ? 1 : 0) }
+        }.buttonStyle(.plain)
+    }
+    var body: some View {
+        HStack(spacing: 8) {
+            btn(Color(red: 1, green: 0.37, blue: 0.34), "xmark") { $0.close() }
+            btn(Color(red: 1, green: 0.74, blue: 0.18), "minus") { $0.miniaturize(nil) }
+            btn(Color(red: 0.16, green: 0.79, blue: 0.25), "plus") { $0.toggleFullScreen(nil) }
+        }
+        .padding(8).background(.black.opacity(0.18), in: Capsule())
+        .onHover { hover = $0 }
+    }
+}
+
 struct RootView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openWindow) private var openWindow
 
     private let tabs: [SidebarItem] = [.home, .live, .movies, .series, .random, .downloads, .search, .settings]
+    @Namespace private var tabPill
+    @State private var direction: CGFloat = 1
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    private var navSpring: Animation { reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.42, dampingFraction: 0.86) }
 
     var body: some View {
         @Bindable var model = model
@@ -16,28 +40,55 @@ struct RootView: View {
                     .hideWindowToolbar()
                     .navigationDestination(for: Route.self) { route in
                         switch route {
-                        case .detail(let item): DetailView(item: item).hideWindowToolbar()
-                        case .category(let kind, let group): BrowseView(kind: kind, initialGroup: group).hideWindowToolbar()
-                        case .person(let name, let role): PersonView(name: name, role: role).hideWindowToolbar()
+                        case .detail(let item): DetailView(item: item).hideWindowToolbar().modifier(PushIn())
+                        case .category(let kind, let group): BrowseView(kind: kind, initialGroup: group).hideWindowToolbar().modifier(PushIn())
+                        case .person(let name, let role): PersonView(name: name, role: role).hideWindowToolbar().modifier(PushIn())
                         case .page: EmptyView()
                         }
                     }
             }
             .id(model.selection)
+            .transition(reduceMotion ? .opacity : .asymmetric(
+                insertion: .opacity.combined(with: .offset(x: 36 * direction)).combined(with: .scale(scale: 0.985)),
+                removal: .opacity.combined(with: .offset(x: -24 * direction))))
             topBar
+            TrafficLights().padding(.leading, 20).padding(.top, 18).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .ignoresSafeArea(.container, edges: .top)
+        .animation(navSpring, value: model.selection)
+        .background(WindowReader { w in
+            // keep the red/yellow/green buttons: transparent title bar, content runs underneath
+            w.styleMask.insert([.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView])
+            w.titlebarAppearsTransparent = true
+            w.titleVisibility = .hidden
+            w.isMovableByWindowBackground = false
+            for b in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] { w.standardWindowButton(b)?.isHidden = true }
+        })
         .overlay { ToastOverlay() }
         .overlay { if model.pickingProfile { ProfilePickerView() } }
         .modifier(IdleWatcher())
         .modifier(PasteToPlay())
         .onKeyPress("/") { if model.pickingProfile { return .ignored }; model.selection = .search; return .handled }
         .onKeyPress(.escape) { goBack() }
-        .onAppear { model.downloads.configure(limitGb: model.settings.downloadLimitGb, userAgent: model.settings.userAgent) }
-        .onChange(of: model.selection) { model.path = NavigationPath() }
+        .onAppear { if UserDefaults.standard.bool(forKey: "showProfiles") { model.pickingProfile = true }; if let t = UserDefaults.standard.string(forKey: "startTab"), let s = SidebarItem.allCases.first(where: { "\($0)" == t }) { model.selection = s }; Updater.shared.checkIfDue(); model.downloads.configure(limitGb: model.settings.downloadLimitGb, userAgent: model.settings.userAgent) }
+        .task {
+            // developer hook for screenshots: -openDetail YES opens the first film
+            guard UserDefaults.standard.bool(forKey: "openDetail") else { return }
+            for _ in 0..<60 { if let m = model.movies.last { model.path.append(Route.detail(.movie(m))); break }; try? await Task.sleep(for: .milliseconds(250)) }
+        }
+        .onChange(of: model.selection) { old, new in
+            // slide the new page in from the side its tab sits on
+            let i = tabs.firstIndex(of: tabHighlight(old)) ?? 0, j = tabs.firstIndex(of: tabHighlight(new)) ?? 0
+            direction = j >= i ? 1 : -1
+            model.path = NavigationPath()
+        }
         .onChange(of: model.pendingPlay) {
             if let r = model.pendingPlay { model.play(openWindow, r); model.pendingPlay = nil }
         }
+        // widgets follow the app's theme and accent
+        .onChange(of: model.widgetAccentHex) { model.publishWidgets() }
+        .onChange(of: model.settings.theme) { model.publishWidgets() }
+        .onChange(of: model.settings.widgetAccent) { model.publishWidgets() }
     }
 
     private func goBack() -> KeyPress.Result {
@@ -55,15 +106,18 @@ struct RootView: View {
             HStack(spacing: 0) {
                 HStack(spacing: 10) {
                     if !model.path.isEmpty {
-                        Button { model.path.removeLast() } label: {
+                        Button { withAnimation(navSpring) { model.path.removeLast() } } label: {
                             Image(systemName: "chevron.left").font(.system(size: 13, weight: .bold)).frame(width: 32, height: 32)
                                 .background(.white.opacity(0.14), in: Circle())
+                                .overlay(Circle().strokeBorder(.white.opacity(0.12), lineWidth: 1))
                         }
-                        .buttonStyle(.plain).help("Back (⌘[)")
+                        .buttonStyle(HoverPopStyle()).help("Back (⌘[)")
+                        .transition(.scale(scale: 0.5).combined(with: .opacity))
                     }
                     Spacer(minLength: 0)
                 }
-                .padding(.leading, 84).frame(width: 190, alignment: .leading)
+                .padding(.leading, 112).frame(width: 210, alignment: .leading)
+                .animation(navSpring, value: model.path.isEmpty)
                 Spacer(minLength: 0)
                 ViewThatFits(in: .horizontal) { tabBar(labels: true); tabBar(labels: false) }
                 Spacer(minLength: 0)
@@ -73,8 +127,16 @@ struct RootView: View {
                         HStack(spacing: 8) {
                             ProgressView().controlSize(.small)
                             Text(msg).font(.system(size: 12, weight: .medium)).foregroundStyle(.white.opacity(0.75)).lineLimit(1)
+                            if model.isRefreshing {
+                                Button { model.cancelRefresh() } label: {
+                                    Image(systemName: "xmark").font(.system(size: 10, weight: .bold)).frame(width: 20, height: 20)
+                                        .background(.white.opacity(0.1), in: Circle())
+                                }
+                                .buttonStyle(.plain).foregroundStyle(.white.opacity(0.7)).help("Cancel refresh").accessibilityLabel("Cancel refresh")
+                            }
                         }
-                        .padding(.horizontal, 12).frame(height: 32).frame(maxWidth: 240)
+                        .padding(.leading, 12).padding(.trailing, 6).frame(height: 32).frame(maxWidth: 280)
+                        .transition(.opacity.combined(with: .scale(scale: 0.85, anchor: .trailing)))
                         .background(.white.opacity(0.1), in: Capsule())
                     } else if !model.sources.isEmpty {
                         Button { Task { await model.refresh() } } label: {
@@ -95,6 +157,7 @@ struct RootView: View {
                     .help("\(model.currentProfile.name) · switch profile")
                 }
                 .padding(.trailing, 20).frame(width: 260, alignment: .trailing)
+                .animation(navSpring, value: model.progressMessage == nil)
             }
             .frame(maxHeight: .infinity, alignment: .top)
             .padding(.top, 16)
@@ -110,23 +173,15 @@ struct RootView: View {
     private func tabBar(labels: Bool) -> some View {
         HStack(spacing: 2) {
             ForEach(tabs) { t in
-                let active = tabHighlight(model.selection) == t
-                Button { model.selection = t } label: {
-                    HStack(spacing: 7) {
-                        Image(systemName: t.symbol).font(.system(size: 13, weight: .semibold))
-                        if labels { Text(t.title).font(.system(size: 13, weight: .semibold)).lineLimit(1) }
-                    }
-                    .padding(.horizontal, 13).frame(height: 34)
-                    .foregroundStyle(active ? Color.white : Color.white.opacity(0.58))
-                    .background(active ? Color.white.opacity(0.17) : .clear, in: Capsule())
-                    .contentShape(Capsule())
+                TabPillButton(item: t, labels: labels, active: tabHighlight(model.selection) == t, namespace: tabPill) {
+                    withAnimation(navSpring) { model.selection = t }
                 }
-                .buttonStyle(.plain)
             }
         }
         .padding(5)
         .background(Color(white: 0.16, opacity: 0.92), in: Capsule())
         .overlay(Capsule().strokeBorder(.white.opacity(0.1)))
+        .animation(navSpring, value: tabHighlight(model.selection))
     }
 
     @ViewBuilder private var screen: some View {
@@ -150,6 +205,67 @@ struct RootView: View {
     }
 }
 #endif
+
+#if os(macOS)
+/// One tab: the white pill glides between tabs, the icon gives a small bounce when chosen.
+private struct TabPillButton: View {
+    let item: SidebarItem
+    let labels: Bool
+    let active: Bool
+    let namespace: Namespace.ID
+    let action: () -> Void
+    @State private var hover = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 7) {
+                Image(systemName: item.symbol).font(.system(size: 13, weight: .semibold))
+                    .symbolEffect(.bounce.down, value: active)
+                if labels { Text(item.title).font(.system(size: 13, weight: .semibold)).lineLimit(1) }
+            }
+            .padding(.horizontal, 13).frame(height: 34)
+            .foregroundStyle(active ? Color.white : Color.white.opacity(hover ? 0.85 : 0.58))
+            .background {
+                ZStack {
+                    if hover && !active { Capsule().fill(.white.opacity(0.07)).transition(.opacity) }
+                    if active {
+                        Capsule().fill(.white.opacity(0.17))
+                            .overlay(Capsule().strokeBorder(.white.opacity(0.1), lineWidth: 1))
+                            .shadow(color: .black.opacity(0.25), radius: 6, y: 2)
+                            .matchedGeometryEffect(id: "pill", in: namespace)
+                    }
+                }
+            }
+            .contentShape(Capsule())
+        }
+        .buttonStyle(HoverPopStyle(scale: 0.95))
+        .onHover { hover = $0 }
+        .animation(.easeOut(duration: 0.15), value: hover)
+        .accessibilityAddTraits(active ? .isSelected : [])
+    }
+}
+#endif
+
+/// Press-down for buttons in the bar.
+struct HoverPopStyle: ButtonStyle {
+    var scale: CGFloat = 0.9
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label.scaleEffect(configuration.isPressed ? scale : 1)
+            .animation(.spring(response: 0.25, dampingFraction: 0.6), value: configuration.isPressed)
+    }
+}
+
+/// Pushed pages (detail, person, category) rise in instead of popping in.
+struct PushIn: ViewModifier {
+    @State private var shown = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    func body(content: Content) -> some View {
+        content
+            .opacity(shown ? 1 : 0)
+            .offset(x: shown || reduceMotion ? 0 : 28)
+            .onAppear { withAnimation(reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.45, dampingFraction: 0.88)) { shown = true } }
+    }
+}
 
 struct LogoMark: View {
     @Environment(AppModel.self) private var model
@@ -186,7 +302,11 @@ struct HomeView: View {
                 if model.heroItems.isEmpty { Color.clear.frame(height: 70) }
                 #endif
                 if model.isRefreshing && !model.hasContent {
-                    ProgressView(model.progressMessage ?? "Loading your library…").frame(maxWidth: .infinity).padding(80)
+                    Label(model.progressMessage ?? "Loading your library…", systemImage: "arrow.triangle.2.circlepath")
+                        .font(.system(size: 13, weight: .medium)).foregroundStyle(.white.opacity(0.55))
+                        .symbolEffect(.rotate, options: .repeat(.continuous))
+                        .padding(.horizontal, Platform.isPhone ? 20 : 56)
+                    ForEach(0..<3, id: \.self) { _ in SkeletonShelf() }
                 }
                 if !model.continueWatching.isEmpty {
                     Shelf(title: "Continue Watching", symbol: "play.circle") {
@@ -262,7 +382,7 @@ struct HomeView: View {
             }
             .padding(.bottom, 40)
         }
-        .background(ThemeBackground())
+        .background(ThemeBackground(ambient: true))
     }
 
     private func posterButton(_ item: Item) -> some View {
@@ -293,35 +413,53 @@ struct HomeView: View {
 struct HeroCarousel: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let items: [Item]
     @State private var index = 0
     @State private var paused = false
+    @State private var hovering = false
+    /// 0...1 fill of the active page dot
+    @State private var fill: CGFloat = 0
+    @State private var zoom = false
+    @State private var forward = true
+    private let interval: Double = 9
 
     var body: some View {
         let item = items[min(index, items.count - 1)]
         let wide = item.backdrop != nil
         ZStack(alignment: .bottomLeading) {
-            Group {
-                if wide {
-                    Artwork(source: item.backdrop, size: "w1280")
-                } else {
-                    LinearGradient(colors: [model.accent.opacity(0.35), Theme.base], startPoint: .topTrailing, endPoint: .bottomLeading)
+            ZStack {
+            ZStack {
+                Group {
+                    if wide {
+                        Artwork(source: item.backdrop, size: "w1280", onColor: { c in Ambient.shared.color = c })
+                    } else {
+                        LinearGradient(colors: [model.accent.opacity(0.35), Theme.base], startPoint: .topTrailing, endPoint: .bottomLeading)
+                    }
                 }
+                .frame(maxWidth: .infinity).frame(height: Metrics.heroH)
+                // slow Ken Burns drift
+                .scaleEffect(zoom && !reduceMotion ? 1.07 : 1, anchor: index.isMultiple(of: 2) ? .topLeading : .bottomTrailing)
+                .clipped()
             }
-            .frame(maxWidth: .infinity).frame(height: Metrics.heroH).clipped()
             .id(item.id)
+            .transition(.asymmetric(insertion: .opacity.combined(with: .scale(scale: 1.03)), removal: .opacity))
             LinearGradient(colors: [Theme.base.opacity(0.92), Theme.base.opacity(0.45), .clear], startPoint: .leading, endPoint: .trailing)
-            LinearGradient(colors: [.clear, Theme.base], startPoint: .init(x: 0.5, y: 0.5), endPoint: .bottom)
             LinearGradient(colors: [Theme.base.opacity(0.55), .clear], startPoint: .top, endPoint: .init(x: 0.5, y: 0.25))
+            }
+            // fade the art out to transparent so the page's ambient glow shows through without a seam
+            .mask(LinearGradient(stops: [.init(color: .black, location: 0.5), .init(color: .clear, location: 1)], startPoint: .top, endPoint: .bottom))
 
             if !wide && !Platform.isPhone {
-                Artwork(source: item.artwork, size: "w500")
+                Artwork(source: item.artwork, size: "w500", onColor: { c in Ambient.shared.color = c })
                     .frame(width: 250, height: 375)
                     .clipShape(.rect(cornerRadius: 22))
                     .overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(.white.opacity(0.15)))
                     .shadow(color: .black.opacity(0.6), radius: 30, y: 20)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
                     .padding(.trailing, 110).padding(.top, 20)
+                    .id("poster" + item.id)
+                    .transition(.opacity.combined(with: .offset(x: forward ? 40 : -40)))
             }
 
             VStack(alignment: .leading, spacing: 12) {
@@ -333,6 +471,7 @@ struct HeroCarousel: View {
                 }
                 Text(SearchKit.cleanTitle(item.name)).font(.system(size: Platform.isPhone ? 36 : 56, weight: .heavy)).tracking(-2).lineLimit(2).minimumScaleFactor(0.7)
                     .frame(maxWidth: 680, alignment: .leading)
+                    .shadow(color: .black.opacity(0.55), radius: 24, y: 6)
                 HStack(spacing: 12) {
                     if let y = item.year { Text(y) }
                     if let r = item.rating {
@@ -348,33 +487,82 @@ struct HeroCarousel: View {
                     .buttonStyle(LumenButtonStyle(prominent: true))
                     Button { model.path.append(Route.detail(item)) } label: { Label("More Info", systemImage: "info.circle") }
                         .buttonStyle(LumenButtonStyle())
-                    Button { model.toggleWatchlist(item.id) } label: { Image(systemName: model.inWatchlist(item.id) ? "checkmark" : "plus") }
-                        .buttonStyle(LumenButtonStyle()).help("My List")
+                    Button { model.toggleWatchlist(item.id) } label: {
+                        Image(systemName: model.inWatchlist(item.id) ? "checkmark" : "plus").contentTransition(.symbolEffect(.replace))
+                    }
+                    .buttonStyle(LumenButtonStyle()).help("My List")
                 }
                 .padding(.top, 8)
             }
+            .id("text" + item.id)
+            .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: 18)), removal: .opacity))
             .padding(.leading, Platform.isPhone ? 20 : 56).padding(.bottom, Platform.isPhone ? 50 : 90)
             .foregroundStyle(.white)
 
             HStack(spacing: 6) {
                 ForEach(items.indices, id: \.self) { i in
-                    Capsule().fill(.white.opacity(i == index ? 0.95 : 0.35))
-                        .frame(width: i == index ? 28 : 6, height: 6)
-                        .onTapGesture { index = i }
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(.white.opacity(0.3))
+                        if i == index {
+                            Capsule().fill(.white).frame(width: 28 * fill)
+                        }
+                    }
+                    .frame(width: i == index ? 28 : 6, height: 6)
+                    .contentShape(Rectangle().inset(by: -6))
+                    .onTapGesture { go(to: i) }
                 }
             }
             .padding(.trailing, Platform.isPhone ? 20 : 56).padding(.bottom, Platform.isPhone ? 22 : 92)
             .frame(maxWidth: .infinity, alignment: .trailing)
+
+            #if os(macOS)
+            if items.count > 1 {
+                HStack {
+                    arrow("chevron.left") { go(to: (index - 1 + items.count) % items.count) }
+                    Spacer()
+                    arrow("chevron.right") { go(to: (index + 1) % items.count) }
+                }
+                .padding(.horizontal, 14)
+                .frame(maxHeight: .infinity)
+                .opacity(hovering ? 1 : 0)
+                .animation(.easeOut(duration: 0.2), value: hovering)
+            }
+            #endif
         }
         .frame(height: Metrics.heroH)
-        .onHover { paused = $0 }
-        .task {
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(9))
-                if !paused { index = (index + 1) % max(1, items.count) }
-            }
+        .clipped()
+        .onHover { hovering = $0; paused = $0 }
+        .task(id: index) {
+            // restart the dot fill and the drift for this page, then move on
+            var t = Transaction(); t.disablesAnimations = true
+            withTransaction(t) { fill = 0; zoom = false }
+            withAnimation(.linear(duration: interval)) { fill = 1 }
+            withAnimation(.easeInOut(duration: interval + 2)) { zoom = true }
+            try? await Task.sleep(for: .seconds(interval))
+            while !Task.isCancelled && (paused || !AppModel.appIsActive) { try? await Task.sleep(for: .seconds(0.5)) }
+            guard !Task.isCancelled, items.count > 1 else { return }
+            go(to: (index + 1) % items.count)
         }
     }
+
+    private func go(to i: Int) {
+        forward = i > index || (index == items.count - 1 && i == 0)
+        withAnimation(reduceMotion ? .none : .easeInOut(duration: 0.75)) { index = i }
+    }
+
+    #if os(macOS)
+    private func arrow(_ symbol: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol).font(.system(size: 16, weight: .bold))
+                .frame(width: 44, height: 44)
+                .background(.ultraThinMaterial, in: Circle())
+                .overlay(Circle().strokeBorder(.white.opacity(0.15), lineWidth: 1))
+                .shadow(color: .black.opacity(0.35), radius: 10, y: 4)
+        }
+        .buttonStyle(HoverPopStyle())
+        .accessibilityLabel(symbol == "chevron.left" ? "Previous" : "Next")
+    }
+    #endif
 }
 
 #if os(macOS)

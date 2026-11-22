@@ -101,7 +101,7 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate {
         if let data = resume[id] { t = session.downloadTask(withResumeData: data); resume[id] = nil }
         else {
             var req = URLRequest(url: url)
-            if !userAgent.isEmpty { req.setValue(userAgent, forHTTPHeaderField: "User-Agent") }
+            req.setValue(userAgent.isEmpty ? Net.defaultUA : userAgent, forHTTPHeaderField: "User-Agent")
             t = session.downloadTask(with: req)
         }
         t.taskDescription = id
@@ -178,6 +178,7 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate {
                 let size = ((try? FileManager.default.attributesOfItem(atPath: dest.path))?[.size] as? Int64) ?? items[i].size
                 items[i].size = size; items[i].received = items[i].size
                 items[i].state = .done; items[i].doneAt = .now
+                UISound.play(.done)
             } catch { items[i].state = .error; items[i].error = error.localizedDescription }
         }
     }

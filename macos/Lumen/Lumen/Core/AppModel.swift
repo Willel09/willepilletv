@@ -72,7 +72,12 @@ final class AppModel {
     var syncStatus: String?
     var syncing = false
     @ObservationIgnored var applyingSync = false
-    var syncCode: String = "" { didSet { if loaded { saveSyncState() } } }
+    var syncCode: String = "" { didSet {
+        guard loaded else { return }
+        // a different code is a different library: forget what the old one knew, or its leftovers read as deletions
+        if oldValue != syncCode { sync.reset() }
+        saveSyncState()
+    } }
     var lastSync: Date?
     /// bumped when downloads change so views refresh
     let downloads = DownloadManager()
@@ -125,7 +130,9 @@ final class AppModel {
 
     // MARK: Files
     private let dir: URL = {
-        let d = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Lumen", isDirectory: true)
+        // developer hook: LUMEN_DATA_DIR runs the app against a scratch folder instead of the real data
+        let d = ProcessInfo.processInfo.environment["LUMEN_DATA_DIR"].map { URL(fileURLWithPath: $0, isDirectory: true) }
+            ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Lumen", isDirectory: true)
         try? FileManager.default.createDirectory(at: d, withIntermediateDirectories: true)
         return d
     }()
@@ -175,6 +182,8 @@ final class AppModel {
         guard loaded, let d = try? JSONEncoder().encode(sources) else { return }
         try? d.write(to: sourcesURL, options: [.atomic])
         try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: sourcesURL.path)
+        // playlists follow you to your other devices
+        if !applyingSync { scheduleSync() }
     }
 
     private func saveProfiles() {
@@ -192,6 +201,7 @@ final class AppModel {
     }
 
     @ObservationIgnored var syncTask: Task<Void, Never>?
+    @ObservationIgnored var lastSyncRun = Date.distantPast
     @ObservationIgnored var forYouTask: Task<Void, Never>?
     var forYou: [Item] = []
     private var saveTask: Task<Void, Never>?
@@ -208,7 +218,20 @@ final class AppModel {
 
     // MARK: Refresh
 
+    @ObservationIgnored private var refreshTask: Task<Void, Never>?
+
+    /// Stops a running library refresh; the library you had stays as it was.
+    func cancelRefresh() { refreshTask?.cancel() }
+
     func refresh() async {
+        guard !isRefreshing else { return }
+        let t = Task { await performRefresh() }
+        refreshTask = t
+        await t.value
+        refreshTask = nil
+    }
+
+    private func performRefresh() async {
         guard !isRefreshing else { return }
         isRefreshing = true
         defer { isRefreshing = false; progressMessage = nil }
@@ -216,6 +239,7 @@ final class AppModel {
         var next = Library()
         var errors: [String] = []
         for src in sources where src.enabled {
+            if Task.isCancelled { break }
             do {
                 switch src.kind {
                 case .m3u:
@@ -242,6 +266,7 @@ final class AppModel {
                 next.series += library.series.filter { $0.sourceId == src.id }
             }
         }
+        if Task.isCancelled { toast = "Refresh cancelled"; return }
         next.errors = errors
         next.updatedAt = .now
         library = next
@@ -286,7 +311,8 @@ final class AppModel {
     // MARK: Derived lists
 
     private func hidden(_ name: String, _ group: String, hiddenSet: Set<String>) -> Bool {
-        if hiddenSet.contains(group.lowercased()) { return true }
+        // like Windows: a category is hidden when it contains any of the words
+        if !hiddenSet.isEmpty { let g = group.lowercased(); if hiddenSet.contains(where: { g.contains($0) }) { return true } }
         if settings.removeBs && SearchKit.isBs(name: name, group: group) { return true }
         return false
     }
@@ -549,6 +575,18 @@ final class AppModel {
 
     // MARK: Widgets
 
+    /// The colour widgets use: the user's pick, else the app's accent.
+    var widgetAccentHex: String { settings.widgetAccent.isEmpty ? accentHex : settings.widgetAccent }
+    /// Backdrop blobs: the theme's own, or two shades of a custom colour.
+    var widgetGlowHex: [String] {
+        func hex(_ r: Double, _ g: Double, _ b: Double) -> String { String(format: "#%02X%02X%02X", Int(max(0, min(255, r))), Int(max(0, min(255, g))), Int(max(0, min(255, b)))) }
+        if settings.widgetAccent.isEmpty { return [theme.glow1, theme.glow2].map { hex($0.0, $0.1, $0.2) } }
+        var s = settings.widgetAccent; if s.hasPrefix("#") { s.removeFirst() }
+        guard s.count == 6, let v = UInt32(s, radix: 16) else { return [] }
+        let r = Double((v >> 16) & 0xff), g = Double((v >> 8) & 0xff), b = Double(v & 0xff)
+        return [hex(r * 0.7, g * 0.7, b * 0.7), hex(b * 0.5, r * 0.45, g * 0.6)]
+    }
+
     private var widgetTask: Task<Void, Never>?
     func publishWidgets() {
         widgetTask?.cancel()
@@ -573,7 +611,8 @@ final class AppModel {
                 if picks.count == 6 { break }
             }
             let snap = WidgetSnapshot(continueWatching: cont, liveNow: live, picks: picks, movieCount: movies.count, seriesCount: series.count,
-                                      channelCount: channels.count, watchlistCount: user.watchlist.count, updatedAt: .now)
+                                      channelCount: channels.count, watchlistCount: user.watchlist.count, updatedAt: .now,
+                                      accentHex: widgetAccentHex, glowHex: widgetGlowHex)
             var art: [(String, String)] = continueWatching.prefix(6).compactMap { h in h.artwork.map { (h.itemId, $0) } }
             art += favs.compactMap { c in c.logo.map { (c.id, $0) } }
             art += picks.compactMap { p in item(p.id)?.artwork.map { (p.id, $0) } }

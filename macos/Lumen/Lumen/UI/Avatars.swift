@@ -171,44 +171,100 @@ struct ProfilePickerView: View {
     @State private var manage = false
     @State private var editing: ProfileEdit?
 
+    @State private var appeared = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
         ZStack {
-            Rectangle().fill(.black.opacity(0.9)).ignoresSafeArea()
-            VStack(spacing: 40) {
-                Text(manage ? "Manage profiles" : "Who's watching?").font(.system(size: 44, weight: .bold)).tracking(-1.5)
-                HStack(spacing: 30) {
-                    ForEach(model.profiles) { p in
-                        Button { manage ? (editing = ProfileEdit(profile: p)) : model.switchProfile(p.id) } label: {
-                            VStack(spacing: 12) {
-                                AvatarView(id: p.avatar, size: 120)
-                                    .overlay { if manage { RoundedRectangle(cornerRadius: 34).fill(.black.opacity(0.5)).overlay(Image(systemName: "pencil").font(.largeTitle)) } }
-                                    .overlay { if p.id == model.activeProfile && !manage { RoundedRectangle(cornerRadius: 34).strokeBorder(.white, lineWidth: 3) } }
-                                Text(p.name).font(.system(size: 15, weight: .semibold)).foregroundStyle(p.id == model.activeProfile ? .white : .white.opacity(0.65))
-                            }
-                            .frame(width: 140)
+            Rectangle().fill(.ultraThinMaterial).ignoresSafeArea()
+            Rectangle().fill(.black.opacity(0.72)).ignoresSafeArea()
+            RadialGradient(colors: [model.accent.opacity(0.18), .clear], center: .center, startRadius: 0, endRadius: 620).ignoresSafeArea()
+            VStack(spacing: 46) {
+                Text(manage ? "Manage profiles" : "Who's watching?")
+                    .font(.system(size: 52, weight: .heavy)).tracking(-2)
+                    .contentTransition(.opacity)
+                    .opacity(appeared ? 1 : 0).offset(y: appeared ? 0 : 12)
+                HStack(spacing: 34) {
+                    ForEach(Array(model.profiles.enumerated()), id: \.element.id) { i, p in
+                        ProfileTile(name: p.name, active: p.id == model.activeProfile && !manage, editing: manage) {
+                            AvatarView(id: p.avatar, size: 150)
+                        } action: {
+                            if manage { editing = ProfileEdit(profile: p) } else { model.switchProfile(p.id) }
                         }
-                        .buttonStyle(.plain)
+                        .opacity(appeared ? 1 : 0).scaleEffect(appeared ? 1 : 0.9).offset(y: appeared ? 0 : 18)
+                        .animation(reduceMotion ? nil : .spring(response: 0.55, dampingFraction: 0.8).delay(0.06 + Double(i) * 0.06), value: appeared)
                     }
                     if model.profiles.count < 8 {
-                        Button { editing = ProfileEdit(profile: nil) } label: {
-                            VStack(spacing: 12) {
-                                RoundedRectangle(cornerRadius: 34).fill(.white.opacity(0.1)).frame(width: 120, height: 120).overlay(Image(systemName: "plus").font(.system(size: 36)).foregroundStyle(.white.opacity(0.6)))
-                                Text("Add profile").font(.system(size: 15, weight: .semibold)).foregroundStyle(.white.opacity(0.65))
-                            }
-                            .frame(width: 140)
-                        }
-                        .buttonStyle(.plain)
+                        ProfileTile(name: "Add profile", active: false, editing: false) {
+                            RoundedRectangle(cornerRadius: 42, style: .continuous)
+                                .fill(LinearGradient(colors: [.white.opacity(0.12), .white.opacity(0.04)], startPoint: .top, endPoint: .bottom))
+                                .frame(width: 150, height: 150)
+                                .overlay(RoundedRectangle(cornerRadius: 42, style: .continuous).strokeBorder(.white.opacity(0.12), lineWidth: 1))
+                                .overlay(Image(systemName: "plus").font(.system(size: 40, weight: .light)).foregroundStyle(.white.opacity(0.7)))
+                        } action: { editing = ProfileEdit(profile: nil) }
+                        .opacity(appeared ? 1 : 0).scaleEffect(appeared ? 1 : 0.9)
+                        .animation(reduceMotion ? nil : .spring(response: 0.55, dampingFraction: 0.8).delay(0.06 + Double(model.profiles.count) * 0.06), value: appeared)
                     }
                 }
-                HStack(spacing: 12) {
-                    Button { manage.toggle() } label: { Label(manage ? "Done" : "Manage profiles", systemImage: manage ? "checkmark" : "pencil") }.buttonStyle(LumenButtonStyle())
-                    if !manage { Button("Close") { model.pickingProfile = false }.buttonStyle(LumenButtonStyle()) }
+                HStack(spacing: 22) {
+                    Button { withAnimation(.snappy) { manage.toggle() } } label: {
+                        Label(manage ? "Done" : "Manage profiles", systemImage: manage ? "checkmark" : "pencil")
+                            .font(.system(size: 15, weight: .semibold)).padding(.horizontal, 22).frame(height: 44)
+                            .background(manage ? AnyShapeStyle(Color.white) : AnyShapeStyle(Color.white.opacity(0.1)), in: Capsule())
+                            .foregroundStyle(manage ? Color.black : .white)
+                            .overlay(Capsule().strokeBorder(.white.opacity(manage ? 0 : 0.16), lineWidth: 1))
+                    }
+                    .buttonStyle(RailPressStyle())
+                    if !manage {
+                        Button("Close") { model.pickingProfile = false }
+                            .buttonStyle(.plain).font(.system(size: 15, weight: .semibold)).foregroundStyle(.white.opacity(0.6))
+                            .keyboardShortcut(.cancelAction)
+                    }
                 }
+                .opacity(appeared ? 1 : 0)
+                .animation(.easeOut(duration: 0.4).delay(0.3), value: appeared)
             }
             .foregroundStyle(.white)
         }
+        .onAppear { withAnimation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.85)) { appeared = true } }
         .sheet(item: $editing) { ProfileEditor(edit: $0) }
         .transition(.opacity)
+    }
+}
+
+/// Avatar with its name; lifts and glows on hover.
+private struct ProfileTile<Art: View>: View {
+    let name: String
+    let active: Bool
+    let editing: Bool
+    @ViewBuilder let art: () -> Art
+    let action: () -> Void
+    @State private var hover = false
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 16) {
+                art()
+                    .overlay {
+                        if editing {
+                            RoundedRectangle(cornerRadius: 42, style: .continuous).fill(.black.opacity(0.45))
+                                .overlay(Image(systemName: "pencil").font(.system(size: 34, weight: .semibold)))
+                                .transition(.opacity)
+                        }
+                    }
+                    .overlay(RoundedRectangle(cornerRadius: 48, style: .continuous).strokeBorder(.white, lineWidth: active || hover ? 3 : 0).padding(-6))
+                    .shadow(color: .black.opacity(hover ? 0.55 : 0.35), radius: hover ? 28 : 14, y: hover ? 16 : 8)
+                    .scaleEffect(hover ? 1.06 : 1)
+                Text(name).font(.system(size: 17, weight: active || hover ? .bold : .semibold))
+                    .foregroundStyle(active || hover ? .white : .white.opacity(0.55))
+            }
+            .frame(width: 170)
+            .contentShape(.rect)
+        }
+        .buttonStyle(RailPressStyle())
+        .onHover { hover = $0 }
+        .animation(.spring(response: 0.3, dampingFraction: 0.75), value: hover)
+        .animation(.easeOut(duration: 0.2), value: editing)
     }
 }
 

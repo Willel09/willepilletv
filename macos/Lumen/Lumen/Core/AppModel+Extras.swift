@@ -162,14 +162,25 @@ extension AppModel {
 
     func scheduleSync(delay: Double = 2.5) {
         guard loaded, !syncCode.isEmpty else { return }
+        // Never sync more than once a minute: playback saves its position every 10 s, which would otherwise hit the server (and the radio) constantly.
+        let wait = max(delay, 60 - Date().timeIntervalSince(lastSyncRun))
         syncTask?.cancel()
         syncTask = Task {
-            try? await Task.sleep(for: .seconds(delay))
+            try? await Task.sleep(for: .seconds(wait))
             guard !Task.isCancelled else { return }
+            lastSyncRun = .now
             await sync.run(model: self)
         }
     }
     func syncNow() async { await sync.run(model: self, manual: true) }
+
+    static var appIsActive: Bool {
+        #if os(macOS)
+        NSApplication.shared.isActive
+        #else
+        UIApplication.shared.applicationState == .active
+        #endif
+    }
 
     static var activeNotification: Notification.Name {
         #if os(macOS)
@@ -186,8 +197,9 @@ extension AppModel {
         }
         scheduleSync(delay: 4)
         while !Task.isCancelled {
-            try? await Task.sleep(for: .seconds(180))
-            if !syncCode.isEmpty { await sync.run(model: self) }
+            try? await Task.sleep(for: .seconds(600))
+            // only while the app is in front: background polling is what drains the battery
+            if !syncCode.isEmpty, Self.appIsActive { lastSyncRun = .now; await sync.run(model: self) }
         }
     }
 

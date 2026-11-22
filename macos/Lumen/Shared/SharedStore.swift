@@ -102,6 +102,9 @@ nonisolated struct WidgetSnapshot: Codable, Sendable {
     var channelCount: Int
     var watchlistCount: Int
     var updatedAt: Date
+    /// App accent and theme glow so widgets match the app's look
+    var accentHex: String? = nil
+    var glowHex: [String]? = nil
 
     static let empty = WidgetSnapshot(continueWatching: [], liveNow: [], picks: [], movieCount: 0, seriesCount: 0,
                                       channelCount: 0, watchlistCount: 0, updatedAt: .distantPast)

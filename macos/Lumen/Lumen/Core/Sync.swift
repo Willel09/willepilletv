@@ -507,7 +507,9 @@ final class SyncEngine {
             if let e = existing[s.id] { s.enabled = e.enabled }
             return s
         }
-        if srcs != model.sources { model.sources = srcs }
+        // never wipe the local list because entries failed to decode
+        let incoming = main.colls["sources"] ?? []
+        if srcs.count == incoming.count, srcs != model.sources { model.applyingSync = true; model.sources = srcs; model.applyingSync = false; if !srcs.isEmpty { Task { await model.refresh() } } }
         // prefs
         var st = model.settings
         applyPrefs(main.prefs, to: &st)
