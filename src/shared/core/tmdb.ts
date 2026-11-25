@@ -250,3 +250,19 @@ export async function fetchGenreTitles(get: GetJson, key: string, kind: TmdbKind
   }
   return out
 }
+
+export interface NextEpisode {
+  /** YYYY-MM-DD */
+  date: string
+  season: number
+  episode: number
+  name?: string
+}
+
+/** The next episode TMDB knows is coming for a series, if it has a date */
+export async function fetchNextEpisode(get: GetJson, key: string, tmdb: number): Promise<NextEpisode | null> {
+  const r = await call<{ next_episode_to_air?: { air_date?: string | null; season_number?: number; episode_number?: number; name?: string } | null }>(get, key, `/tv/${tmdb}`)
+  const n = r.next_episode_to_air
+  if (!n?.air_date || !n.season_number || !n.episode_number) return null
+  return { date: n.air_date, season: n.season_number, episode: n.episode_number, name: n.name || undefined }
+}

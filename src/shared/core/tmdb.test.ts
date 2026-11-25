@@ -111,3 +111,12 @@ test('genre titles: three pages merged without repeats, a failing page is skippe
   const r = await fetchGenreTitles(get, 'k', 'movie', 53)
   assert.deepEqual(r.map((t) => t.tmdb), [1, 2, 3])
 })
+
+import { fetchNextEpisode } from './tmdb.ts'
+
+test('the next episode of a series: only with a date and a number', async () => {
+  const ok = await fetchNextEpisode(async () => ({ next_episode_to_air: { air_date: '2026-12-12', season_number: 2, episode_number: 3, name: 'Snow' } }), 'k', 1)
+  assert.deepEqual(ok, { date: '2026-12-12', season: 2, episode: 3, name: 'Snow' })
+  assert.equal(await fetchNextEpisode(async () => ({ next_episode_to_air: null }), 'k', 1), null)
+  assert.equal(await fetchNextEpisode(async () => ({ next_episode_to_air: { air_date: null, season_number: 1, episode_number: 1 } }), 'k', 1), null)
+})

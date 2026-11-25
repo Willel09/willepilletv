@@ -1,11 +1,12 @@
-import { Clapperboard, Dices, Library, Play, RotateCcw, Star, Tv } from 'lucide-react'
+import { Clapperboard, Dices, Library, Play, RotateCcw, Star, ThumbsDown, Tv } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Channel, Movie, Show } from '../../../shared/types'
 import { Img } from '../components/Img'
 import { Button, Segmented } from '../components/ui'
 import { nowNext } from '../lib/epg'
 import { cleanName } from '../lib/format'
-import { openDetail, playChannel, playMovie, useApp, useIndex } from '../store'
+import { markNotForMe, notForMe } from '../lib/notforme'
+import { openDetail, playChannel, playMovie, toast, useApp, useIndex } from '../store'
 
 type Kind = 'movie' | 'series' | 'channel'
 type Pick = Movie | Show | Channel
@@ -86,7 +87,8 @@ export default function Random() {
   const go = useCallback(() => {
     if (!counts[kind]) return
     const watched = new Set(history.map((h) => h.id))
-    const ok = (x: Pick) => (x.kind === 'live' ? !!x.logo : !!x.poster && (!good || (x.rating ?? 0) >= 7) && !watched.has(x.id))
+    const skip = notForMe()
+    const ok = (x: Pick) => !skip.has(x.id) && (x.kind === 'live' ? !!x.logo : !!x.poster && (!good || (x.rating ?? 0) >= 7) && !watched.has(x.id))
     const list = (kind === 'movie' ? idx.movies : kind === 'series' ? idx.series : idx.channels) as Pick[]
     clearTimeout(timer.current)
     setSpin((s) => ({ n: (s?.n ?? 0) + 1, kind, cards: sample(list, CARDS, ok), phase: 'start' }))
@@ -188,6 +190,7 @@ export default function Random() {
               </Button>
               {winner.kind === 'movie' && <Button size="lg" onClick={details}>Details</Button>}
               <Button size="lg" icon={<RotateCcw className="size-4.5" />} onClick={go}>Spin again</Button>
+              <Button size="lg" icon={<ThumbsDown className="size-4.5" />} onClick={() => (markNotForMe(winner.id), toast(`“${cleanName(winner.name)}” won't come up again`), go())}>Not for me</Button>
             </div>
           </div>
         ) : (

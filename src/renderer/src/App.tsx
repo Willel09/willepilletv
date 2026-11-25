@@ -5,7 +5,9 @@ import { Ambient } from './components/Ambient'
 import { Screensaver, useIdle } from './components/Screensaver'
 import { TitleBar, visibleTabs } from './components/TitleBar'
 import { Toast } from './components/Toast'
+import { cleanName, clock } from './lib/format'
 import { initSpatialNav } from './lib/nav'
+import { remindersSupported, takeDue } from './lib/reminders'
 import { initTvKeys } from './lib/tv'
 import { spring } from './lib/motion'
 import Player from './player/Player'
@@ -18,7 +20,7 @@ import Live from './screens/Live'
 import Random from './screens/Random'
 import Search from './screens/Search'
 import Settings, { SourceSheet } from './screens/Settings'
-import { api, boot, closeDetail, closePerson, play, setTab, toast, useApp } from './store'
+import { api, boot, closeDetail, closePerson, index, play, playChannel, resume, resumable, setTab, toast, useApp } from './store'
 
 
 function Screen() {
@@ -73,6 +75,39 @@ export default function App() {
     return () => clearTimeout(id)
   }, [full])
   const hide = covered ? { visibility: 'hidden' as const } : undefined
+
+  // Windows tray icon: what its menu asks for, and what its "Continue" entry says
+  useEffect(
+    () =>
+      api.onAction?.((a) => {
+        if (a === 'random' || a === 'search') return setTab(a)
+        const h = useApp.getState().history.filter((x) => resumable(x)).sort((x, y) => y.updatedAt - x.updatedAt)[0]
+        if (h) resume(h)
+      }),
+    []
+  )
+  const history = useApp((s) => s.history)
+  useEffect(() => {
+    const h = history.filter((x) => resumable(x)).sort((x, y) => y.updatedAt - x.updatedAt)[0]
+    api.tray?.setResume(h ? cleanName(h.name) + (h.subtitle ? ` · ${h.subtitle}` : '') : null)
+  }, [history])
+
+  // reminders for live programmes: a notification when one starts
+  useEffect(() => {
+    if (!remindersSupported()) return
+    const id = setInterval(() => {
+      if (Notification.permission !== 'granted') return
+      for (const r of takeDue()) {
+        const n = new Notification(`${r.title} is starting`, { body: `${r.channelName} · ${clock(r.start)}` })
+        n.onclick = () => {
+          const c = index().channels.find((x) => x.id === r.channelId)
+          if (c) playChannel(c)
+          window.focus()
+        }
+      }
+    }, 20_000)
+    return () => clearInterval(id)
+  }, [])
 
   useEffect(() => {
     // must run before every other key handler (registers the first capture listener)

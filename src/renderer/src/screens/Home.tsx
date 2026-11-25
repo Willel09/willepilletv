@@ -10,7 +10,7 @@ import { cleanName } from '../lib/format'
 import { forYouScore, newestScore, topMany, topRatedScore } from '../lib/recommend'
 import { softSpring } from '../lib/motion'
 import { hasNew, markSeen, seenOf } from '../lib/seen'
-import { useGenreRows, useRecommended } from '../lib/tmdb'
+import { useComingSoon, useGenreRows, useRecommended } from '../lib/tmdb'
 import { api, listsOf, localPosterOf, openDetail, openSourceSheet, playChannel, playDownload, playMovie, removeHistory, resume, resumable, setGroup, setTab, toggleWatchlist, useApp, useIndex } from '../store'
 import type { Channel, Item, Movie, Show } from '../../../shared/types'
 import { RECENT } from './Browse'
@@ -118,6 +118,8 @@ export default function Home() {
   const featured = rows?.featured ?? []
   // needs a TMDB key (Settings); until then "For You" below picks by category
   const recommended = useRecommended(rows?.signals ?? [])
+  const followed = useMemo(() => [...watchlist, ...favorites].filter((x): x is Show => x.kind === 'series'), [watchlist, favorites])
+  const coming = useComingSoon(followed)
   const genres = useGenreRows()
 
   // channels on air right now (favorites first), so live TV has a place on Home
@@ -180,6 +182,20 @@ export default function Home() {
           <Row title="Continue Watching" hint={api.device === 'tv' ? 'Press the red button to remove' : undefined}>
             {cont.map(({ h, also }) => (
               <WideCard key={h.id} name={h.name} subtitle={h.subtitle} art={h.poster} progress={h.position / h.duration} onClick={() => resume(h)} onRemove={() => removeHistory([h.id, ...also])} removeLabel="Remove from Continue Watching" />
+            ))}
+          </Row>
+        )}
+        {coming.length > 0 && (
+          <Row title="Coming Soon" hint="New episodes of series you follow">
+            {coming.map((c) => (
+              <PosterCard
+                key={c.show.id}
+                name={c.show.name}
+                poster={c.show.poster}
+                rating={c.show.rating}
+                onClick={() => openDetail(c.show)}
+                badge={<span className="absolute bottom-2.5 left-2.5 rounded-full bg-black/70 px-2.5 py-0.5 text-[11px] font-bold text-white shadow-lg">{new Date(`${c.date}T12:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })} · S{c.season} E{c.episode}</span>}
+              />
             ))}
           </Row>
         )}

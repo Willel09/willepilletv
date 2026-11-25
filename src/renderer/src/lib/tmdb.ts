@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { titleKey } from '../../../shared/core/dedupe'
-import { fetchGenreTitles, fetchPerson, fetchRecommendations, fetchTrailer, MOVIE_GENRES, resolveTmdb, SERIES_GENRES, type GetJson, type Person, type TmdbKind, type TmdbTitle, type Trailer } from '../../../shared/core/tmdb'
+import { fetchGenreTitles, fetchNextEpisode, fetchPerson, fetchRecommendations, fetchTrailer, MOVIE_GENRES, resolveTmdb, SERIES_GENRES, type GetJson, type NextEpisode, type Person, type TmdbKind, type TmdbTitle, type Trailer } from '../../../shared/core/tmdb'
 import type { Movie, Show } from '../../../shared/types'
 import { cleanName } from './format'
 import { index, useApp } from '../store'
@@ -36,6 +36,17 @@ function remember(id: string, v: unknown) {
     localStorage.setItem(CACHE, JSON.stringify(t))
   } catch {
     /* storage full: keep it in memory only */
+  }
+}
+
+/** Size of the saved TMDB answers in characters, and a way to forget them (they are fetched again when needed) */
+export const tmdbCacheSize = () => (localStorage.getItem(CACHE) ?? '').length
+export function clearTmdbCache() {
+  mem = {}
+  try {
+    localStorage.removeItem(CACHE)
+  } catch {
+    /* nothing to clear */
   }
 }
 
@@ -275,5 +286,39 @@ export function useGenreRows(): GenreRow[] {
     }, 3500)
     return () => (clearTimeout(timer), void (live = false))
   }, [key, library])
+  return rows
+}
+
+export interface ComingSoon {
+  show: Title
+  date: string
+  season: number
+  episode: number
+}
+
+/** The next episodes (within two months) of the series you follow, soonest first. Needs the TMDB key. */
+export function useComingSoon(followed: Title[]): ComingSoon[] {
+  const key = useApp((s) => s.settings.tmdbKey)
+  const [rows, setRows] = useState<ComingSoon[]>([])
+  const ids = followed.filter((x) => x.kind === 'series').slice(0, 24).map((x) => x.id).join('|')
+  useEffect(() => {
+    if (!key || !ids) return setRows([])
+    let live = true
+    const shows = followed.filter((x) => x.kind === 'series').slice(0, 24)
+    void (async () => {
+      const today = new Date().toISOString().slice(0, 10)
+      const limit = new Date(Date.now() + 60 * DAY).toISOString().slice(0, 10)
+      const out: ComingSoon[] = []
+      for (const show of shows) {
+        const tmdb = await tmdbIdOf(key, show).catch(() => null)
+        if (!tmdb) continue
+        const n = await cached<NextEpisode>(`next:${tmdb}`, 1, () => fetchNextEpisode(get, key, tmdb)).catch(() => null)
+        if (n && n.date >= today && n.date <= limit) out.push({ show, date: n.date, season: n.season, episode: n.episode })
+        if (!live) return
+      }
+      if (live) setRows(out.sort((a, b) => a.date.localeCompare(b.date)))
+    })()
+    return () => void (live = false)
+  }, [key, ids]) // eslint-disable-line react-hooks/exhaustive-deps
   return rows
 }

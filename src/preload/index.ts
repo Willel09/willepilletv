@@ -42,10 +42,14 @@ const api: IptvApi = {
     toggleMaximize: () => ipcRenderer.send('win:toggleMaximize'),
     close: () => ipcRenderer.send('win:close'),
     setFullscreen: (on) => ipcRenderer.send('win:fullscreen', on),
+    setAlwaysOnTop: (on) => ipcRenderer.send('win:onTop', on),
     setMaterial: (m) => ipcRenderer.send('win:material', m),
     setTheme: (mode) => ipcRenderer.send('win:theme', mode)
   },
   onWindowState: (cb) => on('win:state', cb),
+  tray: { setResume: (title) => ipcRenderer.send('tray:resume', title) },
+  onAction: (cb) => on('app:action', cb),
+  fetchImage: (url) => ipcRenderer.invoke('img:fetch', url),
   onProgress: (cb) => on('progress', cb),
   // Windows only: saved films and episodes
   downloads:

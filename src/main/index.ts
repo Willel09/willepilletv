@@ -18,6 +18,7 @@ import { registerScheme, serveDownloads } from './dlprotocol'
 import { probeStream } from '../shared/core/probe'
 import { getBytes, getText } from './http'
 import { devModeOn, discoverTvs, localIps, openTvInstaller } from './tvinstall'
+import { startTray } from './tray'
 
 registerScheme() // lumen-dl:// plays downloaded files, see downloads.ts
 
@@ -36,6 +37,7 @@ const settings = (): Settings => {
 }
 
 let win: BrowserWindow | null = null
+let tray: ReturnType<typeof startTray> | undefined
 let downloads: Downloads
 /** Converts Dolby/DTS sound for the player, see transcode.ts; started when first needed */
 let transcoder: ReturnType<typeof startTranscoder> | null = null
@@ -252,6 +254,21 @@ function registerIpc() {
   ipcMain.on('win:toggleMaximize', () => (win?.isMaximized() ? win.unmaximize() : win?.maximize()))
   ipcMain.on('win:close', () => win?.close())
   ipcMain.on('win:fullscreen', (_e, on: boolean) => win?.setFullScreen(on))
+  ipcMain.on('win:onTop', (_e, on: boolean) => win?.setAlwaysOnTop(on === true))
+  ipcMain.on('tray:resume', (_e, title: unknown) => tray?.setResume(typeof title === 'string' ? title : null))
+  // an image as a data URL: the share card draws artwork on a canvas, which remote images without CORS headers would taint
+  ipcMain.handle('img:fetch', async (_e, url: unknown) => {
+    if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) return null
+    try {
+      const r = await net.fetch(url, { signal: AbortSignal.timeout(15_000) })
+      const type = r.headers.get('content-type') ?? ''
+      if (!r.ok || !/^image\//i.test(type)) return null
+      const buf = Buffer.from(await r.arrayBuffer())
+      return buf.length > 8_000_000 ? null : `data:${type.split(';')[0]};base64,${buf.toString('base64')}`
+    } catch {
+      return null
+    }
+  })
   // Mica/Acrylic tint follows nativeTheme, so keep it in step with the app theme
   ipcMain.on('win:theme', (_e, mode: 'dark' | 'light') => (nativeTheme.themeSource = mode))
   ipcMain.on('update:check', () => checkForUpdates())
@@ -303,6 +320,7 @@ app.whenReady().then(() => {
   serveDownloads(downloads.dir)
   registerIpc()
   createWindow()
+  tray = startTray(() => win, (a) => send('app:action', a))
   setupUpdater()
   app.on('activate', () => BrowserWindow.getAllWindows().length === 0 && createWindow())
 })

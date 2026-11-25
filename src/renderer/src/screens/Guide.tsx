@@ -1,10 +1,12 @@
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useLayoutEffect, useRef } from 'react'
 import type { Channel } from '../../../shared/types'
+import { Bell } from 'lucide-react'
 import { Img } from '../components/Img'
 import { useNow } from '../lib/epg'
 import { cleanName, clock } from '../lib/format'
-import { playChannel, useApp } from '../store'
+import { remindersSupported, reminderKey, toggleReminder, useReminders } from '../lib/reminders'
+import { playChannel, toast, useApp } from '../store'
 
 const PX_PER_MIN = 5
 const ROW_H = 68
@@ -17,6 +19,8 @@ const HOURS = 14
 export function Guide({ channels }: { channels: Channel[] }) {
   const epg = useApp((s) => s.epg)
   const now = useNow(60_000)
+  const reminded = useReminders()
+  const canRemind = remindersSupported()
   const ref = useRef<HTMLDivElement>(null)
   // Anchor the window when the guide opens; it only re-anchors when remounted
   const start = useRef(Math.floor(Date.now() / SLOT) * SLOT - SLOT).current
@@ -71,19 +75,32 @@ export function Guide({ channels }: { channels: Channel[] }) {
                   progs.map((p) => {
                     const live = p.start <= now && p.stop > now
                     const past = p.stop <= now
+                    const left = x(p.start) + 2
+                    const width = Math.max(4, x(p.stop) - x(p.start) - 4)
+                    const rk = reminderKey({ channelId: c.id, start: p.start })
                     return (
-                      <button
-                        key={p.start}
-                        onClick={() => playChannel(c, channels)}
-                        title={`${clock(p.start)}–${clock(p.stop)}  ${p.title}${p.desc ? `\n\n${p.desc}` : ''}`}
-                        className={`card absolute inset-y-1.5 overflow-hidden rounded-[14px] px-3 py-2 text-left transition-colors ${live ? 'bg-accent/25 shadow-[inset_0_0_0_1px_rgb(var(--accent-rgb)/0.6)] hover:bg-accent/35' : past ? 'bg-fg/4 text-fg/40 hover:bg-fg/8' : 'glass-thin hover:bg-fg/12'}`}
-                        style={{ left: x(p.start) + 2, width: Math.max(4, x(p.stop) - x(p.start) - 4) }}
-                      >
-                        <div className="truncate text-[13px] font-semibold">{p.title}</div>
-                        <div className="truncate text-[11.5px] tabular-nums text-fg/50">
-                          {clock(p.start)} – {clock(p.stop)}
-                        </div>
-                      </button>
+                      <div key={p.start} className="absolute inset-y-1.5" style={{ left, width }}>
+                        <button
+                          onClick={() => playChannel(c, channels)}
+                          title={`${clock(p.start)}–${clock(p.stop)}  ${p.title}${p.desc ? `\n\n${p.desc}` : ''}`}
+                          className={`card size-full overflow-hidden rounded-[14px] px-3 py-2 text-left transition-colors ${live ? 'bg-accent/25 shadow-[inset_0_0_0_1px_rgb(var(--accent-rgb)/0.6)] hover:bg-accent/35' : past ? 'bg-fg/4 text-fg/40 hover:bg-fg/8' : 'glass-thin hover:bg-fg/12'}`}
+                        >
+                          <div className="truncate pr-5 text-[13px] font-semibold">{p.title}</div>
+                          <div className="truncate text-[11.5px] tabular-nums text-fg/50">
+                            {clock(p.start)} – {clock(p.stop)}
+                          </div>
+                        </button>
+                        {canRemind && p.start > now && width > 70 && (
+                          <button
+                            aria-label={reminded.has(rk) ? 'Remove reminder' : 'Remind me when it starts'}
+                            title={reminded.has(rk) ? 'Reminder set: click to remove' : 'Remind me when it starts'}
+                            onClick={() => toast(toggleReminder({ channelId: c.id, channelName: cleanName(c.name), title: p.title, start: p.start }) ? `We'll remind you when “${p.title}” starts` : 'Reminder removed')}
+                            className={`absolute right-1.5 top-1.5 grid size-6 place-items-center rounded-full ${reminded.has(rk) ? 'bg-[var(--accent)] text-white' : 'bg-fg/10 text-fg/60 hover:bg-fg/20'}`}
+                          >
+                            <Bell className={`size-3.5 ${reminded.has(rk) ? 'fill-current' : ''}`} />
+                          </button>
+                        )}
+                      </div>
                     )
                   })
                 ) : (

@@ -184,6 +184,8 @@ export interface Settings {
   /** Hide Arabic and Indian channels, movies and series */
   removeBs: boolean
   autoplayNext: boolean
+  /** which copy of a title with several to start on (the best one not above it); auto = the best */
+  quality: 'auto' | '4k' | '1080p' | '720p'
   refreshHours: number
   /** minutes without input before the screensaver starts; 0 = never */
   screensaverMins: number
@@ -281,6 +283,7 @@ export const DEFAULT_SETTINGS: Settings = {
   hiddenGroups: '',
   removeBs: false,
   autoplayNext: true,
+  quality: 'auto',
   refreshHours: 12,
   screensaverMins: 5,
   downloadLimitGb: 20,
@@ -347,11 +350,18 @@ export interface IptvApi {
   /** Desktop: read a local playlist file so sync can share it with the TV. `sig` changes when the file does. */
   readPlaylistFile?(path: string): Promise<{ text: string; sig: string }>
   openInVlc(url: string, title: string): Promise<{ ok: boolean; error?: string }>
+  /** Windows app: the tray icon's "Continue Watching" entry, and what its menu asks the app to do */
+  tray?: { setResume(title: string | null): void }
+  onAction?(cb: (action: 'resume' | 'random' | 'search') => void): () => void
+  /** Windows app: an image's bytes as a data URL (for the share card: remote artwork can't be drawn to a canvas directly) */
+  fetchImage?(url: string): Promise<string | null>
   win: {
     minimize(): void
     toggleMaximize(): void
     close(): void
     setFullscreen(on: boolean): void
+    /** Windows app: keep the window above other windows */
+    setAlwaysOnTop?(on: boolean): void
     setMaterial(m: Settings['material']): void
     setTheme(mode: 'dark' | 'light'): void
   }

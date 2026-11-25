@@ -1,12 +1,14 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   AlertTriangle, Captions, Maximize2, X, ChevronDown, ChevronLeft, ChevronUp, Copy, ExternalLink, Gauge, Heart, Languages, Maximize, Minimize,
-  Cast, Moon, Pause, PictureInPicture2, Play, RotateCcw, RotateCw, SkipForward, Volume1, Volume2, VolumeX
+  Cast, Moon, Pause, Pin, PictureInPicture2, Play, RotateCcw, RotateCw, SkipForward, Volume1, Volume2, VolumeX
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Spinner } from '../components/ui'
 import { nowNext, useNow } from '../lib/epg'
 import { artUrl, cleanName, clock, duration } from '../lib/format'
+import { inIntro, introOf, recordSkip } from '../lib/intro'
+import { addWatch } from '../lib/stats'
 import { sheetSpring, spring } from '../lib/motion'
 import type { CastDevice } from '../../../shared/types'
 import { api, canMiniPlayer, closePlayer, setCastTo, expandPlayer, index, isFavorite, minimizePlayer, playChannel, playEpisode, playPreviousChannel, saveProgress, toast, toggleFavorite, useApp, type PlayRequest } from '../store'
@@ -146,6 +148,14 @@ function Session({ req, mini, fullscreen, sleepAt, setSleepAt }: SessionProps) {
   const [visible, setVisible] = useState(true)
   const [numBuf, setNumBuf] = useState('')
   const [upNext, setUpNext] = useState<number | null>(null)
+  // last 30 s of an episode (the "next episode" card) and the learned intro stretch: set only when they change, so the
+  // 4-times-a-second time updates don't re-render the player while its controls are hidden
+  const [soon, setSoon] = useState(false)
+  const [soonOff, setSoonOff] = useState(false)
+  const [introOn, setIntroOn] = useState(false)
+  const intro = useMemo(() => (req.kind === 'episode' && req.show ? introOf(req.show.id) : null), [req])
+  const [onTop, setOnTop] = useState(false)
+  const profile = useApp((s) => s.activeProfile)
   const hideTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
 
   // Xtream live channels can be switched between MPEG-TS and HLS
@@ -314,6 +324,14 @@ function Session({ req, mini, fullscreen, sleepAt, setSleepAt }: SessionProps) {
     }
   }, [save])
 
+  // "Your Stats": time actually spent playing (not paused, not casting), in 10 s steps
+  const title = !live && (req.kind === 'episode' ? req.show : req.kind === 'movie' ? { id: req.id, name: req.title } : undefined)
+  useEffect(() => {
+    if (!playing || castTo) return
+    const id = setInterval(() => addWatch(profile, 10, title ? { id: title.id, name: cleanName(title.name) } : undefined), 10_000)
+    return () => clearInterval(id)
+  }, [playing, castTo, profile, title && title.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
   /* ---------- video events ---------- */
   const onMeta = () => {
     const v = video.current!
@@ -361,7 +379,26 @@ function Session({ req, mini, fullscreen, sleepAt, setSleepAt }: SessionProps) {
 
   const v = () => video.current!
   const toggle = () => (v().paused ? v().play().catch(() => {}) : v().pause())
-  const seek = (d: number) => !live && jump(clamp(v().currentTime + off + d, 0, tc?.dur ?? (v().duration || 0)))
+  // a jump forward by the user early in an episode (several quick presses count as one) teaches Skip Intro
+  const skipped = useRef<{ from: number; to: number; timer?: ReturnType<typeof setTimeout> } | null>(null)
+  const userJump = (x: number) => {
+    const from = v().currentTime + off
+    jump(x)
+    if (req.kind !== 'episode' || !req.show || x <= from) return
+    const s = skipped.current
+    if (s?.timer) clearTimeout(s.timer)
+    const cur = s ?? { from, to: x }
+    cur.to = x
+    const showId = req.show.id
+    cur.timer = setTimeout(() => ((skipped.current = null), recordSkip(showId, cur.from, cur.to)), 4000)
+    skipped.current = cur
+  }
+  const seek = (d: number) => !live && userJump(clamp(v().currentTime + off + d, 0, tc?.dur ?? (v().duration || 0)))
+  const toggleOnTop = () => {
+    setOnTop(!onTop)
+    api.win.setAlwaysOnTop?.(!onTop)
+  }
+  useEffect(() => () => void api.win.setAlwaysOnTop?.(false), [])
   const setVol = (x: number) => {
     const n = clamp(x)
     v().volume = n
@@ -454,6 +491,7 @@ function Session({ req, mini, fullscreen, sleepAt, setSleepAt }: SessionProps) {
       case 'f': api.win.setFullscreen(!fullscreen); break
       case 'm': v().muted = !v().muted; break
       case 'p': pip(); break
+      case 't': if (api.win.setAlwaysOnTop) toggleOnTop(); break
       case 'c': toggleSubs(); break
       case 'n': if (nextEp) playEpisode(req.show!, nextEp, req.episodes!, true); break
       default:
@@ -482,6 +520,33 @@ function Session({ req, mini, fullscreen, sleepAt, setSleepAt }: SessionProps) {
     }, 5000)
     return () => clearInterval(id)
   }, [sleepAt, setSleepAt])
+
+  // Windows' media overlay and the keyboard's media keys: Now Playing with artwork, play/pause, ±10 s, next/previous
+  const ctl = useRef({ seek, zap })
+  ctl.current = { seek, zap }
+  useEffect(() => {
+    const ms = typeof navigator !== 'undefined' ? navigator.mediaSession : undefined
+    if (!ms || mini) return
+    const art = req.poster ?? req.channel?.logo
+    ms.metadata = new MediaMetadata({ title: cleanName(req.title), artist: req.subtitle ?? (live ? 'Live' : ''), artwork: art ? [{ src: artUrl(art, 342) ?? "" }] : [] })
+    const on = (a: MediaSessionAction, f: MediaSessionActionHandler | null) => {
+      try {
+        ms.setActionHandler(a, f)
+      } catch {
+        /* an older browser without that action */
+      }
+    }
+    on('play', () => void video.current?.play())
+    on('pause', () => video.current?.pause())
+    on('seekbackward', () => ctl.current.seek(-10))
+    on('seekforward', () => ctl.current.seek(10))
+    on('previoustrack', live ? () => ctl.current.zap(-1) : null)
+    on('nexttrack', live ? () => ctl.current.zap(1) : nextEp ? () => playEpisode(req.show!, nextEp, req.episodes!, true) : null)
+    return () => {
+      for (const a of ['play', 'pause', 'seekbackward', 'seekforward', 'previoustrack', 'nexttrack'] as const) on(a, null)
+      ms.metadata = null
+    }
+  }, [req, mini, live, nextEp])
 
   const shown = !mini && (visible || !playing || !!menu || !!error)
   // Time and buffer only matter while something on screen shows them: otherwise skip the re-render (4x a second)
@@ -516,7 +581,13 @@ function Session({ req, mini, fullscreen, sleepAt, setSleepAt }: SessionProps) {
         onTimeUpdate={(e) => {
           const el = e.currentTarget
           if (el.currentSrc || el.srcObject) pos.current = { t: el.currentTime + off, d: tc?.dur ?? el.duration }
-          if (watchRef.current) setTime(el.currentTime + off)
+          const t = el.currentTime + off
+          if (watchRef.current) setTime(t)
+          const d = tc?.dur ?? el.duration
+          const s = !live && !!nextEp && isFinite(d) && d - t <= 30 && d - t > 0
+          if (s !== soon) setSoon(s)
+          const i = inIntro(intro, t)
+          if (i !== introOn) setIntroOn(i)
         }}
         onDurationChange={(e) => setDur(tc ? tc.dur : isFinite(e.currentTarget.duration) ? e.currentTarget.duration : 0)}
         onProgress={(e) => {
@@ -574,6 +645,11 @@ function Session({ req, mini, fullscreen, sleepAt, setSleepAt }: SessionProps) {
               <Heart className={`size-5 ${fav ? 'fill-rose-400 text-rose-400' : ''}`} />
             </CtrlBtn>
           )}
+          {api.win.setAlwaysOnTop && !mini && (
+            <CtrlBtn label={onTop ? 'Stop keeping on top (T)' : 'Keep on top (T)'} onClick={toggleOnTop} active={onTop}>
+              <Pin className={`size-5 ${onTop ? 'fill-current' : ''}`} />
+            </CtrlBtn>
+          )}
           {canMiniPlayer && <CtrlBtn label="Close" onClick={closePlayer}><X className="size-5" /></CtrlBtn>}
         </div>
       </motion.div>
@@ -611,7 +687,7 @@ function Session({ req, mini, fullscreen, sleepAt, setSleepAt }: SessionProps) {
           ) : (
             <div className="flex items-center gap-4 text-[12.5px] font-medium tabular-nums text-white/65">
               <span className="w-14 text-right">{duration(time)}</span>
-              <div className="flex-1"><SeekBar time={time} dur={dur} buffered={buffered} onSeek={jump} /></div>
+              <div className="flex-1"><SeekBar time={time} dur={dur} buffered={buffered} onSeek={userJump} /></div>
               <span className="w-14">-{duration(Math.max(0, dur - time))}</span>
             </div>
           )}
@@ -744,15 +820,35 @@ function Session({ req, mini, fullscreen, sleepAt, setSleepAt }: SessionProps) {
         </div>
       )}
 
+      {/* skip intro: learned from where you skipped before in this series */}
+      <AnimatePresence>
+        {!mini && introOn && intro && (
+          <motion.button
+            initial={{ opacity: 0, x: 30 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 30 }}
+            transition={sheetSpring}
+            onClick={(e) => (e.stopPropagation(), jump(intro.to))}
+            className="glass-strong absolute bottom-40 right-10 rounded-full px-6 py-3 text-[14px] font-semibold text-white"
+          >
+            Skip Intro
+          </motion.button>
+        )}
+      </AnimatePresence>
+
       {/* up next */}
       <AnimatePresence>
-        {!mini && upNext !== null && nextEp && (
+        {!mini && nextEp && (upNext !== null || (soon && !soonOff && settings.autoplayNext)) && (
           <motion.div initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 40 }} transition={sheetSpring} className="glass-strong absolute bottom-40 right-10 w-80 rounded-[26px] p-5" onClick={(e) => e.stopPropagation()}>
-            <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-white/50">Up Next in {upNext}</div>
+            <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-white/50">{upNext !== null ? `Up Next in ${upNext}` : 'Next episode'}</div>
             <div className="mt-1 truncate text-[16px] font-semibold text-white">S{nextEp.season} E{nextEp.episode} · {nextEp.title}</div>
             <div className="mt-4 flex gap-2">
               <button onClick={() => setUpNext(0)} className="flex-1 rounded-full bg-white py-2 text-[13px] font-semibold text-black">Play Now</button>
-              <button onClick={() => (setUpNext(null), closePlayer())} className="glass-thin flex-1 rounded-full py-2 text-[13px] font-semibold text-white">Close</button>
+              {upNext !== null ? (
+                <button onClick={() => (setUpNext(null), closePlayer())} className="glass-thin flex-1 rounded-full py-2 text-[13px] font-semibold text-white">Close</button>
+              ) : (
+                <button onClick={() => setSoonOff(true)} className="glass-thin flex-1 rounded-full py-2 text-[13px] font-semibold text-white">Not now</button>
+              )}
             </div>
           </motion.div>
         )}

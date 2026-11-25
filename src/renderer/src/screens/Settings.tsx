@@ -1,6 +1,6 @@
 import { AnimatePresence } from 'framer-motion'
 import { Check, Cloud, CloudOff, Copy, Download, FileText, FolderOpen, Globe, Keyboard, Link2, MonitorSmartphone, Pencil, Plus, RefreshCw, Trash2, Tv } from 'lucide-react'
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { DEFAULT_UA, type Source, type UpdateState } from '../../../shared/types'
 import { Sheet } from '../components/Sheet'
 import { Button, Field, IconButton, Segmented, Toggle } from '../components/ui'
@@ -10,6 +10,9 @@ import { newPairCode, newSyncCode, receivePairing, sendPairing, supported as syn
 import { THEMES } from '../lib/themes'
 import { TvInstallSheet } from './TvInstall'
 import { Avatar } from '../components/Avatar'
+import { clearNotForMe, notForMe } from '../lib/notforme'
+import { readWatch, summarize } from '../lib/stats'
+import { clearTmdbCache, tmdbCacheSize } from '../lib/tmdb'
 import { api, clearCollection, currentProfile, deleteList, listsOf, openProfilePicker, openSourceSheet, refreshEpg, refreshLibrary, saveSources, setSyncCode, setTab, syncNow, toast, updateSettings, useApp } from '../store'
 
 const ACCENTS = ['#0a84ff', '#5e5ce6', '#bf5af2', '#ff375f', '#ff9f0a', '#30d158', '#64d2ff']
@@ -259,6 +262,74 @@ function SyncCard() {
   )
 }
 
+const HOURS = (secs: number) => (secs >= 3600 ? `${(secs / 3600).toFixed(1)} h` : secs >= 60 ? `${Math.round(secs / 60)} min` : `${Math.round(secs)} s`)
+const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+
+/** Watch time on this device for the active profile (see lib/stats.ts) */
+function StatsBody() {
+  const profile = useApp((x) => x.activeProfile)
+  const st = useMemo(() => summarize(readWatch(profile)), [profile])
+  if (!st.year)
+    return <p className="py-3 text-[13.5px] text-fg/55">Nothing counted yet. Your watch time shows up here once you start playing something. It is kept on this {api.device === 'tv' ? 'TV' : 'device'} only.</p>
+  const max = Math.max(...st.weekdays, 1)
+  return (
+    <div className="space-y-5 py-3.5">
+      <div className="grid grid-cols-3 gap-3 text-center">
+        {([['Last 7 days', st.week], ['Last 30 days', st.month], ['Last year', st.year]] as const).map(([label, secs]) => (
+          <div key={label} className="glass-thin rounded-2xl px-3 py-3">
+            <div className="text-[22px] font-bold tabular-nums">{HOURS(secs)}</div>
+            <div className="text-[11.5px] font-semibold uppercase tracking-[0.1em] text-fg/45">{label}</div>
+          </div>
+        ))}
+      </div>
+      <div className="flex flex-wrap gap-x-8 gap-y-1 text-[14px]">
+        <span><b className="text-[18px] tabular-nums">{st.streak}</b> day{st.streak === 1 ? '' : 's'} in a row</span>
+        {st.best >= 0 && <span>Most active on <b>{WEEKDAYS[st.best]}s</b></span>}
+      </div>
+      <div className="flex h-16 items-end gap-2" aria-label="Watch time by weekday">
+        {st.weekdays.map((secs, i) => (
+          <div key={i} className="flex h-full flex-1 flex-col items-center gap-1" title={`${WEEKDAYS[i]}: ${HOURS(secs)}`}>
+            <div className="flex w-full flex-1 items-end">
+              <div className={`w-full rounded-md ${i === st.best ? 'bg-[var(--accent)]' : 'bg-fg/20'}`} style={{ height: `${Math.max(6, (secs / max) * 100)}%` }} />
+            </div>
+            <span className="text-[10.5px] text-fg/45">{WEEKDAYS[i][0]}</span>
+          </div>
+        ))}
+      </div>
+      {st.top.length > 0 && (
+        <ol className="space-y-1.5 text-[14px]">
+          {st.top.map((t, i) => (
+            <li key={t.name} className="flex justify-between gap-4"><span className="truncate"><span className="mr-2 text-fg/40">{i + 1}</span>{t.name}</span><span className="shrink-0 tabular-nums text-fg/55">{HOURS(t.secs)}</span></li>
+          ))}
+        </ol>
+      )}
+    </div>
+  )
+}
+
+/** What the app keeps on this device to be quicker or smarter, and a way to clear each */
+function CacheBody() {
+  const [, bump] = useState(0)
+  const kb = (n: number) => (n < 1024 ? `${n} B` : n < 1048576 ? `${Math.round(n / 1024)} KB` : `${(n / 1048576).toFixed(1)} MB`)
+  const skipped = notForMe().size
+  return (
+    <>
+      <Line label="TMDB answers" hint="Actor pages, recommendations, trailers and genre rows are saved for a few days, so they open at once.">
+        <div className="flex items-center gap-3">
+          <span className="text-[13px] tabular-nums text-fg/55">{kb(tmdbCacheSize())}</span>
+          <Button onClick={() => (clearTmdbCache(), bump((n) => n + 1), toast('TMDB cache cleared'))}>Clear</Button>
+        </div>
+      </Line>
+      <Line label="“Not for me” in Random" hint="Titles Random will not pick again.">
+        <div className="flex items-center gap-3">
+          <span className="text-[13px] tabular-nums text-fg/55">{skipped}</span>
+          <Button disabled={!skipped} onClick={() => (clearNotForMe(), bump((n) => n + 1))}>Reset</Button>
+        </div>
+      </Line>
+    </>
+  )
+}
+
 function UpdateCard() {
   const [st, setSt] = useState<UpdateState>({ status: 'idle' })
   useEffect(() => api.update.onState(setSt), [])
@@ -441,6 +512,9 @@ export default function Settings() {
           <Line label="Live stream format" hint="Xtream Codes only. Switch to HLS if live channels stutter or fail.">
             <Segmented layoutId="fmt" value={s.liveFormat} onChange={(liveFormat) => updateSettings({ liveFormat })} options={[{ value: 'ts', label: 'MPEG-TS' }, { value: 'm3u8', label: 'HLS' }]} />
           </Line>
+          <Line label="Preferred quality" hint="For titles that come in several copies: starts on the best one that is not above this. Auto picks the best.">
+            <Segmented layoutId="quality" value={s.quality} onChange={(quality) => updateSettings({ quality })} options={[{ value: 'auto', label: 'Auto' }, { value: '4k', label: '4K' }, { value: '1080p', label: '1080p' }, { value: '720p', label: '720p' }]} />
+          </Line>
           <Line label="Autoplay next episode">
             <Toggle label="Autoplay next episode" checked={s.autoplayNext} onChange={(autoplayNext) => updateSettings({ autoplayNext })} />
           </Line>
@@ -450,6 +524,14 @@ export default function Settings() {
               <LazyField label="User agent" value={s.userAgent} onCommit={(userAgent) => updateSettings({ userAgent: userAgent || DEFAULT_UA })} hint="Some providers only allow specific players. Leave empty to reset." />
             </div>
           )}
+        </Card>
+
+        <Card title="Your Stats">
+          <StatsBody />
+        </Card>
+
+        <Card title="Cache & learned data">
+          <CacheBody />
         </Card>
 
         <Card title="Ratings">

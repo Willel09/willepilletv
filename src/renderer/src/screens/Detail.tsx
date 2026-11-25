@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { Check, ChevronLeft, Clapperboard, Download, EyeOff, ExternalLink, Heart, ListPlus, Play, Plus, RotateCcw, Star } from 'lucide-react'
+import { Check, ChevronLeft, Clapperboard, Download, EyeOff, ExternalLink, Heart, ListPlus, Play, Plus, RotateCcw, Share2, Star } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { DownloadRequest, Episode, MediaInfo, Movie, Show } from '../../../shared/types'
 import { PosterCard } from '../components/Cards'
@@ -8,7 +8,9 @@ import { Img } from '../components/Img'
 import { ListSheet } from '../components/ListSheet'
 import { Row } from '../components/Row'
 import { Button, IconButton, Spinner } from '../components/ui'
+import { shareCard } from '../lib/card'
 import { artUrl, cleanName, duration } from '../lib/format'
+import { pickVersion } from '../lib/quality'
 import { sheetSpring, softSpring, spring } from '../lib/motion'
 import { useRatings } from '../lib/ratings'
 import { markSeen } from '../lib/seen'
@@ -115,7 +117,8 @@ export default function Detail({ item }: { item: Movie | Show }) {
   const [loading, setLoading] = useState(() => !!(item.kind === 'movie' ? item.versions?.[0]?.vodId ?? item.vodId : item.versions?.[0]?.seriesId ?? item.seriesId))
   const [season, setSeason] = useState<number>()
   /** Merged duplicates: which copy to play (0 = the best one) */
-  const [ver, setVer] = useState(0)
+  const quality = useApp((s) => s.settings.quality)
+  const [ver, setVer] = useState(() => pickVersion(item.versions, quality))
   useApp((s) => s.favorites)
   useApp((s) => s.watchlist)
   const customLists = useApp((s) => s.customLists)
@@ -299,6 +302,19 @@ export default function Detail({ item }: { item: Movie | Show }) {
               <Button size="lg" icon={inLists ? <Check className="size-5" /> : <ListPlus className="size-5" />} onClick={() => setListSheet(true)}>
                 {inLists ? `In ${inLists} ${inLists === 1 ? 'list' : 'lists'}` : 'Save to list'}
               </Button>
+              {api.device !== 'tv' && (
+                <IconButton
+                  label="Share as card"
+                  className="size-13"
+                  onClick={() =>
+                    void shareCard({ title: cleanName(item.name), meta: [item.year, item.rating ? `★ ${item.rating.toFixed(1)}` : '', info.genre ?? item.group].filter(Boolean).join(' · '), poster: info.poster || item.poster })
+                      .then((r) => toast(r === 'copied' ? 'Card copied: paste it into a chat' : 'Card saved as a picture'))
+                      .catch(() => toast("Couldn't make the card"))
+                  }
+                >
+                  <Share2 className="size-5" />
+                </IconButton>
+              )}
               <IconButton label={fav ? 'Remove from Favorites' : 'Add to Favorites'} className="size-13" onClick={() => toggleFavorite(item)}>
                 <Heart className={`size-5 ${fav ? 'fill-rose-400 text-rose-400' : ''}`} />
               </IconButton>
